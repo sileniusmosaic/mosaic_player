@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b0d">
+<title>Eight-Part Mobile Beta v21</title>
+<style>
+:root{--bg:#090b0d;--panel:#12161a;--panel2:#1a2026;--text:#f5f7f8;--muted:#aeb8c2;--border:#303942;--accent:#63d7ff;--good:#7de0a6;--danger:#ff8a8a}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-height:100vh}.app{max-width:680px;margin:0 auto;padding:0 12px calc(14px + env(safe-area-inset-bottom))}.badge{font-size:12px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
+.focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:1px solid var(--border);border-radius:14px;overflow:hidden;contain:paint}.focus-video{position:absolute;width:400%;height:200%;max-width:none;left:0;top:0;display:block;object-fit:fill;background:#030405;will-change:left,top}.focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}.focus-label{position:absolute;left:9px;bottom:9px;background:rgba(0,0,0,.68);padding:5px 8px;border-radius:7px;font-size:13px;font-weight:650}.grid-stage{position:relative;aspect-ratio:2/1;margin-top:4px;background:#030405;border:1px solid var(--border);border-radius:14px;overflow:hidden;contain:paint}.grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}.tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}.focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}.muteBtn{position:absolute;right:4px;top:4px;width:28px;height:28px;border-radius:50%;border:2px solid #fff;background:#050607;color:#fff;display:grid;place-items:center;padding:4px;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation}.muteBtn svg{width:16px;height:16px;display:block;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}.muteBtn.is-muted{background:#fff;color:#050607;border-color:#050607}.tile-name{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.68);padding:2px 4px;border-radius:5px;font-size:9px;pointer-events:none}.tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}.tile.is-selected{outline:2px solid var(--accent);outline-offset:-2px}.tempo-strip{margin-top:5px}.panel{margin-top:7px;padding:9px 10px;border:1px solid var(--border);border-radius:14px;background:var(--panel)}.transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.transport button{font:inherit;border:1px solid var(--border);border-radius:10px;padding:10px 13px;background:var(--panel2);color:var(--text)}.transport button.primary{background:var(--accent);color:#001018;border-color:transparent;font-weight:750}.transport button:disabled{opacity:.5}.time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14px}.timeline{width:100%;margin:9px 0 2px}.tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0}.tempo-buttons button{font:inherit;border:1px solid var(--border);border-radius:9px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:700}.tempo-buttons button.active{background:var(--accent);color:#001018;border-color:transparent}.tempo-buttons button:disabled{opacity:.5}.status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}.status.good{color:var(--good)}.status.error{color:var(--danger)}.note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}@media(min-width:620px){.grid-stage{margin-top:8px}}
+</style>
+</head>
+<body>
+<main class="app">
+  <div class="viewer">
+    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline muted disablepictureinpicture crossorigin="anonymous" poster="media/mosaic_poster.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
+    <div class="grid-stage"><canvas id="grid" width="640" height="320"></canvas><div id="gridControls" class="grid-controls"></div></div>
+  </div>
+  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Tempo presets"></div></div>
+  <section class="panel">
+    <div class="transport">
+      <button id="play" class="primary" type="button">Play</button>
+      <button id="reset" type="button">Reset</button>
+      <span id="time" class="time">0.000 / 23.920</span>
+    </div>
+    <input id="timeline" class="timeline" type="range" min="0" max="23.92" step="0.001" value="0" aria-label="Timeline">
+    <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
+    <p class="note">Tap a square to select focus. Mute remains instantaneous. Tempo presets are pitch-correct: 25, 50, 75 and 100%.</p>
+    <div id="badge" class="badge" hidden>Ready to start</div>
+  </section>
+  <img id="poster" src="media/mosaic_poster.jpg" alt="" hidden>
+  <audio id="fallbackAudio" preload="auto" playsinline loop src="media/audio/full_mix_long.m4a" hidden></audio>
+</main>
+<script>
+(() => {
+'use strict';
+const LOOP_END=23.920;
+const TEMPO_PRESETS=[25,50,75,100];
+const VIDEO_SOURCES={
+  high:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4',
+  mobile:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4'
+};
+let videoQuality='mobile',qualityDowngraded=false;
+const NAMES=['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'];
+const STEM_URLS=['media/audio/01_clave.wav','media/audio/02_cata.wav','media/audio/03_erikundi.wav','media/audio/04_quinto.wav','media/audio/05_conga.wav','media/audio/06_tumba.wav','media/audio/07_coro_1.wav','media/audio/08_coro_2.wav'];
+const $=s=>document.querySelector(s);
+const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
+video.loop=true;
+const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
+let selected=0, muted=Array(8).fill(false), hasLiveFrame=false;
+let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0, lastGridPaint=0, lastSync=0, lastAudioCycle=-1;
+let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
+let videoCycle=LOOP_END, videoRate=1;
+let tempo=1, tempoPercent=100, bankBusy=false;
+const bankCache=new Map(), bankLoads=new Map();
+
+// Real-time multitrack engine
+let ctx=null, buffers=[], gains=[], sources=[];
+let engineStartCtx=0, engineStartPos=0;
+let fallbackMode=false;
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function loopPos(v){v%=LOOP_END;return v<0?v+LOOP_END:v}
+
+// --- Auto video-quality selection ---
+function pickVideoSource(){
+  const conn=navigator.connection||navigator.webkitConnection||navigator.mozConnection;
+  const smallScreen=Math.min(window.innerWidth,window.innerHeight)<420;
+  if(conn){
+    if(conn.saveData)return 'mobile';
+    if(conn.effectiveType&&/^(slow-2g|2g|3g)$/.test(conn.effectiveType))return 'mobile';
+    if(typeof conn.downlink==='number'&&conn.downlink<3)return 'mobile';
+  }
+  if(smallScreen)return 'mobile';
+  return 'high';
+}
+function setVideoSource(quality,keepPos){
+  const pos=keepPos?currentPos():0;
+  videoQuality=quality;
+  video.src=VIDEO_SOURCES[quality];
+  video.load();
+  const resume=()=>{
+    video.removeEventListener('loadedmetadata',resume);
+    calibrateVideo();
+    try{video.currentTime=videoTimeForPos(loopPos(pos))}catch{}
+    if(playing){video.playbackRate=videoRate*tempo;video.play().catch(()=>{});}
+  };
+  video.addEventListener('loadedmetadata',resume);
+}
+function downgradeVideoQuality(reason){
+  if(qualityDowngraded||videoQuality==='mobile')return;
+  qualityDowngraded=true;
+  console.warn('Downgrading video quality:',reason);
+  setStatus('Switching to a lighter video stream for smoother playback…');
+  setVideoSource('mobile',true);
+}
+
+// --- Video stall watchdog ---
+let watchdogLastTime=-1,watchdogStuckTicks=0,watchdogTimer=0;
+function startWatchdog(){
+  if(watchdogTimer)return;
+  watchdogLastTime=-1;watchdogStuckTicks=0;
+  watchdogTimer=setInterval(()=>{
+    if(!playing||video.paused||video.seeking){watchdogLastTime=-1;watchdogStuckTicks=0;return;}
+    const t=video.currentTime;
+    if(watchdogLastTime>=0&&Math.abs(t-watchdogLastTime)<0.02){
+      watchdogStuckTicks++;
+      if(watchdogStuckTicks===2)recoverStalledVideo('soft');
+      else if(watchdogStuckTicks>=4)recoverStalledVideo('hard');
+    }else{
+      watchdogStuckTicks=0;
+    }
+    watchdogLastTime=t;
+  },1000);
+}
+function stopWatchdog(){if(watchdogTimer){clearInterval(watchdogTimer);watchdogTimer=0}watchdogLastTime=-1;watchdogStuckTicks=0}
+let recovering=false;
+async function recoverStalledVideo(mode){
+  if(recovering)return;recovering=true;
+  try{
+    const pos=currentPos();
+    if(mode==='soft'){
+      try{video.pause();await seekVideoAndWait(videoTimeForPos(pos));video.playbackRate=videoRate*tempo;await video.play();}catch{}
+    }else{
+      console.warn('Hard video recovery: reloading source.');
+      downgradeVideoQuality('stalled');
+      if(!qualityDowngraded||videoQuality!=='mobile'){
+        // already mobile and still stuck: force a raw reload of the same source
+        setVideoSource(videoQuality,true);
+      }
+    }
+    watchdogStuckTicks=0;watchdogLastTime=-1;
+  }finally{recovering=false;}
+}
+function setStatus(msg,cls=''){status.textContent=msg;status.className='status'+(cls?' '+cls:'')}
+function tileSource(i,w,h){const tw=w/4,th=h/2;return [(i%4)*tw,Math.floor(i/4)*th,tw,th]}
+function updateFocusCrop(){const col=selected%4,row=Math.floor(selected/4);video.style.left=(-col*100)+'%';video.style.top=(-row*100)+'%';focusLabel.textContent=NAMES[selected];focusWrap.classList.toggle('is-muted',muted[selected])}
+function drawGrid(source,w,h){if(!source||!w||!h)return;const S=160;for(let i=0;i<8;i++){const [sx,sy,sw,sh]=tileSource(i,w,h),dx=(i%4)*S,dy=Math.floor(i/4)*S;gctx.drawImage(source,sx,sy,sw,sh,dx,dy,S,S);if(muted[i]){gctx.fillStyle='rgba(0,0,0,.55)';gctx.fillRect(dx,dy,S,S)}gctx.strokeStyle=i===selected?'#63d7ff':'#050607';gctx.lineWidth=i===selected?4:2;gctx.strokeRect(dx+1,dy+1,S-2,S-2)}}
+function drawPoster(){if(poster.complete&&poster.naturalWidth)drawGrid(poster,poster.naturalWidth,poster.naturalHeight)}
+function drawLive(){if(video.readyState>=2&&video.videoWidth){drawGrid(video,video.videoWidth,video.videoHeight);hasLiveFrame=true}}
+function buildControls(){
+  NAMES.forEach((name,i)=>{
+    const t=document.createElement('div');t.className='tile';
+    const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
+    const mute=document.createElement('button');mute.type='button';mute.className='muteBtn';mute.setAttribute('aria-label','Mute '+name);
+    mute.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"></path><path d="M17 9l4 6"></path><path d="M21 9l-4 6"></path></svg>';
+    const label=document.createElement('span');label.className='tile-name';label.textContent=name;
+    t.appendChild(label);t.appendChild(tap);t.appendChild(mute);controls.appendChild(t);
+    tap.addEventListener('click',()=>{selected=i;document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));updateFocusCrop();(hasLiveFrame?drawLive():drawPoster());});
+    mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];t.classList.toggle('is-muted',muted[i]);mute.classList.toggle('is-muted',muted[i]);mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);updateFocusCrop();(hasLiveFrame?drawLive():drawPoster());setTrackMute(i,muted[i]);});
+  });
+  if(controls.children[0])controls.children[0].classList.add('is-selected');
+}
+function AC(){return window.AudioContext||window.webkitAudioContext}
+function currentPos(){
+  if(fallbackMode)return playing?loopPos(fallbackAudio.currentTime||0):pausedPos;
+  if(playing&&ctx)return loopPos(engineStartPos+(ctx.currentTime-engineStartCtx)*tempo);
+  return pausedPos;
+}
+function setTrackMute(i,isMuted){
+  const g=gains[i];if(!g||!ctx)return;
+  const now=ctx.currentTime,target=isMuted?0:1;
+  try{g.gain.cancelScheduledValues(now);g.gain.setTargetAtTime(target,now,0.006);}catch{g.gain.value=target;}
+}
+function stopSources(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[]}
+function makeSources(bank,pos,rate,when){
+  const musical=loopPos(pos),wallOffset=musical/rate;
+  return bank.map((buf,i)=>{
+    const s=ctx.createBufferSource();s.buffer=buf;s.loop=true;s.loopStart=0;s.loopEnd=Math.min(LOOP_END/rate,buf.duration);
+    s.connect(gains[i]);s.start(when,wallOffset);return s;
+  });
+}
+function startSources(pos){
+  if(!ctx||buffers.length!==8)return;
+  stopSources();
+  const when=ctx.currentTime+0.018;
+  engineStartCtx=when;engineStartPos=loopPos(pos);
+  sources=makeSources(buffers,engineStartPos,tempo,when);
+}
+function switchSources(bank,newTempo,pos){
+  const old=sources.slice(),when=ctx.currentTime+0.035,musical=loopPos(pos);
+  const next=makeSources(bank,musical,newTempo,when);
+  for(const s of old){try{s.stop(when)}catch{}}
+  sources=next;buffers=bank;tempo=newTempo;engineStartCtx=when;engineStartPos=musical;
+}
+async function unlockContext(){
+  if(!ctx){const C=AC();if(!C)throw new Error('Web Audio is not supported in this browser');ctx=new C({latencyHint:'interactive'});}
+  if(ctx.state!=='running')await ctx.resume();
+  // iOS/WebKit-safe gesture unlock: schedule an inaudibly quiet oscillator now.
+  const o=ctx.createOscillator(),g=ctx.createGain();g.gain.value=0.000001;o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+0.025);
+}
+function tempoUrls(percent){
+  if(percent===100)return STEM_URLS;
+  const folder='media/tempo/'+percent+'/';
+  return ['01_clave','02_cata','03_erikundi','04_quinto','05_conga','06_tumba','07_coro_1','08_coro_2'].map(n=>folder+n+'.m4a');
+}
+async function fetchWithRetry(u,attempts=3){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{
+      const r=await fetch(u,{cache:'force-cache'});
+      if(!r.ok)throw new Error('HTTP '+r.status+' for '+u);
+      return await r.arrayBuffer();
+    }catch(e){
+      lastErr=e;
+      if(i<attempts-1)await new Promise(res=>setTimeout(res,250*Math.pow(2,i)));
+    }
+  }
+  throw lastErr;
+}
+async function loadBank(percent){
+  if(bankCache.has(percent))return bankCache.get(percent);
+  if(bankLoads.has(percent))return bankLoads.get(percent);
+  const promise=(async()=>{
+    const urls=tempoUrls(percent),rate=percent/100;
+    setStatus('Preparing '+percent+'% pitch-correct audio…');
+    const arrays=await Promise.all(urls.map(u=>fetchWithRetry(u,3)));
+    const targetFrames=Math.round((LOOP_END/rate)*ctx.sampleRate),out=[];
+    for(let i=0;i<arrays.length;i++){
+      const decoded=await ctx.decodeAudioData(arrays[i].slice(0));
+      const exact=ctx.createBuffer(1,targetFrames,ctx.sampleRate),dst=exact.getChannelData(0),src=decoded.getChannelData(0);
+      dst.set(src.subarray(0,Math.min(src.length,dst.length)));out.push(exact);
+      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of 8…');
+    }
+    bankCache.set(percent,out);bankLoads.delete(percent);return out;
+  })().catch(e=>{bankLoads.delete(percent);throw e});
+  bankLoads.set(percent,promise);return promise;
+}
+function ensureGains(){
+  if(gains.length===8)return;
+  gains=Array.from({length:8},(_,i)=>{const g=ctx.createGain();g.gain.value=muted[i]?0:1;g.connect(ctx.destination);return g;});
+}
+async function ensurePrepared(){
+  if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
+  try{
+    await unlockContext();ensureGains();buffers=await loadBank(tempoPercent);prepared=true;fallbackMode=false;badge.textContent='Audio ready';setStatus(tempoPercent+'% ready.','good');return true;
+  }catch(err){
+    console.error(err);
+    try{
+      setStatus('Multitrack audio failed, switching to full mix…','error');
+      await fallbackAudio.play().then(()=>fallbackAudio.pause()).catch(()=>{});
+      fallbackMode=true;prepared=true;badge.textContent='Audio ready (full mix)';setStatus('Multitrack audio unavailable; using full-mix fallback.','error');return true;
+    }catch(err2){
+      console.error(err2);badge.textContent='Audio error';setStatus('Audio setup failed: '+(err?.message||err),'error');return false;
+    }
+  }finally{preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';}
+}
+function buildTempoButtons(){
+  TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));tempoButtons.appendChild(b)});updateTempoUI();
+}
+function updateTempoUI(){tempoButtons.querySelectorAll('button').forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
+function seekVideoAndWait(t){
+  return new Promise(resolve=>{
+    let done=false;
+    const finish=()=>{if(done)return;done=true;video.removeEventListener('seeked',finish);resolve();};
+    video.addEventListener('seeked',finish,{once:true});
+    try{if(video.fastSeek)video.fastSeek(t);else video.currentTime=t;}catch{finish();return;}
+    setTimeout(finish,220);
+  });
+}
+async function changeTempo(percent){
+  percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
+  const newTempo=percent/100;
+  if(!prepared){tempoPercent=percent;tempo=newTempo;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
+  bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+  const wasPlaying=playing;
+  try{
+    // Prepare the bank first while the existing transport remains untouched.
+    const bank=await loadBank(percent);
+    const phase=currentPos();
+
+    // Clean transport teardown: this intentionally mirrors the reliable Reset path.
+    playing=false;
+    cancelAnimationFrame(raf);raf=0;
+    stopSources();
+    fallbackAudio.pause();
+    video.pause();
+
+    buffers=bank;tempo=newTempo;tempoPercent=percent;pausedPos=phase;
+    calibrateVideo();
+
+    // Make iOS complete the seek before changing rate or asking the decoder to play again.
+    await seekVideoAndWait(videoTimeForPos(phase));
+    video.playbackRate=videoRate*tempo;
+
+    if(wasPlaying){
+      await unlockContext();
+      startSources(phase);
+      try{await video.play();}catch(err){
+        console.warn('Video restart after clean tempo handover failed; retrying.',err);
+        video.pause();
+        await seekVideoAndWait(videoTimeForPos(phase));
+        video.playbackRate=videoRate*tempo;
+        await video.play();
+      }
+      playing=true;
+      lastSync=performance.now();
+      lastAudioCycle=0;
+      playBtn.textContent='Pause';
+      if(!raf)tick();
+      startWatchdog();
+    }else{
+      playBtn.textContent='Play';
+    }
+    updateTempoUI();
+    setStatus(percent+'% tempo ready.','good');badge.textContent=playing?'Playing · '+percent+'%':'Audio ready · '+percent+'%';
+  }catch(err){
+    console.error(err);
+    playing=false;stopSources();video.pause();playBtn.textContent='Play';
+    setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');
+  }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);}
+}
+function prefetchTempoBanks(){
+  setTimeout(()=>{for(const p of TEMPO_PRESETS){if(p===tempoPercent)continue;for(const u of tempoUrls(p)){const l=document.createElement('link');l.rel='prefetch';l.as='fetch';l.href=u;l.crossOrigin='anonymous';document.head.appendChild(l)}}},1200);
+}
+function calibrateVideo(){const d=video.duration;if(Number.isFinite(d)&&d>1){videoCycle=d;videoRate=d/LOOP_END;if(Math.abs(videoRate-1)<0.00001)videoRate=1;video.playbackRate=videoRate*tempo;}}
+function videoTimeForPos(pos){return videoCycle>0?(pos/LOOP_END)*videoCycle:pos}
+async function playFromGesture(){
+  if(!prepared){const ok=await ensurePrepared();if(!ok)return;prefetchTempoBanks();}
+  const pos=loopPos(pausedPos);calibrateVideo();
+  try{
+    if(fallbackMode){fallbackAudio.currentTime=pos;await fallbackAudio.play();}
+    else{await unlockContext();startSources(pos);}
+    try{video.currentTime=videoTimeForPos(pos)}catch{}video.playbackRate=videoRate*tempo;await video.play();
+    playing=true;lastAudioCycle=0;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();startWatchdog();
+  }catch(err){console.warn(err);stopSources();video.pause();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
+}
+function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopSources();video.pause();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;stopWatchdog();updateUI()}
+function toggleFromGesture(){if(playing)pause();else playFromGesture()}
+function reset(){playing=false;lastAudioCycle=-1;stopSources();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI();stopWatchdog()}
+function syncVideo(pos,now){if(now-lastSync<1200)return;lastSync=now;if(video.paused||video.seeking||!videoCycle)return;const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);let d=vp-pos;if(d>LOOP_END/2)d-=LOOP_END;if(d<-LOOP_END/2)d+=LOOP_END;if(Math.abs(d)>.18){try{video.currentTime=videoTimeForPos(pos)}catch{}}}
+function updateUI(){const p=scrubbing?scrubPos:currentPos();if(!scrubbing)timeline.value=String(p);timeEl.textContent=p.toFixed(3)+' / '+LOOP_END.toFixed(3)}
+function tick(now=performance.now()){
+  if(!playing)return;const p=currentPos();
+  const total=fallbackMode?(fallbackAudio.currentTime||0):(engineStartPos+(ctx.currentTime-engineStartCtx)*tempo);
+  const cycle=Math.floor(Math.max(0,total)/LOOP_END);
+  if(lastAudioCycle<0)lastAudioCycle=cycle;
+  if(cycle!==lastAudioCycle&&!scrubbing){lastAudioCycle=cycle;try{video.currentTime=videoTimeForPos(p)}catch{}lastSync=now;}
+  syncVideo(p,now);updateUI();raf=requestAnimationFrame(tick);
+}
+function onVideoFrame(now){if(now-lastGridPaint>=16){drawLive();lastGridPaint=now}if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame)}
+
+playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('click',reset);
+function scrubValueFromClientX(clientX){const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*LOOP_END,0,LOOP_END-.001)}
+function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+LOOP_END.toFixed(3);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
+function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+LOOP_END.toFixed(3);e.preventDefault()}
+async function endScrub(e){
+  if(!scrubbing||e.pointerId!==scrubPointerId)return;moveScrub(e);scrubbing=false;pausedPos=scrubPos;
+  try{if(video.fastSeek)video.fastSeek(videoTimeForPos(scrubPos));else video.currentTime=videoTimeForPos(scrubPos)}catch{}
+  if(scrubWasPlaying){
+    try{
+      if(fallbackMode){fallbackAudio.currentTime=scrubPos;if(fallbackAudio.paused)await fallbackAudio.play();}
+      else{await unlockContext();startSources(scrubPos);}
+      video.playbackRate=videoRate*tempo;if(video.paused)await video.play();playing=true;lastAudioCycle=0;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');if(!raf)tick();
+    }catch(err){console.warn(err)}
+  }else{playing=false;playBtn.textContent='Play';badge.textContent='Paused'}
+  scrubPointerId=null;updateUI();e.preventDefault();
+}
+timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginScrub);timeline.addEventListener('pointermove',moveScrub);timeline.addEventListener('pointerup',endScrub);timeline.addEventListener('pointercancel',endScrub);
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause()});window.addEventListener('pagehide',()=>{if(playing)pause()});
+video.addEventListener('loadedmetadata',calibrateVideo);video.addEventListener('durationchange',calibrateVideo);video.addEventListener('loadeddata',()=>{calibrateVideo();if(!hasLiveFrame)drawLive()});
+video.addEventListener('error',()=>{
+  setStatus('Video stream error — attempting recovery…','error');
+  if(videoQuality!=='mobile')downgradeVideoQuality('error event');
+  else if(playing)recoverStalledVideo('hard');
+});
+video.addEventListener('stalled',()=>{if(playing)recoverStalledVideo('soft')});
+video.addEventListener('waiting',()=>{if(playing)recoverStalledVideo('soft')});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&playing)recoverStalledVideo('soft')});
+poster.addEventListener('load',drawPoster);if(poster.complete)drawPoster();buildControls();buildTempoButtons();updateFocusCrop();updateUI();setStatus('v21: tap Play once. Improved stall recovery, faster resync, audio retry, and auto video quality.');
+videoQuality=pickVideoSource();setVideoSource(videoQuality,false);
+if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame);else setInterval(()=>{if(!video.paused)drawLive()},1000/50);
+})();
+</script>
+</body>
+</html>
