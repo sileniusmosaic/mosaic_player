@@ -32,7 +32,7 @@
 .rail-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;margin-top:2px;color:var(--good)}
 .badge{font-size:12px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
 .focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:1px solid var(--border);border-radius:10px;overflow:hidden;contain:paint}
-.focus-wrap::before{content:"";position:absolute;inset:5px;pointer-events:none;border:2px solid var(--accent);border-radius:2px;background-image:repeating-linear-gradient(45deg, rgba(241,230,208,0.5) 0 2px, transparent 2px 14px);-webkit-mask:linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);-webkit-mask-composite:xor;mask-composite:exclude;padding:4px;z-index:3}
+.focus-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;border:3px solid var(--accent);border-radius:10px;background-image:repeating-linear-gradient(45deg, rgba(241,230,208,0.5) 0 2px, transparent 2px 14px);-webkit-mask:linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);-webkit-mask-composite:xor;mask-composite:exclude;padding:5px;z-index:3}
 .focus-video{position:absolute;width:400%;height:200%;max-width:none;left:0;top:0;display:block;object-fit:fill;background:#030405;will-change:left,top}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 .focus-label{position:absolute;left:10px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
@@ -76,7 +76,7 @@
     <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
   </div>
   <div class="viewer">
-    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline muted disablepictureinpicture crossorigin="anonymous" poster="poster.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
+    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline muted disablepictureinpicture crossorigin="anonymous" poster="poster_abakua.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
     <div class="grid-stage"><canvas id="grid" width="640" height="320"></canvas><div id="gridControls" class="grid-controls"></div></div>
   </div>
   <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Tempo presets"></div></div>
@@ -91,7 +91,7 @@
     <p class="note">Tap a square to select focus. Mute remains instantaneous. Tempo presets are pitch-correct: 25, 50, 75 and 100%.</p>
     <div id="badge" class="badge" hidden>Ready to start</div>
   </section>
-  <img id="poster" src="poster.jpg" alt="" hidden>
+  <img id="poster" src="poster_abakua.jpg" alt="" hidden>
   <audio id="fallbackAudio" preload="none" playsinline loop hidden></audio>
 
   <div class="menu-panel">
@@ -113,14 +113,14 @@
 (() => {
 'use strict';
 const LOOP_END=45.600;
-const TEMPO_PRESETS=[100];
+const TEMPO_PRESETS=[25,50,75,100];
 const VIDEO_SOURCES={
   high:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4',
   mobile:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4'
 };
 let videoQuality='mobile',qualityDowngraded=false;
 const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
-const STEM_URLS=['audio_01_clave.wav','audio_02_bembe.wav','audio_03_cata.wav','audio_04_erikundi.wav','audio_05_quinto.wav','audio_06_conga.wav','audio_07_tumba.wav','audio_08_coro.wav'];
+const STEM_URLS=['01_clave_abakua.wav','02_bembe_abakua.wav','03_cata_abakua.wav','04_erikundi_abakua.wav','05_quinto_abakua.wav','06_conga_abakua.wav','07_tumba_abakua.wav','08_coro_abakua.wav'];
 const $=s=>document.querySelector(s);
 const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 video.loop=true;
@@ -270,8 +270,7 @@ async function unlockContext(){
 }
 function tempoUrls(percent){
   if(percent===100)return STEM_URLS;
-  const folder='media/tempo/'+percent+'/';
-  return ['01_clave','02_cata','03_erikundi','04_quinto','05_conga','06_tumba','07_coro_1','08_coro_2'].map(n=>folder+n+'.m4a');
+  return STEM_URLS.map(u=>u.replace('.wav','_'+percent+'.wav'));
 }
 async function fetchWithRetry(u,attempts=3){
   let lastErr;
