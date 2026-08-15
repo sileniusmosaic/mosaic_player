@@ -127,7 +127,7 @@ video.loop=true;
 const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel');
 const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
 let selected=0, muted=Array(8).fill(false), hasLiveFrame=false;
-let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0, lastGridPaint=0, lastSync=0, lastAudioCycle=-1;
+let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0, lastGridPaint=0, lastSync=0, lastAudioCycle=-1, syncGraceUntil=0;
 let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
 let videoCycle=LOOP_END, videoRate=1;
 let tempo=1, tempoPercent=100, bankBusy=false;
@@ -199,7 +199,7 @@ async function recoverStalledVideo(mode){
   try{
     const pos=currentPos();
     if(mode==='soft'){
-      try{video.pause();await seekVideoAndWait(videoTimeForPos(pos));video.playbackRate=videoRate*tempo;await video.play();}catch{}
+      try{video.pause();await seekVideoAndWait(videoTimeForPos(pos));video.playbackRate=videoRate*tempo;syncGraceUntil=performance.now()+2500;await video.play();}catch{}
     }else{
       console.warn('Hard video recovery: reloading source.');
       downgradeVideoQuality('stalled');
@@ -373,6 +373,7 @@ async function changeTempo(percent){
       }
       playing=true;
       lastSync=performance.now();
+      syncGraceUntil=performance.now()+2500;
       lastAudioCycle=0;
       playBtn.textContent='Pause';
       if(!raf)tick();
@@ -400,13 +401,13 @@ async function playFromGesture(){
     if(fallbackMode){fallbackAudio.currentTime=pos;await fallbackAudio.play();}
     else{await unlockContext();startSources(pos);}
     try{video.currentTime=videoTimeForPos(pos)}catch{}video.playbackRate=videoRate*tempo;await video.play();
-    playing=true;lastAudioCycle=0;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();startWatchdog();
+    playing=true;lastAudioCycle=0;syncGraceUntil=performance.now()+2500;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();startWatchdog();
   }catch(err){console.warn(err);stopSources();video.pause();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
 }
 function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopSources();video.pause();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;stopWatchdog();updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
 function reset(){playing=false;lastAudioCycle=-1;stopSources();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI();stopWatchdog()}
-function syncVideo(pos,now){if(now-lastSync<1200)return;lastSync=now;if(video.paused||video.seeking||!videoCycle)return;const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);let d=vp-pos;if(d>LOOP_END/2)d-=LOOP_END;if(d<-LOOP_END/2)d+=LOOP_END;if(Math.abs(d)>.18){try{video.currentTime=videoTimeForPos(pos)}catch{}}}
+function syncVideo(pos,now){if(now-lastSync<1200)return;lastSync=now;if(now<syncGraceUntil)return;if(video.paused||video.seeking||!videoCycle)return;const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);let d=vp-pos;if(d>LOOP_END/2)d-=LOOP_END;if(d<-LOOP_END/2)d+=LOOP_END;if(Math.abs(d)>.18){try{video.currentTime=videoTimeForPos(pos)}catch{}}}
 function updateUI(){const p=scrubbing?scrubPos:currentPos();if(!scrubbing)timeline.value=String(p);timeEl.textContent=p.toFixed(3)+' / '+LOOP_END.toFixed(3)}
 function tick(now=performance.now()){
   if(!playing)return;const p=currentPos();
