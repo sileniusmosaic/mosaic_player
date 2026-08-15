@@ -402,7 +402,7 @@ function toggleFromGesture(){if(playing)pause();else playFromGesture()}
 function reset(){playing=false;lastAudioCycle=-1;stopSources();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI();stopWatchdog()}
 function targetRate(){return videoRate*tempo}
 function syncVideo(pos,now){
-  if(now-lastSync<250)return;lastSync=now;
+  if(now-lastSync<150)return;lastSync=now;
   if(video.paused||video.seeking||!videoCycle)return;
   const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);
   let d=vp-pos;
@@ -414,15 +414,15 @@ function syncVideo(pos,now){
     if(Math.abs(d)>1.0){try{video.currentTime=videoTimeForPos(pos)}catch{}}
     return;
   }
-  if(Math.abs(d)>1.0){
+  if(Math.abs(d)>0.6){
     // Large desync (real stall/skip): a smooth nudge would take too long, so seek once.
     try{video.currentTime=videoTimeForPos(pos)}catch{}
     video.playbackRate=base;
     return;
   }
-  if(Math.abs(d)<0.03){video.playbackRate=base;return}
+  if(Math.abs(d)<0.02){video.playbackRate=base;return}
   // Small/moderate drift: nudge the rate gently rather than seeking, so there's no visible jump.
-  const K=0.6,MAX_NUDGE=0.12;
+  const K=1.1,MAX_NUDGE=0.25;
   const nudge=clamp(-d*K,-MAX_NUDGE,MAX_NUDGE);
   video.playbackRate=base*(1+nudge);
 }
