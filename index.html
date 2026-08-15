@@ -407,14 +407,39 @@ async function playFromGesture(){
 function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopSources();video.pause();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;stopWatchdog();updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
 function reset(){playing=false;lastAudioCycle=-1;stopSources();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI();stopWatchdog()}
-function syncVideo(pos,now){if(now-lastSync<1200)return;lastSync=now;if(now<syncGraceUntil)return;if(video.paused||video.seeking||!videoCycle)return;const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);let d=vp-pos;if(d>LOOP_END/2)d-=LOOP_END;if(d<-LOOP_END/2)d+=LOOP_END;if(Math.abs(d)>.18){try{video.currentTime=videoTimeForPos(pos)}catch{}}}
+function targetRate(){return videoRate*tempo}
+function syncVideo(pos,now){
+  if(now-lastSync<250)return;lastSync=now;
+  if(video.paused||video.seeking||!videoCycle)return;
+  const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);
+  let d=vp-pos;
+  if(d>LOOP_END/2)d-=LOOP_END;
+  if(d<-LOOP_END/2)d+=LOOP_END;
+  const base=targetRate();
+  if(now<syncGraceUntil){
+    // Still settling right after a tempo change/recovery: only step in for a large, genuine desync.
+    if(Math.abs(d)>1.0){try{video.currentTime=videoTimeForPos(pos)}catch{}}
+    return;
+  }
+  if(Math.abs(d)>1.0){
+    // Large desync (real stall/skip): a smooth nudge would take too long, so seek once.
+    try{video.currentTime=videoTimeForPos(pos)}catch{}
+    video.playbackRate=base;
+    return;
+  }
+  if(Math.abs(d)<0.03){video.playbackRate=base;return}
+  // Small/moderate drift: nudge the rate gently rather than seeking, so there's no visible jump.
+  const K=0.6,MAX_NUDGE=0.12;
+  const nudge=clamp(-d*K,-MAX_NUDGE,MAX_NUDGE);
+  video.playbackRate=base*(1+nudge);
+}
 function updateUI(){const p=scrubbing?scrubPos:currentPos();if(!scrubbing)timeline.value=String(p);timeEl.textContent=p.toFixed(3)+' / '+LOOP_END.toFixed(3)}
 function tick(now=performance.now()){
   if(!playing)return;const p=currentPos();
   const total=fallbackMode?(fallbackAudio.currentTime||0):(engineStartPos+(ctx.currentTime-engineStartCtx)*tempo);
   const cycle=Math.floor(Math.max(0,total)/LOOP_END);
   if(lastAudioCycle<0)lastAudioCycle=cycle;
-  if(cycle!==lastAudioCycle&&!scrubbing){lastAudioCycle=cycle;try{video.currentTime=videoTimeForPos(p)}catch{}lastSync=now;}
+  if(cycle!==lastAudioCycle&&!scrubbing){lastAudioCycle=cycle;const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);let d=vp-p;if(d>LOOP_END/2)d-=LOOP_END;if(d<-LOOP_END/2)d+=LOOP_END;if(Math.abs(d)>0.5){try{video.currentTime=videoTimeForPos(p)}catch{}}lastSync=now;}
   syncVideo(p,now);updateUI();raf=requestAnimationFrame(tick);
 }
 function onVideoFrame(now){if(now-lastGridPaint>=16){drawLive();lastGridPaint=now}if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame)}
