@@ -14,7 +14,7 @@
 <body>
 <main class="app">
   <div class="viewer">
-    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline muted disablepictureinpicture crossorigin="anonymous" poster="media/mosaic_poster.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
+    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline muted disablepictureinpicture crossorigin="anonymous" poster="poster.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
     <div class="grid-stage"><canvas id="grid" width="640" height="320"></canvas><div id="gridControls" class="grid-controls"></div></div>
   </div>
   <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Tempo presets"></div></div>
@@ -22,28 +22,28 @@
     <div class="transport">
       <button id="play" class="primary" type="button">Play</button>
       <button id="reset" type="button">Reset</button>
-      <span id="time" class="time">0.000 / 23.920</span>
+      <span id="time" class="time">0.000 / 45.600</span>
     </div>
-    <input id="timeline" class="timeline" type="range" min="0" max="23.92" step="0.001" value="0" aria-label="Timeline">
+    <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
     <p class="note">Tap a square to select focus. Mute remains instantaneous. Tempo presets are pitch-correct: 25, 50, 75 and 100%.</p>
     <div id="badge" class="badge" hidden>Ready to start</div>
   </section>
-  <img id="poster" src="media/mosaic_poster.jpg" alt="" hidden>
-  <audio id="fallbackAudio" preload="auto" playsinline loop src="media/audio/full_mix_long.m4a" hidden></audio>
+  <img id="poster" src="poster.jpg" alt="" hidden>
+  <audio id="fallbackAudio" preload="none" playsinline loop hidden></audio>
 </main>
 <script>
 (() => {
 'use strict';
-const LOOP_END=23.920;
-const TEMPO_PRESETS=[25,50,75,100];
+const LOOP_END=45.600;
+const TEMPO_PRESETS=[100];
 const VIDEO_SOURCES={
   high:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4',
   mobile:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4'
 };
 let videoQuality='mobile',qualityDowngraded=false;
-const NAMES=['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'];
-const STEM_URLS=['media/audio/01_clave.wav','media/audio/02_cata.wav','media/audio/03_erikundi.wav','media/audio/04_quinto.wav','media/audio/05_conga.wav','media/audio/06_tumba.wav','media/audio/07_coro_1.wav','media/audio/08_coro_2.wav'];
+const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
+const STEM_URLS=['audio_01_clave.wav','audio_02_bembe.wav','audio_03_cata.wav','audio_04_erikundi.wav','audio_05_quinto.wav','audio_06_conga.wav','audio_07_tumba.wav','audio_08_coro.wav'];
 const $=s=>document.querySelector(s);
 const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 video.loop=true;
