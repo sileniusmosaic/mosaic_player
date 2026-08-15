@@ -115,10 +115,12 @@
 const LOOP_END=45.600;
 const TEMPO_PRESETS=[25,50,75,100];
 const VIDEO_SOURCES={
-  high:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4',
-  mobile:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/mosaic_4x2_full_1920x960.mp4'
+  100:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_100.mp4',
+  75:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_75.mp4',
+  50:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_50.mp4',
+  25:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_25.mp4'
 };
-let videoQuality='mobile',qualityDowngraded=false;
+let videoQuality=100;
 const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
 const STEM_URLS=['01_clave_abakua.m4a','02_bembe_abakua.m4a','03_cata_abakua.m4a','04_erikundi_abakua.m4a','05_quinto_abakua.m4a','06_conga_abakua.m4a','07_tumba_abakua.m4a','08_coro_abakua.m4a'];
 const $=s=>document.querySelector(s);
@@ -141,18 +143,7 @@ let fallbackMode=false;
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function loopPos(v){v%=LOOP_END;return v<0?v+LOOP_END:v}
 
-// --- Auto video-quality selection ---
-function pickVideoSource(){
-  const conn=navigator.connection||navigator.webkitConnection||navigator.mozConnection;
-  const smallScreen=Math.min(window.innerWidth,window.innerHeight)<420;
-  if(conn){
-    if(conn.saveData)return 'mobile';
-    if(conn.effectiveType&&/^(slow-2g|2g|3g)$/.test(conn.effectiveType))return 'mobile';
-    if(typeof conn.downlink==='number'&&conn.downlink<3)return 'mobile';
-  }
-  if(smallScreen)return 'mobile';
-  return 'high';
-}
+// --- (per-tempo video sources selected directly by tempo, no device-quality tiers) ---
 function setVideoSource(quality,keepPos){
   const pos=keepPos?currentPos():0;
   videoQuality=quality;
@@ -165,13 +156,6 @@ function setVideoSource(quality,keepPos){
     if(playing){video.playbackRate=videoRate*tempo;video.play().catch(()=>{});}
   };
   video.addEventListener('loadedmetadata',resume);
-}
-function downgradeVideoQuality(reason){
-  if(qualityDowngraded||videoQuality==='mobile')return;
-  qualityDowngraded=true;
-  console.warn('Downgrading video quality:',reason);
-  setStatus('Switching to a lighter video stream for smoother playback…');
-  setVideoSource('mobile',true);
 }
 
 // --- Video stall watchdog ---
@@ -202,11 +186,7 @@ async function recoverStalledVideo(mode){
       try{video.pause();await seekVideoAndWait(videoTimeForPos(pos));video.playbackRate=videoRate*tempo;syncGraceUntil=performance.now()+2500;await video.play();}catch{}
     }else{
       console.warn('Hard video recovery: reloading source.');
-      downgradeVideoQuality('stalled');
-      if(!qualityDowngraded||videoQuality!=='mobile'){
-        // already mobile and still stuck: force a raw reload of the same source
-        setVideoSource(videoQuality,true);
-      }
+      setVideoSource(videoQuality,true);
     }
     watchdogStuckTicks=0;watchdogLastTime=-1;
   }finally{recovering=false;}
@@ -336,6 +316,18 @@ function seekVideoAndWait(t){
     setTimeout(finish,220);
   });
 }
+async function switchVideoSource(percent,phase){
+  if(videoQuality===percent){await seekVideoAndWait(videoTimeForPos(phase));return}
+  videoQuality=percent;
+  video.src=VIDEO_SOURCES[percent];
+  video.load();
+  await new Promise(resolve=>{
+    const onMeta=()=>{video.removeEventListener('loadedmetadata',onMeta);resolve()};
+    video.addEventListener('loadedmetadata',onMeta);
+  });
+  calibrateVideo();
+  await seekVideoAndWait(videoTimeForPos(phase));
+}
 async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
   const newTempo=percent/100;
@@ -357,8 +349,9 @@ async function changeTempo(percent){
     buffers=bank;tempo=newTempo;tempoPercent=percent;pausedPos=phase;
     calibrateVideo();
 
-    // Make iOS complete the seek before changing rate or asking the decoder to play again.
-    await seekVideoAndWait(videoTimeForPos(phase));
+    // Load the correct pre-rendered video file for this tempo (each file's own native
+    // length already matches its tempo, so playbackRate naturally comes out to 1.0).
+    await switchVideoSource(percent,phase);
     video.playbackRate=videoRate*tempo;
 
     if(wasPlaying){
@@ -465,14 +458,13 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pa
 video.addEventListener('loadedmetadata',calibrateVideo);video.addEventListener('durationchange',calibrateVideo);video.addEventListener('loadeddata',()=>{calibrateVideo();if(!hasLiveFrame)drawLive()});
 video.addEventListener('error',()=>{
   setStatus('Video stream error — attempting recovery…','error');
-  if(videoQuality!=='mobile')downgradeVideoQuality('error event');
-  else if(playing)recoverStalledVideo('hard');
+  if(playing)recoverStalledVideo('hard');
 });
 video.addEventListener('stalled',()=>{if(playing)recoverStalledVideo('soft')});
 video.addEventListener('waiting',()=>{if(playing)recoverStalledVideo('soft')});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&playing)recoverStalledVideo('soft')});
 poster.addEventListener('load',drawPoster);if(poster.complete)drawPoster();buildControls();buildTempoButtons();updateFocusCrop();updateUI();setStatus('v21: tap Play once. Improved stall recovery, faster resync, audio retry, and auto video quality.');
-videoQuality=pickVideoSource();setVideoSource(videoQuality,false);
+setVideoSource(100,false);
 if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame);else setInterval(()=>{if(!video.paused)drawLive()},1000/50);
 })();
 </script>
