@@ -120,7 +120,7 @@ const VIDEO_SOURCES={
 };
 let videoQuality='mobile',qualityDowngraded=false;
 const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
-const STEM_URLS=['01_clave_abakua.wav','02_bembe_abakua.wav','03_cata_abakua.wav','04_erikundi_abakua.wav','05_quinto_abakua.wav','06_conga_abakua.wav','07_tumba_abakua.wav','08_coro_abakua.wav'];
+const STEM_URLS=['01_clave_abakua.m4a','02_bembe_abakua.m4a','03_cata_abakua.m4a','04_erikundi_abakua.m4a','05_quinto_abakua.m4a','06_conga_abakua.m4a','07_tumba_abakua.m4a','08_coro_abakua.m4a'];
 const $=s=>document.querySelector(s);
 const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 video.loop=true;
@@ -270,7 +270,7 @@ async function unlockContext(){
 }
 function tempoUrls(percent){
   if(percent===100)return STEM_URLS;
-  return STEM_URLS.map(u=>u.replace('.wav','_'+percent+'.wav'));
+  return STEM_URLS.map(u=>u.replace('.m4a','_'+percent+'.m4a'));
 }
 async function fetchWithRetry(u,attempts=3){
   let lastErr;
