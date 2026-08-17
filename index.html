@@ -76,7 +76,7 @@
     <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
   </div>
   <div class="viewer">
-    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline muted disablepictureinpicture crossorigin="anonymous" poster="poster_abakua.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
+    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline disablepictureinpicture crossorigin="anonymous" poster="poster_abakua.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
     <div class="grid-stage"><canvas id="grid" width="640" height="320"></canvas><div id="gridControls" class="grid-controls"></div></div>
   </div>
   <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Tempo presets"></div></div>
@@ -122,26 +122,30 @@ const VIDEO_SOURCES={
 };
 let videoQuality=100;
 const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
-const STEM_URLS=['01_clave_abakua.m4a','02_bembe_abakua.m4a','03_cata_abakua.m4a','04_erikundi_abakua.m4a','05_quinto_abakua.m4a','06_conga_abakua.m4a','07_tumba_abakua.m4a','08_coro_abakua.m4a'];
+// Clave is embedded directly in the video as its native audio track (tile 0).
+// The remaining 7 tiles are separate Web Audio stems, slaved to the video's own clock.
+const STEM_URLS=['02_bembe_abakua.m4a','03_cata_abakua.m4a','04_erikundi_abakua.m4a','05_quinto_abakua.m4a','06_conga_abakua.m4a','07_tumba_abakua.m4a','08_coro_abakua.m4a'];
+const tileToStem=i=>i-1; // tile 0 (Clave) has no stem index; tiles 1-7 map to stems 0-6
 const $=s=>document.querySelector(s);
 const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 video.loop=true;
 const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel');
 const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
 let selected=0, muted=Array(8).fill(false), hasLiveFrame=false;
-let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0, lastGridPaint=0, lastSync=0, lastAudioCycle=-1, syncGraceUntil=0;
+let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0, lastGridPaint=0;
 let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
-let videoCycle=LOOP_END, videoRate=1;
-let tempo=1, tempoPercent=100, bankBusy=false;
+let videoCycle=LOOP_END;
+let tempoPercent=100, bankBusy=false;
 const bankCache=new Map(), bankLoads=new Map();
 
-// Real-time multitrack engine
+// Real-time multitrack engine for the 7 non-Clave stems. The VIDEO (with its
+// embedded Clave audio) is the single master clock; these stems are slaved to
+// video.currentTime, restarted at the correct offset whenever they drift.
 let ctx=null, buffers=[], gains=[], sources=[];
-let engineStartCtx=0, engineStartPos=0;
+let stemStartCtx=0, stemStartPos=0, lastDriftCheck=0;
 let fallbackMode=false;
 
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
-function loopPos(v){v%=LOOP_END;return v<0?v+LOOP_END:v}
 
 // --- (per-tempo video sources selected directly by tempo, no device-quality tiers) ---
 function setVideoSource(quality,keepPos){
@@ -152,8 +156,9 @@ function setVideoSource(quality,keepPos){
   const resume=()=>{
     video.removeEventListener('loadedmetadata',resume);
     calibrateVideo();
-    try{video.currentTime=videoTimeForPos(loopPos(pos))}catch{}
-    if(playing){video.playbackRate=videoRate*tempo;video.play().catch(()=>{});}
+    try{video.currentTime=pos}catch{}
+    video.muted=muted[0];
+    if(playing)video.play().catch(()=>{});
   };
   video.addEventListener('loadedmetadata',resume);
 }
@@ -183,7 +188,7 @@ async function recoverStalledVideo(mode){
   try{
     const pos=currentPos();
     if(mode==='soft'){
-      try{video.pause();await seekVideoAndWait(videoTimeForPos(pos));video.playbackRate=videoRate*tempo;syncGraceUntil=performance.now()+2500;await video.play();}catch{}
+      try{video.pause();await seekVideoAndWait(pos);await video.play();}catch{}
     }else{
       console.warn('Hard video recovery: reloading source.');
       setVideoSource(videoQuality,true);
@@ -212,35 +217,25 @@ function buildControls(){
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
 function currentPos(){
-  if(fallbackMode)return playing?loopPos(fallbackAudio.currentTime||0):pausedPos;
-  if(playing&&ctx)return loopPos(engineStartPos+(ctx.currentTime-engineStartCtx)*tempo);
-  return pausedPos;
+  if(fallbackMode)return playing?(fallbackAudio.currentTime||0):pausedPos;
+  return playing?(video.currentTime||0):pausedPos;
 }
 function setTrackMute(i,isMuted){
-  const g=gains[i];if(!g||!ctx)return;
+  if(i===0){video.muted=isMuted;return}
+  const g=gains[tileToStem(i)];if(!g||!ctx)return;
   const now=ctx.currentTime,target=isMuted?0:1;
   try{g.gain.cancelScheduledValues(now);g.gain.setTargetAtTime(target,now,0.006);}catch{g.gain.value=target;}
 }
-function stopSources(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[]}
-function makeSources(bank,pos,rate,when){
-  const musical=loopPos(pos),wallOffset=musical/rate;
-  return bank.map((buf,i)=>{
-    const s=ctx.createBufferSource();s.buffer=buf;s.loop=true;s.loopStart=0;s.loopEnd=Math.min(LOOP_END/rate,buf.duration);
-    s.connect(gains[i]);s.start(when,wallOffset);return s;
+function stopStems(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[]}
+function startStems(pos){
+  if(!ctx||buffers.length!==7)return;
+  stopStems();
+  const when=ctx.currentTime+0.02;
+  stemStartCtx=when;stemStartPos=pos;
+  sources=buffers.map((buf,idx)=>{
+    const s=ctx.createBufferSource();s.buffer=buf;s.loop=true;s.loopStart=0;s.loopEnd=buf.duration;
+    s.connect(gains[idx]);s.start(when,Math.min(pos,buf.duration-0.001));return s;
   });
-}
-function startSources(pos){
-  if(!ctx||buffers.length!==8)return;
-  stopSources();
-  const when=ctx.currentTime+0.018;
-  engineStartCtx=when;engineStartPos=loopPos(pos);
-  sources=makeSources(buffers,engineStartPos,tempo,when);
-}
-function switchSources(bank,newTempo,pos){
-  const old=sources.slice(),when=ctx.currentTime+0.035,musical=loopPos(pos);
-  const next=makeSources(bank,musical,newTempo,when);
-  for(const s of old){try{s.stop(when)}catch{}}
-  sources=next;buffers=bank;tempo=newTempo;engineStartCtx=when;engineStartPos=musical;
 }
 async function unlockContext(){
   if(!ctx){const C=AC();if(!C)throw new Error('Web Audio is not supported in this browser');ctx=new C({latencyHint:'interactive'});}
@@ -278,15 +273,15 @@ async function loadBank(percent){
       const decoded=await ctx.decodeAudioData(arrays[i].slice(0));
       const exact=ctx.createBuffer(1,targetFrames,ctx.sampleRate),dst=exact.getChannelData(0),src=decoded.getChannelData(0);
       dst.set(src.subarray(0,Math.min(src.length,dst.length)));out.push(exact);
-      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of 8…');
+      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of 7…');
     }
     bankCache.set(percent,out);bankLoads.delete(percent);return out;
   })().catch(e=>{bankLoads.delete(percent);throw e});
   bankLoads.set(percent,promise);return promise;
 }
 function ensureGains(){
-  if(gains.length===8)return;
-  gains=Array.from({length:8},(_,i)=>{const g=ctx.createGain();g.gain.value=muted[i]?0:1;g.connect(ctx.destination);return g;});
+  if(gains.length===7)return;
+  gains=Array.from({length:7},(_,idx)=>{const g=ctx.createGain();g.gain.value=muted[idx+1]?0:1;g.connect(ctx.destination);return g;});
 }
 async function ensurePrepared(){
   if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
@@ -317,7 +312,7 @@ function seekVideoAndWait(t){
   });
 }
 async function switchVideoSource(percent,phase){
-  if(videoQuality===percent){await seekVideoAndWait(videoTimeForPos(phase));return}
+  if(videoQuality===percent){await seekVideoAndWait(phase);return}
   videoQuality=percent;
   video.src=VIDEO_SOURCES[percent];
   video.load();
@@ -326,48 +321,52 @@ async function switchVideoSource(percent,phase){
     video.addEventListener('loadedmetadata',onMeta);
   });
   calibrateVideo();
-  await seekVideoAndWait(videoTimeForPos(phase));
+  video.muted=muted[0];
+  await seekVideoAndWait(phase);
 }
 async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
-  const newTempo=percent/100;
-  if(!prepared){tempoPercent=percent;tempo=newTempo;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
+  if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
   bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
   const wasPlaying=playing;
   try{
     // Prepare the bank first while the existing transport remains untouched.
     const bank=await loadBank(percent);
-    const phase=currentPos();
+    const oldCycle=videoCycle||LOOP_END;
+    const proportion=clamp(currentPos()/oldCycle,0,1);
 
     // Clean transport teardown: this intentionally mirrors the reliable Reset path.
     playing=false;
     cancelAnimationFrame(raf);raf=0;
-    stopSources();
+    stopStems();
     fallbackAudio.pause();
     video.pause();
 
-    buffers=bank;tempo=newTempo;tempoPercent=percent;pausedPos=phase;
-    calibrateVideo();
+    buffers=bank;tempoPercent=percent;
 
     // Load the correct pre-rendered video file for this tempo (each file's own native
-    // length already matches its tempo, so playbackRate naturally comes out to 1.0).
-    await switchVideoSource(percent,phase);
-    video.playbackRate=videoRate*tempo;
+    // length + embedded Clave audio already matches its tempo — no rate math needed).
+    videoQuality=percent;
+    video.src=VIDEO_SOURCES[percent];
+    video.load();
+    await new Promise(resolve=>{
+      const onMeta=()=>{video.removeEventListener('loadedmetadata',onMeta);resolve()};
+      video.addEventListener('loadedmetadata',onMeta);
+    });
+    calibrateVideo();
+    video.muted=muted[0];
+    const newPos=proportion*videoCycle;
+    pausedPos=newPos;
+    await seekVideoAndWait(newPos);
 
     if(wasPlaying){
       await unlockContext();
-      startSources(phase);
       try{await video.play();}catch(err){
-        console.warn('Video restart after clean tempo handover failed; retrying.',err);
-        video.pause();
-        await seekVideoAndWait(videoTimeForPos(phase));
-        video.playbackRate=videoRate*tempo;
-        await video.play();
+        console.warn('Video restart after tempo handover failed; retrying.',err);
+        video.pause();await seekVideoAndWait(newPos);await video.play();
       }
+      startStems(video.currentTime||newPos);
       playing=true;
-      lastSync=performance.now();
-      syncGraceUntil=performance.now()+2500;
-      lastAudioCycle=0;
       playBtn.textContent='Pause';
       if(!raf)tick();
       startWatchdog();
@@ -378,77 +377,58 @@ async function changeTempo(percent){
     setStatus(percent+'% tempo ready.','good');badge.textContent=playing?'Playing · '+percent+'%':'Audio ready · '+percent+'%';
   }catch(err){
     console.error(err);
-    playing=false;stopSources();video.pause();playBtn.textContent='Play';
+    playing=false;stopStems();video.pause();playBtn.textContent='Play';
     setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');
   }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);}
 }
 function prefetchTempoBanks(){
   setTimeout(()=>{for(const p of TEMPO_PRESETS){if(p===tempoPercent)continue;for(const u of tempoUrls(p)){const l=document.createElement('link');l.rel='prefetch';l.as='fetch';l.href=u;l.crossOrigin='anonymous';document.head.appendChild(l)}}},1200);
 }
-function calibrateVideo(){const d=video.duration;if(Number.isFinite(d)&&d>1){videoCycle=d;videoRate=d/LOOP_END;if(Math.abs(videoRate-1)<0.00001)videoRate=1;video.playbackRate=videoRate*tempo;}}
-function videoTimeForPos(pos){return videoCycle>0?(pos/LOOP_END)*videoCycle:pos}
+function calibrateVideo(){const d=video.duration;if(Number.isFinite(d)&&d>1)videoCycle=d;}
 async function playFromGesture(){
   if(!prepared){const ok=await ensurePrepared();if(!ok)return;prefetchTempoBanks();}
-  const pos=loopPos(pausedPos);calibrateVideo();
+  const pos=pausedPos;calibrateVideo();
   try{
-    if(fallbackMode){fallbackAudio.currentTime=pos;await fallbackAudio.play();}
-    else{await unlockContext();startSources(pos);}
-    try{video.currentTime=videoTimeForPos(pos)}catch{}video.playbackRate=videoRate*tempo;await video.play();
-    playing=true;lastAudioCycle=0;syncGraceUntil=performance.now()+2500;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();startWatchdog();
-  }catch(err){console.warn(err);stopSources();video.pause();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
+    try{video.currentTime=pos}catch{}
+    video.muted=muted[0];
+    await video.play();
+    if(!fallbackMode){await unlockContext();startStems(video.currentTime||pos);}
+    else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
+    playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();startWatchdog();
+  }catch(err){console.warn(err);stopStems();video.pause();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
 }
-function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopSources();video.pause();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;stopWatchdog();updateUI()}
+function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();video.pause();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;stopWatchdog();updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
-function reset(){playing=false;lastAudioCycle=-1;stopSources();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI();stopWatchdog()}
-function targetRate(){return videoRate*tempo}
-function syncVideo(pos,now){
-  if(now-lastSync<150)return;lastSync=now;
-  if(video.paused||video.seeking||!videoCycle)return;
-  const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);
-  let d=vp-pos;
-  if(d>LOOP_END/2)d-=LOOP_END;
-  if(d<-LOOP_END/2)d+=LOOP_END;
-  const base=targetRate();
-  if(now<syncGraceUntil){
-    // Still settling right after a tempo change/recovery: only step in for a large, genuine desync.
-    if(Math.abs(d)>1.0){try{video.currentTime=videoTimeForPos(pos)}catch{}}
-    return;
-  }
-  if(Math.abs(d)>0.6){
-    // Large desync (real stall/skip): a smooth nudge would take too long, so seek once.
-    try{video.currentTime=videoTimeForPos(pos)}catch{}
-    video.playbackRate=base;
-    return;
-  }
-  if(Math.abs(d)<0.02){video.playbackRate=base;return}
-  // Small/moderate drift: nudge the rate gently rather than seeking, so there's no visible jump.
-  const K=1.1,MAX_NUDGE=0.25;
-  const nudge=clamp(-d*K,-MAX_NUDGE,MAX_NUDGE);
-  video.playbackRate=base*(1+nudge);
+function reset(){playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI();stopWatchdog()}
+function checkStemDrift(now){
+  if(now-lastDriftCheck<150)return;lastDriftCheck=now;
+  if(!ctx||!playing||video.paused||video.seeking||sources.length!==7)return;
+  const expected=stemStartPos+(ctx.currentTime-stemStartCtx);
+  const actual=video.currentTime||0;
+  let d=expected-actual;
+  // Guard against a false-large reading right at a loop wrap point.
+  if(videoCycle>1&&Math.abs(d)>videoCycle/2)d=d>0?d-videoCycle:d+videoCycle;
+  if(Math.abs(d)>0.05)startStems(actual);
 }
-function updateUI(){const p=scrubbing?scrubPos:currentPos();if(!scrubbing)timeline.value=String(p);timeEl.textContent=p.toFixed(3)+' / '+LOOP_END.toFixed(3)}
+function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)}
 function tick(now=performance.now()){
-  if(!playing)return;const p=currentPos();
-  const total=fallbackMode?(fallbackAudio.currentTime||0):(engineStartPos+(ctx.currentTime-engineStartCtx)*tempo);
-  const cycle=Math.floor(Math.max(0,total)/LOOP_END);
-  if(lastAudioCycle<0)lastAudioCycle=cycle;
-  if(cycle!==lastAudioCycle&&!scrubbing){lastAudioCycle=cycle;const vp=loopPos(((video.currentTime||0)/videoCycle)*LOOP_END);let d=vp-p;if(d>LOOP_END/2)d-=LOOP_END;if(d<-LOOP_END/2)d+=LOOP_END;if(Math.abs(d)>0.5){try{video.currentTime=videoTimeForPos(p)}catch{}}lastSync=now;}
-  syncVideo(p,now);updateUI();raf=requestAnimationFrame(tick);
+  if(!playing)return;
+  checkStemDrift(now);updateUI();raf=requestAnimationFrame(tick);
 }
 function onVideoFrame(now){if(now-lastGridPaint>=16){drawLive();lastGridPaint=now}if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame)}
 
 playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('click',reset);
-function scrubValueFromClientX(clientX){const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*LOOP_END,0,LOOP_END-.001)}
-function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+LOOP_END.toFixed(3);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
-function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+LOOP_END.toFixed(3);e.preventDefault()}
+function scrubValueFromClientX(clientX){const dur=videoCycle||LOOP_END;const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*dur,0,dur-.001)}
+function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
+function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);e.preventDefault()}
 async function endScrub(e){
   if(!scrubbing||e.pointerId!==scrubPointerId)return;moveScrub(e);scrubbing=false;pausedPos=scrubPos;
-  try{if(video.fastSeek)video.fastSeek(videoTimeForPos(scrubPos));else video.currentTime=videoTimeForPos(scrubPos)}catch{}
+  try{if(video.fastSeek)video.fastSeek(scrubPos);else video.currentTime=scrubPos}catch{}
   if(scrubWasPlaying){
     try{
       if(fallbackMode){fallbackAudio.currentTime=scrubPos;if(fallbackAudio.paused)await fallbackAudio.play();}
-      else{await unlockContext();startSources(scrubPos);}
-      video.playbackRate=videoRate*tempo;if(video.paused)await video.play();playing=true;lastAudioCycle=0;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');if(!raf)tick();
+      else{await unlockContext();startStems(video.currentTime||scrubPos);}
+      if(video.paused)await video.play();playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');if(!raf)tick();
     }catch(err){console.warn(err)}
   }else{playing=false;playBtn.textContent='Play';badge.textContent='Paused'}
   scrubPointerId=null;updateUI();e.preventDefault();
