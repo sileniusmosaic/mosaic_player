@@ -387,7 +387,11 @@ function reset(){playing=false;stopStems();fallbackAudio.pause();try{fallbackAud
 // during our manual loop-reset, the video is briefly paused/behind while audio never stops.
 function wrappedAudioPos(){
   if(!ctx)return video.currentTime||0;
-  const cyc=videoCycle||LOOP_END;
+  // Use the audio buffers' OWN real decoded duration, not the video's — AAC
+  // compression subtly shifts exact length (encoder priming/padding), so they're
+  // not identical, and that small mismatch was flipping this to the wrong side
+  // of the loop boundary (computing "almost a full lap" instead of "just past zero").
+  const cyc=(buffers[0]&&buffers[0].duration)||videoCycle||LOOP_END;
   let v=(stemStartPos+(ctx.currentTime-stemStartCtx))%cyc;
   if(v<0)v+=cyc;
   return v;
