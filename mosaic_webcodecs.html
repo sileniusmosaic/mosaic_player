@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b0d">
+<title>Mosaic — Congo Yambumba (Abakuá)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#15100b;--panel:#1f1812;--panel2:#2a2117;--border:#3a2f22;--text:#f1e6d0;--muted:#c9bca3;--accent:#cf9f5f;--danger:#a3402a;--good:#8fae72;--brass:#b98a2e}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Work Sans',-apple-system,sans-serif}body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
+.app{max-width:480px;margin:0 auto;padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 8px;position:relative}
+.wordmark{font-family:'Fraunces',serif;font-weight:700;font-size:17px;color:var(--text)}
+.wordmark span{color:var(--accent);font-style:italic;font-weight:500}
+.piece-name{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--brass);letter-spacing:1px;margin-top:1px}
+.burger{width:34px;height:34px;border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;background:none}
+.burger span{width:16px;height:2px;background:var(--accent);display:block;border-radius:2px}
+#menuToggle{display:none}
+.menu-panel{position:fixed;inset:0;background:rgba(15,11,7,.97);z-index:50;padding:18px 16px;transform:translateY(-100%);transition:transform .25s ease}
+#menuToggle:checked ~ .menu-panel{transform:translateY(0)}
+.menu-close{width:34px;height:34px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;margin-left:auto;color:var(--accent);font-size:18px;cursor:pointer}
+.menu-links{margin-top:20px;display:flex;flex-direction:column;gap:2px}
+.menu-links a{color:var(--text);text-decoration:none;font-family:'Fraunces',serif;font-size:19px;padding:12px 4px;border-bottom:1px solid var(--border);display:block}
+.menu-links a.active{color:var(--accent)}
+.menu-sub{margin-top:22px}
+.rail-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1.5px;color:var(--brass);text-transform:uppercase;margin:0 0 10px}
+.rail-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:3px;margin-bottom:8px;border:1px solid var(--border);background:var(--panel)}
+.rail-item.active{border-color:var(--accent)}
+.rail-name{font-family:'Fraunces',serif;font-weight:600;font-size:13px}
+.rail-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;margin-top:2px;color:var(--good)}
+.badge{font-size:12px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
+.focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:1px solid var(--border);border-radius:10px;overflow:hidden;contain:paint}
+.focus-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;border:3px solid var(--accent);border-radius:10px;background-image:repeating-linear-gradient(45deg, rgba(241,230,208,0.5) 0 2px, transparent 2px 14px);-webkit-mask:linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);-webkit-mask-composite:xor;mask-composite:exclude;padding:5px;z-index:3}
+.focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
+.focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
+.focus-label{position:absolute;left:10px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
+.grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:1px solid var(--border);border-radius:10px;overflow:hidden;contain:paint}
+.grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
+.tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
+.focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
+.muteBtn{position:absolute;right:4px;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:4px;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation}
+.muteBtn svg{width:14px;height:14px;display:block;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.muteBtn.is-muted{background:var(--accent);color:#1a1309;border-color:#1a1309}
+.tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
+.tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
+.tile.is-selected{outline:2px solid var(--accent);outline-offset:-2px}
+.tempo-strip{margin-top:6px}
+.panel{margin-top:6px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
+.transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.transport button{font:inherit;border:1px solid var(--border);border-radius:8px;padding:9px 14px;background:var(--panel2);color:var(--text)}
+.transport button.primary{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
+.transport button:disabled{opacity:.5}
+.time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
+.timeline{width:100%;margin:9px 0 2px;accent-color:var(--accent)}
+.tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0}
+.tempo-buttons button{font:inherit;border:1px solid var(--border);border-radius:6px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:700}
+.tempo-buttons button.active{background:var(--accent);color:#1a1309;border-color:transparent}
+.tempo-buttons button:disabled{opacity:.4}
+.status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
+.status.good{color:var(--good)}.status.error{color:var(--danger)}
+.note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
+@media(min-width:620px){.grid-stage{margin-top:8px}}
+</style>
+</head>
+<body>
+<main class="app">
+  <input type="checkbox" id="menuToggle">
+  <div class="topbar">
+    <div>
+      <div class="wordmark">Mo<span>saic</span></div>
+      <div class="piece-name">Congo Yambumba (Abakuá)</div>
+    </div>
+    <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
+  </div>
+  <div class="viewer">
+    <div id="focusWrap" class="focus-wrap"><canvas id="mosaicFocus" class="focus-video"></canvas><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
+    <div class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
+  </div>
+  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Tempo presets"></div></div>
+  <section class="panel">
+    <div class="transport">
+      <button id="play" class="primary" type="button">Play</button>
+      <button id="reset" type="button">Reset</button>
+      <span id="time" class="time">0.000 / 45.600</span>
+    </div>
+    <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
+    <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
+    <p class="note">Tap a square to select focus. Mute remains instantaneous. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
+    <div id="badge" class="badge" hidden>Ready to start</div>
+  </section>
+  <img id="poster" src="poster_abakua.jpg" alt="" hidden>
+  <audio id="fallbackAudio" preload="none" playsinline loop hidden></audio>
+
+  <div class="menu-panel">
+    <label for="menuToggle" class="menu-close">✕</label>
+    <div class="menu-links">
+      <a class="active">Free</a>
+      <a>Membership</a>
+      <a>Log in</a>
+    </div>
+    <div class="menu-sub">
+      <p class="rail-title">Mosaics</p>
+      <div class="rail-item active">
+        <div><div class="rail-name">Congo Yambumba</div><div class="rail-tag">● playing now</div></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="mp4-demuxer.js"></script>
+<script src="wc-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const LOOP_END=45.600;
+const TEMPO_PRESETS=[50,75,100]; // 25% dropped for now to reduce scope — can add back later
+const VIDEO_SOURCES={
+  100:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_100.mp4',
+  75:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_75.mp4',
+  50:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_50.mp4'
+};
+const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
+// All 8 tiles are separate Web Audio stems (sample-accurate, gapless native looping).
+// This part is UNCHANGED from the previous architecture — it was already proven
+// gapless and reliable. Audio is the one and only master clock: video has no
+// clock of its own anymore (see the WebCodecs engine section below), so there is
+// no more "which one is master" question at all, and nothing for the two to drift
+// against — the whole class of sync bugs the old build fought is gone by construction.
+const STEM_URLS=['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac'];
+const $=s=>document.querySelector(s);
+const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
+const focusCtx=focusCanvas.getContext('2d',{alpha:false});
+const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
+let selected=0, muted=Array(8).fill(false);
+let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
+let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
+let videoCycle=LOOP_END;
+let tempoPercent=100, bankBusy=false;
+const bankCache=new Map(), bankLoads=new Map();
+
+// Audio engine — UNCHANGED from the previous architecture.
+let ctx=null, buffers=[], gains=[], sources=[];
+let stemStartCtx=0, stemStartPos=0, lastDriftCheck=0;
+let fallbackMode=false;
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function setStatus(msg,cls=''){status.textContent=msg;status.className='status'+(cls?' '+cls:'')}
+
+// --- WebCodecs video engine --------------------------------------------------
+// Replaces the old <video> element + canvas-snapshot pair. There is now exactly
+// ONE video pipeline: decode a frame, then paint it into BOTH the focus square
+// and its grid tile in the same synchronous step, from the literal same
+// VideoFrame object. The two views can no longer drift apart from each other —
+// they were never two separately-timed things to begin with. Every tick, video
+// is simply redrawn to match wherever the audio (the real clock) currently is.
+let lastRecoverAt=0;
+const engine=new WebCodecsVideoEngine({
+  gridCanvas:grid, focusCanvas:focusCanvas,
+  onStatus:(msg,cls)=>setStatus(msg,cls),
+  onError:(err)=>{
+    const now=performance.now();
+    if(now-lastRecoverAt<5000)return; // avoid reload storms on a persistently bad stream
+    lastRecoverAt=now;
+    console.warn('Video decoder error — reloading current tempo from scratch.',err);
+    loadVideoForTempo(tempoPercent,true).catch(e=>console.error('recovery reload failed',e));
+  }
+});
+engine.muted=muted; // shared by reference — toggling muted[i] is automatically visible to the engine
+
+function sizeFocusCanvas(){
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  const px=Math.round(480*dpr);
+  if(focusCanvas.width!==px){focusCanvas.width=px;focusCanvas.height=px;}
+}
+window.addEventListener('resize',sizeFocusCanvas);
+
+const videoBufferCache=new Map(), videoLoads=new Map();
+async function loadVideoBuffer(percent){
+  if(videoBufferCache.has(percent))return videoBufferCache.get(percent);
+  if(videoLoads.has(percent))return videoLoads.get(percent);
+  const promise=(async()=>{
+    setStatus('Downloading '+percent+'% video…');
+    const ab=await fetchWithRetry(VIDEO_SOURCES[percent],3);
+    videoBufferCache.set(percent,ab);videoLoads.delete(percent);return ab;
+  })().catch(e=>{videoLoads.delete(percent);throw e});
+  videoLoads.set(percent,promise);return promise;
+}
+async function loadVideoForTempo(percent,keepPos){
+  const pos=keepPos?currentPos():0;
+  const ab=await loadVideoBuffer(percent);
+  await engine.loadTempo(ab);
+  videoCycle=engine.cycleSeconds||LOOP_END;
+  engine.selected=selected;
+  if(keepPos)engine.seekTo(pos);
+}
+// Paints the frame at `pos` as soon as decode catches up to it — used whenever
+// we're NOT in the middle of the regular playing tick() loop (paused reset,
+// paused scrub-release, paused tempo switch, initial page load) since a single
+// render() call right after a seek will usually find the queue still empty
+// (decode is asynchronous). Falls back to the poster if nothing arrives in time.
+function paintAt(pos){
+  drawPoster();
+  if(!engine.info)return;
+  let attempts=0;
+  const tryPaint=()=>{
+    attempts++;
+    engine.render(pos);
+    if(engine.frameQueue.length===0&&attempts<40)requestAnimationFrame(tryPaint);
+  };
+  requestAnimationFrame(tryPaint);
+}
+function tileSource(i,w,h){const tw=w/4,th=h/2;return [(i%4)*tw,Math.floor(i/4)*th,tw,th]}
+function drawPoster(){
+  if(!poster.complete||!poster.naturalWidth)return;
+  const w=poster.naturalWidth,h=poster.naturalHeight;
+  const S=grid.width/4,Sh=grid.height/2;
+  for(let i=0;i<8;i++){
+    const [sx,sy,sw,sh]=tileSource(i,w,h),dx=(i%4)*S,dy=Math.floor(i/4)*Sh;
+    gctx.drawImage(poster,sx,sy,sw,sh,dx,dy,S,Sh);
+    if(muted[i]){gctx.fillStyle='rgba(0,0,0,.55)';gctx.fillRect(dx,dy,S,Sh)}
+    gctx.strokeStyle=i===selected?'#63d7ff':'#050607';gctx.lineWidth=i===selected?4:2;gctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
+  }
+  const [fsx,fsy,fsw,fsh]=tileSource(selected,w,h);
+  focusCtx.drawImage(poster,fsx,fsy,fsw,fsh,0,0,focusCanvas.width,focusCanvas.height);
+}
+function updateFocusUI(){
+  focusLabel.textContent=NAMES[selected];
+  focusWrap.classList.toggle('is-muted',muted[selected]);
+  engine.selected=selected;
+  if(engine.decodedFrameCount>0)engine.render(currentPos());
+  else drawPoster();
+}
+function buildControls(){
+  NAMES.forEach((name,i)=>{
+    const t=document.createElement('div');t.className='tile';
+    const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
+    const mute=document.createElement('button');mute.type='button';mute.className='muteBtn';mute.setAttribute('aria-label','Mute '+name);
+    mute.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"></path><path d="M17 9l4 6"></path><path d="M21 9l-4 6"></path></svg>';
+    const label=document.createElement('span');label.className='tile-name';label.textContent=name;
+    t.appendChild(label);t.appendChild(tap);t.appendChild(mute);controls.appendChild(t);
+    tap.addEventListener('click',()=>{selected=i;document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));updateFocusUI();});
+    mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];t.classList.toggle('is-muted',muted[i]);mute.classList.toggle('is-muted',muted[i]);mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);updateFocusUI();setTrackMute(i,muted[i]);});
+  });
+  if(controls.children[0])controls.children[0].classList.add('is-selected');
+}
+function AC(){return window.AudioContext||window.webkitAudioContext}
+function currentPos(){
+  if(fallbackMode)return playing?(fallbackAudio.currentTime||0):pausedPos;
+  return playing?wrappedAudioPos():pausedPos;
+}
+function setTrackMute(i,isMuted){
+  const g=gains[i];if(!g||!ctx)return;
+  const now=ctx.currentTime,target=isMuted?0:1;
+  try{g.gain.cancelScheduledValues(now);g.gain.setTargetAtTime(target,now,0.006);}catch{g.gain.value=target;}
+}
+function stopStems(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[]}
+function startStems(pos){
+  if(!ctx||buffers.length!==8)return;
+  stopStems();
+  const when=ctx.currentTime+0.02;
+  stemStartCtx=when;stemStartPos=pos;
+  sources=buffers.map((buf,idx)=>{
+    const s=ctx.createBufferSource();s.buffer=buf;s.loop=true;s.loopStart=0;s.loopEnd=buf.duration;
+    s.connect(gains[idx]);s.start(when,Math.min(pos,buf.duration-0.001));return s;
+  });
+}
+async function unlockContext(){
+  if(!ctx){const C=AC();if(!C)throw new Error('Web Audio is not supported in this browser');ctx=new C({latencyHint:'interactive'});}
+  if(ctx.state!=='running')await ctx.resume();
+  // iOS/WebKit-safe gesture unlock: schedule an inaudibly quiet oscillator now.
+  const o=ctx.createOscillator(),g=ctx.createGain();g.gain.value=0.000001;o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+0.025);
+}
+function tempoUrls(percent){
+  if(percent===100)return STEM_URLS;
+  return STEM_URLS.map(u=>u.replace('.aac','_'+percent+'.aac'));
+}
+async function fetchWithRetry(u,attempts=3){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{
+      const r=await fetch(u,{cache:'force-cache'});
+      if(!r.ok)throw new Error('HTTP '+r.status+' for '+u);
+      return await r.arrayBuffer();
+    }catch(e){
+      lastErr=e;
+      if(i<attempts-1)await new Promise(res=>setTimeout(res,250*Math.pow(2,i)));
+    }
+  }
+  throw lastErr;
+}
+async function loadBank(percent){
+  if(bankCache.has(percent))return bankCache.get(percent);
+  if(bankLoads.has(percent))return bankLoads.get(percent);
+  const promise=(async()=>{
+    const urls=tempoUrls(percent),rate=percent/100;
+    setStatus('Preparing '+percent+'% pitch-correct audio…');
+    const arrays=await Promise.all(urls.map(u=>fetchWithRetry(u,3)));
+    const targetFrames=Math.round((LOOP_END/rate)*ctx.sampleRate),out=[];
+    for(let i=0;i<arrays.length;i++){
+      const decoded=await ctx.decodeAudioData(arrays[i].slice(0));
+      const exact=ctx.createBuffer(1,targetFrames,ctx.sampleRate),dst=exact.getChannelData(0),src=decoded.getChannelData(0);
+      dst.set(src.subarray(0,Math.min(src.length,dst.length)));out.push(exact);
+      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of 8…');
+    }
+    bankCache.set(percent,out);bankLoads.delete(percent);return out;
+  })().catch(e=>{bankLoads.delete(percent);throw e});
+  bankLoads.set(percent,promise);return promise;
+}
+function ensureGains(){
+  if(gains.length===8)return;
+  gains=Array.from({length:8},(_,idx)=>{const g=ctx.createGain();g.gain.value=muted[idx]?0:1;g.connect(ctx.destination);return g;});
+}
+async function ensurePrepared(){
+  if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
+  try{
+    await unlockContext();ensureGains();buffers=await loadBank(tempoPercent);prepared=true;fallbackMode=false;badge.textContent='Audio ready';setStatus(tempoPercent+'% ready.','good');return true;
+  }catch(err){
+    console.error(err);
+    try{
+      setStatus('Multitrack audio failed, switching to full mix…','error');
+      await fallbackAudio.play().then(()=>fallbackAudio.pause()).catch(()=>{});
+      fallbackMode=true;prepared=true;badge.textContent='Audio ready (full mix)';setStatus('Multitrack audio unavailable; using full-mix fallback.','error');return true;
+    }catch(err2){
+      console.error(err2);badge.textContent='Audio error';setStatus('Audio setup failed: '+(err?.message||err),'error');return false;
+    }
+  }finally{preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';}
+}
+function buildTempoButtons(){
+  TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));tempoButtons.appendChild(b)});updateTempoUI();
+}
+function updateTempoUI(){tempoButtons.querySelectorAll('button').forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
+async function changeTempo(percent){
+  percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
+  if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
+  bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+  const wasPlaying=playing;
+  try{
+    // Prepare the audio bank AND the video buffer in parallel while the existing
+    // transport remains untouched — this intentionally mirrors the reliable Reset path.
+    const oldCycle=videoCycle||LOOP_END;
+    const proportion=clamp(currentPos()/oldCycle,0,1);
+    const [bank]=await Promise.all([loadBank(percent),loadVideoBuffer(percent)]);
+
+    playing=false;
+    cancelAnimationFrame(raf);raf=0;
+    stopStems();
+    fallbackAudio.pause();
+
+    buffers=bank;tempoPercent=percent;
+    await engine.loadTempo(videoBufferCache.get(percent));
+    videoCycle=engine.cycleSeconds||LOOP_END;
+    const newPos=proportion*videoCycle;
+    pausedPos=newPos;
+    engine.seekTo(newPos);
+
+    if(wasPlaying){
+      await unlockContext();
+      startStems(newPos);
+      playing=true;
+      playBtn.textContent='Pause';
+      if(!raf)tick();
+    }else{
+      playBtn.textContent='Play';
+      paintAt(newPos);
+    }
+    updateTempoUI();
+    setStatus(percent+'% tempo ready.','good');badge.textContent=playing?'Playing · '+percent+'%':'Audio ready · '+percent+'%';
+  }catch(err){
+    console.error(err);
+    playing=false;stopStems();playBtn.textContent='Play';
+    setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');
+  }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);}
+}
+function prefetchTempoBanks(){
+  setTimeout(()=>{
+    for(const p of TEMPO_PRESETS){
+      if(p===tempoPercent)continue;
+      for(const u of tempoUrls(p)){const l=document.createElement('link');l.rel='prefetch';l.as='fetch';l.href=u;l.crossOrigin='anonymous';document.head.appendChild(l)}
+      loadVideoBuffer(p).catch(()=>{});
+    }
+  },1200);
+}
+async function playFromGesture(){
+  if(!prepared){const ok=await ensurePrepared();if(!ok)return;prefetchTempoBanks();}
+  const pos=pausedPos;
+  try{
+    if(!fallbackMode){await unlockContext();startStems(pos);}
+    else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
+    playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();
+  }catch(err){console.warn(err);stopStems();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
+}
+function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;updateUI()}
+function toggleFromGesture(){if(playing)pause();else playFromGesture()}
+function reset(){
+  playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};pausedPos=0;
+  playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';
+  cancelAnimationFrame(raf);raf=0;
+  if(engine.info){engine.seekTo(0);paintAt(0);}else drawPoster();
+  updateUI();
+}
+// Where the audio genuinely is right now — the one and only clock in this app.
+function wrappedAudioPos(){
+  if(!ctx)return pausedPos;
+  // Use the audio buffers' OWN real decoded duration, not the video's — AAC
+  // compression subtly shifts exact length (encoder priming/padding), so they're
+  // not identical.
+  const cyc=(buffers[0]&&buffers[0].duration)||videoCycle||LOOP_END;
+  let v=(stemStartPos+(ctx.currentTime-stemStartCtx))%cyc;
+  if(v<0)v+=cyc;
+  return v;
+}
+function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)}
+// Picture-buffering watchdog: purely informational. Audio is completely
+// unaffected by video decode health — this only lets the user know why the
+// picture has frozen if decode ever genuinely falls behind (e.g. a slow first
+// load on a bad connection). There is nothing to "correct" video against
+// anymore, since it has no clock of its own to drift.
+let lastDisplayedTs=null,lastDisplayedChangeAt=performance.now(),pictureStalled=false;
+function tick(now=performance.now()){
+  if(!playing)return;
+  updateUI();
+  engine.render(wrappedAudioPos());
+  const dts=engine.displayedFrame?engine.displayedFrame.timestamp:null;
+  if(dts!==lastDisplayedTs){
+    lastDisplayedTs=dts;lastDisplayedChangeAt=now;
+    if(pictureStalled){pictureStalled=false;setStatus('Playing at '+tempoPercent+'%.','good');}
+  }else if(now-lastDisplayedChangeAt>2500&&!pictureStalled){
+    pictureStalled=true;setStatus('Picture is buffering — audio keeps playing normally.','error');
+  }
+  raf=requestAnimationFrame(tick);
+}
+
+playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('click',reset);
+function scrubValueFromClientX(clientX){const dur=videoCycle||LOOP_END;const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*dur,0,dur-.001)}
+function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
+function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);e.preventDefault()}
+async function endScrub(e){
+  if(!scrubbing||e.pointerId!==scrubPointerId)return;moveScrub(e);scrubbing=false;pausedPos=scrubPos;
+  if(engine.info)engine.seekTo(scrubPos);
+  if(scrubWasPlaying){
+    try{
+      if(fallbackMode){fallbackAudio.currentTime=scrubPos;if(fallbackAudio.paused)await fallbackAudio.play();}
+      else{await unlockContext();startStems(scrubPos);}
+      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');if(!raf)tick();
+    }catch(err){console.warn(err)}
+  }else{playing=false;playBtn.textContent='Play';badge.textContent='Paused';paintAt(scrubPos);}
+  scrubPointerId=null;updateUI();e.preventDefault();
+}
+timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginScrub);timeline.addEventListener('pointermove',moveScrub);timeline.addEventListener('pointerup',endScrub);timeline.addEventListener('pointercancel',endScrub);
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause()});window.addEventListener('pagehide',()=>{if(playing)pause()});
+poster.addEventListener('load',drawPoster);if(poster.complete)drawPoster();
+sizeFocusCanvas();
+buildControls();buildTempoButtons();updateFocusUI();updateUI();
+setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
+loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
+})();
+</script>
+</body>
+</html>
