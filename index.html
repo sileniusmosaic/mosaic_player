@@ -164,6 +164,10 @@ function setVideoSource(quality,keepPos){
 }
 
 // --- Video stall watchdog ---
+// Deliberately conservative: browsers are generally good at recovering from
+// brief buffering stalls on their own. Seeking during recovery risks causing
+// the exact skip-back/rewind artifact we're trying to eliminate, so the soft
+// path now just nudges playback (no seek) and only after a much longer stall.
 let watchdogLastTime=-1,watchdogStuckTicks=0,watchdogTimer=0;
 function startWatchdog(){
   if(watchdogTimer)return;
@@ -173,8 +177,8 @@ function startWatchdog(){
     const t=video.currentTime;
     if(watchdogLastTime>=0&&Math.abs(t-watchdogLastTime)<0.02){
       watchdogStuckTicks++;
-      if(watchdogStuckTicks===2)recoverStalledVideo('soft');
-      else if(watchdogStuckTicks>=4)recoverStalledVideo('hard');
+      if(watchdogStuckTicks===4)recoverStalledVideo('soft');
+      else if(watchdogStuckTicks>=8)recoverStalledVideo('hard');
     }else{
       watchdogStuckTicks=0;
     }
@@ -186,9 +190,11 @@ let recovering=false;
 async function recoverStalledVideo(mode){
   if(recovering)return;recovering=true;
   try{
-    const pos=currentPos();
     if(mode==='soft'){
-      try{video.pause();await seekVideoAndWait(pos);await video.play();}catch{}
+      // No seek: just nudge play() in case it silently paused. If it's genuinely
+      // still buffering, this is a harmless no-op and the browser keeps recovering itself.
+      console.warn('Soft video recovery: nudging playback (no seek).');
+      try{await video.play();}catch{}
     }else{
       console.warn('Hard video recovery: reloading source.');
       setVideoSource(videoQuality,true);
