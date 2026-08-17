@@ -408,17 +408,21 @@ function checkStemDrift(now){
   // Audio is the authority now (proven gapless); video is always the side that gets
   // corrected, never the other way round. Only step in here for something genuinely
   // abnormal — e.g. audio itself stalled or got starved — not routine loop-boundary drift.
-  if(Math.abs(d)>2.0){console.warn('[diagnostic] Large stem drift detected:',d.toFixed(3),'s — no restart applied this build.');}
+  if(Math.abs(d)>2.0)startStems(actual);
 }
 function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)}
 let lastVideoTimeSeen=-1,stemRestartCooldownUntil=0;
 function catchVideoUpAfterNativeLoop(now){
   const vt=video.currentTime||0;
   if(lastVideoTimeSeen>=0&&vt<lastVideoTimeSeen-1.0&&playing&&!video.seeking){
-    // DIAGNOSTIC MODE: logging only, no correction applied — isolating whether our
-    // own corrections are the cause of the canvas-vs-focus drift being reported.
+    // The browser's own native loop just wrapped the video back to ~0. Audio never
+    // stopped (it loops natively via Web Audio), so jump the picture — just the
+    // picture, never the audio — to wherever the audio genuinely is right now.
     const target=wrappedAudioPos();
-    console.warn('[diagnostic] Native loop detected: video at',vt.toFixed(3),'— audio position would be',target.toFixed(3),'(no correction applied this build)');
+    if(Math.abs(target-vt)>0.02){try{video.currentTime=target;}catch{}}
+    // Give the video a moment to settle after the jump before anything is allowed
+    // to second-guess it and consider restarting the (already-correct) audio.
+    stemRestartCooldownUntil=now+1200;
   }
   lastVideoTimeSeen=vt;
 }
@@ -432,10 +436,9 @@ function onVideoFrame(now,metadata){
     const pf=metadata.presentedFrames;
     if(pf!==framePresentCount){framePresentCount=pf;frameProgressAt=now;}
     else{
-      // DIAGNOSTIC MODE: logging only, no nudge applied.
       if(now-frameProgressAt>900&&now-lastNudgeAt>1500){
         lastNudgeAt=now;
-        console.warn('[diagnostic] Frame stall detected — no nudge applied this build.');
+        try{video.currentTime=video.currentTime+0.001}catch{}
       }
       // Only if it's been stuck for a genuinely long time do we fall back to a full reload.
       if(now-frameProgressAt>6000&&now-hardRecoverAt>8000){
