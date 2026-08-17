@@ -185,7 +185,7 @@ async function setVideoSource(quality,keepPos){
 // Recovery is a microscopic forward nudge (not a seek to an old position), since
 // seeking was the actual cause of the earlier skip-back/rewind glitch.
 let framePresentCount=-1,frameProgressAt=0,lastNudgeAt=0,hardRecoverAt=0;
-function resetFrameWatch(){framePresentCount=-1;frameProgressAt=performance.now();lastNudgeAt=0;hardRecoverAt=0;lastVideoTimeSeen=-1;}
+function resetFrameWatch(){framePresentCount=-1;frameProgressAt=performance.now();lastNudgeAt=0;hardRecoverAt=0;lastVideoTimeSeen=-1;stemRestartCooldownUntil=0;}
 async function recoverStalledVideo(mode){
   if(recovering)return;recovering=true;
   try{
@@ -394,16 +394,20 @@ function wrappedAudioPos(){
 }
 function checkStemDrift(now){
   if(now-lastDriftCheck<150)return;lastDriftCheck=now;
+  if(now<stemRestartCooldownUntil)return; // settling after a video catch-up jump — don't second-guess it
   if(!ctx||!playing||video.paused||video.seeking||sources.length!==8)return;
   const expected=stemStartPos+(ctx.currentTime-stemStartCtx);
   const actual=video.currentTime||0;
   let d=expected-actual;
   // Guard against a false-large reading right at a loop wrap point.
   if(videoCycle>1&&Math.abs(d)>videoCycle/2)d=d>0?d-videoCycle:d+videoCycle;
-  if(Math.abs(d)>0.05)startStems(actual);
+  // Audio is the authority now (proven gapless); video is always the side that gets
+  // corrected, never the other way round. Only step in here for something genuinely
+  // abnormal — e.g. audio itself stalled or got starved — not routine loop-boundary drift.
+  if(Math.abs(d)>2.0)startStems(actual);
 }
 function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)}
-let lastVideoTimeSeen=-1;
+let lastVideoTimeSeen=-1,stemRestartCooldownUntil=0;
 function catchVideoUpAfterNativeLoop(now){
   const vt=video.currentTime||0;
   if(lastVideoTimeSeen>=0&&vt<lastVideoTimeSeen-1.0&&playing&&!video.seeking){
@@ -415,6 +419,9 @@ function catchVideoUpAfterNativeLoop(now){
       console.warn('Native loop detected: video was at',vt.toFixed(3),'→ catching up to',target.toFixed(3),'(jump of',(target-vt).toFixed(3),'s)');
       try{video.currentTime=target;}catch{}
     }
+    // Give the video a moment to settle after the jump before anything is allowed
+    // to second-guess it and consider restarting the (already-correct) audio.
+    stemRestartCooldownUntil=now+1200;
   }
   lastVideoTimeSeen=vt;
 }
