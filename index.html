@@ -157,51 +157,27 @@ function setVideoSource(quality,keepPos){
     video.removeEventListener('loadedmetadata',resume);
     calibrateVideo();
     try{video.currentTime=pos}catch{}
-    video.muted=muted[0];
+    video.volume=muted[0]?0:1;
     if(playing)video.play().catch(()=>{});
   };
   video.addEventListener('loadedmetadata',resume);
 }
 
-// --- Video stall watchdog ---
-// Deliberately conservative: browsers are generally good at recovering from
-// brief buffering stalls on their own. Seeking during recovery risks causing
-// the exact skip-back/rewind artifact we're trying to eliminate, so the soft
-// path now just nudges playback (no seek) and only after a much longer stall.
-let watchdogLastTime=-1,watchdogStuckTicks=0,watchdogTimer=0;
-function startWatchdog(){
-  if(watchdogTimer)return;
-  watchdogLastTime=-1;watchdogStuckTicks=0;
-  watchdogTimer=setInterval(()=>{
-    if(!playing||video.paused||video.seeking){watchdogLastTime=-1;watchdogStuckTicks=0;return;}
-    const t=video.currentTime;
-    if(watchdogLastTime>=0&&Math.abs(t-watchdogLastTime)<0.02){
-      watchdogStuckTicks++;
-      if(watchdogStuckTicks===4)recoverStalledVideo('soft');
-      else if(watchdogStuckTicks>=8)recoverStalledVideo('hard');
-    }else{
-      watchdogStuckTicks=0;
-    }
-    watchdogLastTime=t;
-  },1000);
-}
-function stopWatchdog(){if(watchdogTimer){clearInterval(watchdogTimer);watchdogTimer=0}watchdogLastTime=-1;watchdogStuckTicks=0}
-let recovering=false;
+// --- Frame-accurate stall detection ---
+// Uses the browser's real frame-delivery count (from requestVideoFrameCallback's
+// metadata) rather than polling currentTime, which can misreport during a stall.
+// Recovery is a microscopic forward nudge (not a seek to an old position), since
+// seeking was the actual cause of the earlier skip-back/rewind glitch.
+let framePresentCount=-1,frameProgressAt=0,lastNudgeAt=0,hardRecoverAt=0;
+function resetFrameWatch(){framePresentCount=-1;frameProgressAt=performance.now();lastNudgeAt=0;hardRecoverAt=0;}
 async function recoverStalledVideo(mode){
   if(recovering)return;recovering=true;
   try{
-    if(mode==='soft'){
-      // No seek: just nudge play() in case it silently paused. If it's genuinely
-      // still buffering, this is a harmless no-op and the browser keeps recovering itself.
-      console.warn('Soft video recovery: nudging playback (no seek).');
-      try{await video.play();}catch{}
-    }else{
-      console.warn('Hard video recovery: reloading source.');
-      setVideoSource(videoQuality,true);
-    }
-    watchdogStuckTicks=0;watchdogLastTime=-1;
+    console.warn('Hard video recovery: reloading source.');
+    setVideoSource(videoQuality,true);
   }finally{recovering=false;}
 }
+let recovering=false;
 function setStatus(msg,cls=''){status.textContent=msg;status.className='status'+(cls?' '+cls:'')}
 function tileSource(i,w,h){const tw=w/4,th=h/2;return [(i%4)*tw,Math.floor(i/4)*th,tw,th]}
 function updateFocusCrop(){const col=selected%4,row=Math.floor(selected/4);video.style.left=(-col*100)+'%';video.style.top=(-row*100)+'%';focusLabel.textContent=NAMES[selected];focusWrap.classList.toggle('is-muted',muted[selected])}
@@ -227,7 +203,7 @@ function currentPos(){
   return playing?(video.currentTime||0):pausedPos;
 }
 function setTrackMute(i,isMuted){
-  if(i===0){video.muted=isMuted;return}
+  if(i===0){video.volume=isMuted?0:1;return}
   const g=gains[tileToStem(i)];if(!g||!ctx)return;
   const now=ctx.currentTime,target=isMuted?0:1;
   try{g.gain.cancelScheduledValues(now);g.gain.setTargetAtTime(target,now,0.006);}catch{g.gain.value=target;}
@@ -327,7 +303,7 @@ async function switchVideoSource(percent,phase){
     video.addEventListener('loadedmetadata',onMeta);
   });
   calibrateVideo();
-  video.muted=muted[0];
+  video.volume=muted[0]?0:1;
   await seekVideoAndWait(phase);
 }
 async function changeTempo(percent){
@@ -360,7 +336,7 @@ async function changeTempo(percent){
       video.addEventListener('loadedmetadata',onMeta);
     });
     calibrateVideo();
-    video.muted=muted[0];
+    video.volume=muted[0]?0:1;
     const newPos=proportion*videoCycle;
     pausedPos=newPos;
     await seekVideoAndWait(newPos);
@@ -375,7 +351,7 @@ async function changeTempo(percent){
       playing=true;
       playBtn.textContent='Pause';
       if(!raf)tick();
-      startWatchdog();
+      resetFrameWatch();
     }else{
       playBtn.textContent='Play';
     }
@@ -396,16 +372,16 @@ async function playFromGesture(){
   const pos=pausedPos;calibrateVideo();
   try{
     try{video.currentTime=pos}catch{}
-    video.muted=muted[0];
+    video.volume=muted[0]?0:1;
     await video.play();
     if(!fallbackMode){await unlockContext();startStems(video.currentTime||pos);}
     else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
-    playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();startWatchdog();
+    playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();resetFrameWatch();
   }catch(err){console.warn(err);stopStems();video.pause();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
 }
-function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();video.pause();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;stopWatchdog();updateUI()}
+function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();video.pause();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
-function reset(){playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI();stopWatchdog()}
+function reset(){playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};video.pause();pausedPos=0;playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';try{video.currentTime=0}catch{}calibrateVideo();hasLiveFrame=false;drawPoster();updateFocusCrop();updateUI()}
 function checkStemDrift(now){
   if(now-lastDriftCheck<150)return;lastDriftCheck=now;
   if(!ctx||!playing||video.paused||video.seeking||sources.length!==7)return;
@@ -421,7 +397,28 @@ function tick(now=performance.now()){
   if(!playing)return;
   checkStemDrift(now);updateUI();raf=requestAnimationFrame(tick);
 }
-function onVideoFrame(now){if(now-lastGridPaint>=16){drawLive();lastGridPaint=now}if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame)}
+function onVideoFrame(now,metadata){
+  if(now-lastGridPaint>=16){drawLive();lastGridPaint=now}
+  if(playing&&!video.paused&&!video.seeking&&metadata&&typeof metadata.presentedFrames==='number'){
+    const pf=metadata.presentedFrames;
+    if(pf!==framePresentCount){framePresentCount=pf;frameProgressAt=now;}
+    else{
+      // No new frame has actually reached the screen. Try a microscopic nudge first —
+      // this is small enough to be visually imperceptible but can unstick a frozen decoder.
+      if(now-frameProgressAt>900&&now-lastNudgeAt>1500){
+        lastNudgeAt=now;
+        console.warn('Frame stall detected — micro-nudge.');
+        try{video.currentTime=video.currentTime+0.001}catch{}
+      }
+      // Only if it's been stuck for a genuinely long time do we fall back to a full reload.
+      if(now-frameProgressAt>6000&&now-hardRecoverAt>8000){
+        hardRecoverAt=now;
+        recoverStalledVideo('hard');
+      }
+    }
+  }
+  if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame);
+}
 
 playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('click',reset);
 function scrubValueFromClientX(clientX){const dur=videoCycle||LOOP_END;const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*dur,0,dur-.001)}
@@ -434,7 +431,7 @@ async function endScrub(e){
     try{
       if(fallbackMode){fallbackAudio.currentTime=scrubPos;if(fallbackAudio.paused)await fallbackAudio.play();}
       else{await unlockContext();startStems(video.currentTime||scrubPos);}
-      if(video.paused)await video.play();playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');if(!raf)tick();
+      if(video.paused)await video.play();playing=true;resetFrameWatch();playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');if(!raf)tick();
     }catch(err){console.warn(err)}
   }else{playing=false;playBtn.textContent='Play';badge.textContent='Paused'}
   scrubPointerId=null;updateUI();e.preventDefault();
@@ -446,9 +443,9 @@ video.addEventListener('error',()=>{
   setStatus('Video stream error — attempting recovery…','error');
   if(playing)recoverStalledVideo('hard');
 });
-video.addEventListener('stalled',()=>{if(playing)recoverStalledVideo('soft')});
-video.addEventListener('waiting',()=>{if(playing)recoverStalledVideo('soft')});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&playing)recoverStalledVideo('soft')});
+video.addEventListener('stalled',()=>{if(playing)setStatus('Buffering…')});
+video.addEventListener('waiting',()=>{if(playing)setStatus('Buffering…')});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&playing)resetFrameWatch()});
 poster.addEventListener('load',drawPoster);if(poster.complete)drawPoster();buildControls();buildTempoButtons();updateFocusCrop();updateUI();setStatus('v21: tap Play once. Improved stall recovery, faster resync, audio retry, and auto video quality.');
 setVideoSource(100,false);
 if(video.requestVideoFrameCallback)video.requestVideoFrameCallback(onVideoFrame);else setInterval(()=>{if(!video.paused)drawLive()},1000/50);
