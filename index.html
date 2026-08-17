@@ -76,7 +76,7 @@
     <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
   </div>
   <div class="viewer">
-    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline disablepictureinpicture crossorigin="anonymous" poster="poster_abakua.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
+    <div id="focusWrap" class="focus-wrap"><video id="mosaicVideo" class="focus-video" preload="auto" playsinline webkit-playsinline muted disablepictureinpicture crossorigin="anonymous" poster="poster_abakua.jpg"></video><div class="focus-dim"></div><div id="focusLabel" class="focus-label">Clave</div></div>
     <div class="grid-stage"><canvas id="grid" width="640" height="320"></canvas><div id="gridControls" class="grid-controls"></div></div>
   </div>
   <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Tempo presets"></div></div>
@@ -122,10 +122,10 @@ const VIDEO_SOURCES={
 };
 let videoQuality=100;
 const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
-// Clave is embedded directly in the video as its native audio track (tile 0).
-// The remaining 7 tiles are separate Web Audio stems, slaved to the video's own clock.
-const STEM_URLS=['02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac'];
-const tileToStem=i=>i-1; // tile 0 (Clave) has no stem index; tiles 1-7 map to stems 0-6
+// All 8 tiles are separate Web Audio stems (sample-accurate, gapless native looping).
+// The video is only the position reference for keeping everyone aligned — its own
+// picture is allowed to hitch slightly at its own native loop point, which is fine.
+const STEM_URLS=['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac'];
 const $=s=>document.querySelector(s);
 const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 video.loop=true;
@@ -148,10 +148,27 @@ let fallbackMode=false;
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 
 // --- (per-tempo video sources selected directly by tempo, no device-quality tiers) ---
-function setVideoSource(quality,keepPos){
+// Fully preload each video into memory as a blob before assigning it as the
+// source. This is a one-time network cost per tempo (not ongoing load) — but
+// it means looping and seeking never depend on the network again afterward,
+// which is what was causing the ~1s pause at the loop point.
+const videoBlobCache=new Map();
+async function loadVideoBlob(quality){
+  if(videoBlobCache.has(quality))return videoBlobCache.get(quality);
+  setStatus('Downloading '+quality+'% video…');
+  const res=await fetch(VIDEO_SOURCES[quality]);
+  if(!res.ok)throw new Error('Video fetch failed: HTTP '+res.status);
+  const blob=await res.blob();
+  const url=URL.createObjectURL(blob);
+  videoBlobCache.set(quality,url);
+  return url;
+}
+async function setVideoSource(quality,keepPos){
   const pos=keepPos?currentPos():0;
   videoQuality=quality;
-  video.src=VIDEO_SOURCES[quality];
+  let url;
+  try{url=await loadVideoBlob(quality);}catch(err){console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');return;}
+  video.src=url;
   video.load();
   const resume=()=>{
     video.removeEventListener('loadedmetadata',resume);
@@ -202,17 +219,13 @@ function currentPos(){
   return playing?(video.currentTime||0):pausedPos;
 }
 function setTrackMute(i,isMuted){
-  if(i===0){
-    if(claveGain&&ctx){const now=ctx.currentTime,target=isMuted?0:1;try{claveGain.gain.cancelScheduledValues(now);claveGain.gain.setTargetAtTime(target,now,0.006);}catch{claveGain.gain.value=target;}}
-    return;
-  }
-  const g=gains[tileToStem(i)];if(!g||!ctx)return;
+  const g=gains[i];if(!g||!ctx)return;
   const now=ctx.currentTime,target=isMuted?0:1;
   try{g.gain.cancelScheduledValues(now);g.gain.setTargetAtTime(target,now,0.006);}catch{g.gain.value=target;}
 }
 function stopStems(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[]}
 function startStems(pos){
-  if(!ctx||buffers.length!==7)return;
+  if(!ctx||buffers.length!==8)return;
   stopStems();
   const when=ctx.currentTime+0.02;
   stemStartCtx=when;stemStartPos=pos;
@@ -221,24 +234,11 @@ function startStems(pos){
     s.connect(gains[idx]);s.start(when,Math.min(pos,buf.duration-0.001));return s;
   });
 }
-let claveGain=null,claveRouted=false;
 async function unlockContext(){
   if(!ctx){const C=AC();if(!C)throw new Error('Web Audio is not supported in this browser');ctx=new C({latencyHint:'interactive'});}
   if(ctx.state!=='running')await ctx.resume();
   // iOS/WebKit-safe gesture unlock: schedule an inaudibly quiet oscillator now.
   const o=ctx.createOscillator(),g=ctx.createGain();g.gain.value=0.000001;o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+0.025);
-  // Route Clave's embedded video audio through Web Audio too, so its mute works
-  // exactly like the other 7 stems — iOS ignores video.volume entirely, and
-  // video.muted can trigger an OS-level audio-session reset that silences everything.
-  if(!claveRouted){
-    try{
-      const src=ctx.createMediaElementSource(video);
-      claveGain=ctx.createGain();
-      claveGain.gain.value=muted[0]?0:1;
-      src.connect(claveGain).connect(ctx.destination);
-      claveRouted=true;
-    }catch(e){console.warn('Could not route Clave through Web Audio; mute may be unreliable.',e);}
-  }
 }
 function tempoUrls(percent){
   if(percent===100)return STEM_URLS;
@@ -270,15 +270,15 @@ async function loadBank(percent){
       const decoded=await ctx.decodeAudioData(arrays[i].slice(0));
       const exact=ctx.createBuffer(1,targetFrames,ctx.sampleRate),dst=exact.getChannelData(0),src=decoded.getChannelData(0);
       dst.set(src.subarray(0,Math.min(src.length,dst.length)));out.push(exact);
-      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of 7…');
+      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of 8…');
     }
     bankCache.set(percent,out);bankLoads.delete(percent);return out;
   })().catch(e=>{bankLoads.delete(percent);throw e});
   bankLoads.set(percent,promise);return promise;
 }
 function ensureGains(){
-  if(gains.length===7)return;
-  gains=Array.from({length:7},(_,idx)=>{const g=ctx.createGain();g.gain.value=muted[idx+1]?0:1;g.connect(ctx.destination);return g;});
+  if(gains.length===8)return;
+  gains=Array.from({length:8},(_,idx)=>{const g=ctx.createGain();g.gain.value=muted[idx]?0:1;g.connect(ctx.destination);return g;});
 }
 async function ensurePrepared(){
   if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
@@ -308,18 +308,6 @@ function seekVideoAndWait(t){
     setTimeout(finish,220);
   });
 }
-async function switchVideoSource(percent,phase){
-  if(videoQuality===percent){await seekVideoAndWait(phase);return}
-  videoQuality=percent;
-  video.src=VIDEO_SOURCES[percent];
-  video.load();
-  await new Promise(resolve=>{
-    const onMeta=()=>{video.removeEventListener('loadedmetadata',onMeta);resolve()};
-    video.addEventListener('loadedmetadata',onMeta);
-  });
-  calibrateVideo();
-  await seekVideoAndWait(phase);
-}
 async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
@@ -343,7 +331,8 @@ async function changeTempo(percent){
     // Load the correct pre-rendered video file for this tempo (each file's own native
     // length + embedded Clave audio already matches its tempo — no rate math needed).
     videoQuality=percent;
-    video.src=VIDEO_SOURCES[percent];
+    const url=await loadVideoBlob(percent);
+    video.src=url;
     video.load();
     await new Promise(resolve=>{
       const onMeta=()=>{video.removeEventListener('loadedmetadata',onMeta);resolve()};
