@@ -400,11 +400,11 @@ function checkStemDrift(now){
   if(now-lastDriftCheck<150)return;lastDriftCheck=now;
   if(now<stemRestartCooldownUntil)return; // settling after a video catch-up jump — don't second-guess it
   if(!ctx||!playing||video.paused||video.seeking||sources.length!==8)return;
-  const expected=stemStartPos+(ctx.currentTime-stemStartCtx);
+  const expected=wrappedAudioPos(); // properly wrapped, no matter how many laps have passed
   const actual=video.currentTime||0;
+  const cyc=(buffers[0]&&buffers[0].duration)||videoCycle||LOOP_END;
   let d=expected-actual;
-  // Guard against a false-large reading right at a loop wrap point.
-  if(videoCycle>1&&Math.abs(d)>videoCycle/2)d=d>0?d-videoCycle:d+videoCycle;
+  if(cyc>1&&Math.abs(d)>cyc/2)d=d>0?d-cyc:d+cyc;
   // Audio is the authority now (proven gapless); video is always the side that gets
   // corrected, never the other way round. Only step in here for something genuinely
   // abnormal — e.g. audio itself stalled or got starved — not routine loop-boundary drift.
