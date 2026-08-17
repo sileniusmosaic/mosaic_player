@@ -137,6 +137,7 @@ const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoBu
 let selected=0, muted=Array(8).fill(false);
 let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
+let startingPlayback=false; // guards a fast double-tap on Play from starting two overlapping playback attempts
 let videoCycle=LOOP_END;
 let tempoPercent=100, bankBusy=false;
 const bankCache=new Map(), bankLoads=new Map();
@@ -201,11 +202,19 @@ async function loadVideoForTempo(percent,keepPos){
 // paused scrub-release, paused tempo switch, initial page load) since a single
 // render() call right after a seek will usually find the queue still empty
 // (decode is asynchronous). Falls back to the poster if nothing arrives in time.
+let paintToken=0;
 function paintAt(pos){
+  const myToken=++paintToken; // invalidates any earlier still-running paintAt loop
   drawPoster();
   if(!engine.info)return;
   let attempts=0;
   const tryPaint=()=>{
+    // Bail if superseded by a newer paintAt() call, OR if playback has started
+    // in the meantime — tick() owns rendering once playing, and two loops
+    // calling engine.render() with different targets at once will fight over
+    // its internal lap-tracking state and produce exactly the kind of rapid
+    // flicker-through-frames this guards against.
+    if(myToken!==paintToken||playing)return;
     attempts++;
     engine.render(pos);
     if(engine.frameQueue.length===0&&attempts<40)requestAnimationFrame(tryPaint);
@@ -384,13 +393,17 @@ function prefetchTempoBanks(){
   },1200);
 }
 async function playFromGesture(){
-  if(!prepared){const ok=await ensurePrepared();if(!ok)return;prefetchTempoBanks();}
-  const pos=pausedPos;
+  if(startingPlayback||playing)return; // a fast double-tap can otherwise land here twice before `playing` flips
+  startingPlayback=true;
   try{
-    if(!fallbackMode){await unlockContext();startStems(pos);}
-    else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
-    playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');tick();
-  }catch(err){console.warn(err);stopStems();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
+    if(!prepared){const ok=await ensurePrepared();if(!ok)return;prefetchTempoBanks();}
+    const pos=pausedPos;
+    try{
+      if(!fallbackMode){await unlockContext();startStems(pos);}
+      else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
+      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');if(!raf)tick();
+    }catch(err){console.warn(err);stopStems();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
+  }finally{startingPlayback=false;}
 }
 function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
