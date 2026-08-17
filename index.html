@@ -124,7 +124,7 @@ let videoQuality=100;
 const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
 // Clave is embedded directly in the video as its native audio track (tile 0).
 // The remaining 7 tiles are separate Web Audio stems, slaved to the video's own clock.
-const STEM_URLS=['02_bembe_abakua.m4a','03_cata_abakua.m4a','04_erikundi_abakua.m4a','05_quinto_abakua.m4a','06_conga_abakua.m4a','07_tumba_abakua.m4a','08_coro_abakua.m4a'];
+const STEM_URLS=['02_bembe_abakua.wav','03_cata_abakua.wav','04_erikundi_abakua.wav','05_quinto_abakua.wav','06_conga_abakua.wav','07_tumba_abakua.wav','08_coro_abakua.wav'];
 const tileToStem=i=>i-1; // tile 0 (Clave) has no stem index; tiles 1-7 map to stems 0-6
 const $=s=>document.querySelector(s);
 const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
@@ -245,7 +245,7 @@ async function unlockContext(){
 }
 function tempoUrls(percent){
   if(percent===100)return STEM_URLS;
-  return STEM_URLS.map(u=>u.replace('.m4a','_'+percent+'.m4a'));
+  return STEM_URLS.map(u=>u.replace('.wav','_'+percent+'.wav'));
 }
 async function fetchWithRetry(u,attempts=3){
   let lastErr;
