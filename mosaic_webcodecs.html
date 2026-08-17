@@ -421,7 +421,19 @@ function wrappedAudioPos(){
   // compression subtly shifts exact length (encoder priming/padding), so they're
   // not identical.
   const cyc=(buffers[0]&&buffers[0].duration)||videoCycle||LOOP_END;
-  let v=(stemStartPos+(ctx.currentTime-stemStartCtx))%cyc;
+  // startStems() schedules playback ~20ms in the future (when=ctx.currentTime+0.02)
+  // so the very first tick() — called synchronously right after startStems(), before
+  // that 20ms has actually elapsed — sees a small NEGATIVE elapsed value. Wrapping
+  // that with modulo turned it into (cyc - 0.02): a position almost a full cycle
+  // away from the truth. render()'s loop-boundary heuristic then read the very next
+  // (correct, near-zero) tick as a big backward jump and incremented its lap
+  // counter, permanently offsetting the video a full lap ahead of audio until the
+  // decoder's own lap counter caught up — which is exactly the "plays through many
+  // frames rapidly, then settles" bug. Fix: clamp elapsed to zero instead of letting
+  // it go negative — before the schedule point, we ARE at stemStartPos, full stop.
+  let elapsed=ctx.currentTime-stemStartCtx;
+  if(elapsed<0)elapsed=0;
+  let v=(stemStartPos+elapsed)%cyc;
   if(v<0)v+=cyc;
   return v;
 }
