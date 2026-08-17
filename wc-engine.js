@@ -241,7 +241,7 @@ function drawGridFromSource(ctx, source, w, h, muted, selected) {
     const dx = (i % 4) * S, dy = Math.floor(i / 4) * Sh;
     ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
     if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S, Sh); }
-    ctx.strokeStyle = i === selected ? '#63d7ff' : '#050607';
+    ctx.strokeStyle = i === selected ? '#cbe0e6' : 'rgba(203,224,230,0.35)';
     ctx.lineWidth = i === selected ? 4 : 2;
     ctx.strokeRect(dx + 1, dy + 1, S - 2, Sh - 2);
   }
