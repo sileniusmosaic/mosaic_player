@@ -30,6 +30,23 @@ class WebCodecsVideoEngine {
     this.maxQueuedFrames = 8;  // decode-ahead buffer depth
     this.destroyed = false;
     this.seeking = false;
+    this._resetLapTracking();
+  }
+
+  // Frame timestamps reset to ~0 at every loop point (sample 0's pts is always
+  // ~0), but decode runs ahead of playback — so right at a loop boundary, the
+  // frame queue can genuinely contain the tail of one lap (high timestamps)
+  // followed by the head of the next (low timestamps). A naive "timestamp
+  // strictly ascending" scan breaks there: it sees a small timestamp after a
+  // large one, treats the large one as still "in the future", and freezes
+  // forever (this was the real bug — decode stalls too, since nothing ever
+  // gets consumed off the front of a wedged queue). Fix: track lap count
+  // independently for frames (via output-order wrap detection) and for the
+  // playback target (via the same heuristic on the caller's wrapped position),
+  // then compare both on one monotonically-increasing "global" timeline.
+  _resetLapTracking() {
+    this.lapIndex = 0; this._lastOutputRawTs = null;
+    this.displayLapIndex = 0; this._lastTargetRawTs = null;
   }
 
   // --- lifecycle -----------------------------------------------------------
@@ -41,6 +58,7 @@ class WebCodecsVideoEngine {
     this.cycleSeconds = info.samples.reduce((a, s) => a + s.duration, 0) / info.timescale;
     this.sampleIdx = 0;
     this._clearQueue();
+    this._resetLapTracking();
     const config = { codec: info.codec, codedWidth: info.codedWidth, codedHeight: info.codedHeight };
     if (info.description && info.description.length) config.description = info.description;
     const support = await VideoDecoder.isConfigSupported(config);
@@ -104,13 +122,21 @@ class WebCodecsVideoEngine {
 
   _onFrame(frame) {
     this.decodedFrameCount++;
+    const rawTs = frame.timestamp;
+    // Output order is always correct presentation order WITHIN a lap (that's
+    // the WebCodecs contract for a correctly-fed decoder); a big backward jump
+    // in the raw value is therefore the loop point, not disorder — detect it
+    // and fold it into a monotonically-increasing global timestamp so the
+    // queue stays comparable straight across the boundary.
+    if (this._lastOutputRawTs !== null && rawTs < this._lastOutputRawTs - (this.cycleSeconds * 1e6 * 0.5)) {
+      this.lapIndex++;
+    }
+    this._lastOutputRawTs = rawTs;
+    frame.globalTimestamp = this.lapIndex * this.cycleSeconds * 1e6 + rawTs;
     this.frameQueue.push(frame);
-    // Frames should already arrive in ascending presentation order (that's the
-    // WebCodecs contract for a correctly-fed decoder), but guard against a
-    // misbehaving stream rather than silently mis-render.
     if (this.frameQueue.length > 1) {
       const prev = this.frameQueue[this.frameQueue.length - 2];
-      if (frame.timestamp < prev.timestamp) console.warn('Frame arrived out of presentation order:', frame.timestamp, 'after', prev.timestamp);
+      if (frame.globalTimestamp < prev.globalTimestamp) console.warn('Frame arrived out of global order:', frame.globalTimestamp, 'after', prev.globalTimestamp);
     }
   }
 
@@ -129,6 +155,7 @@ class WebCodecsVideoEngine {
       if (s.isSync && s.pts <= targetUnits) keyIdx = i; else if (s.pts > targetUnits) break;
     }
     this._clearQueue();
+    this._resetLapTracking(); // fresh baseline — old lap count is meaningless after a jump
     if (this.decoder && this.decoder.state === 'configured') {
       try { this.decoder.reset(); } catch {}
       try {
@@ -147,10 +174,19 @@ class WebCodecsVideoEngine {
 
   render(targetSeconds) {
     this._pump(); // keep the buffer topped up every tick, not just on load/seek
-    const targetUs = targetSeconds * 1e6;
+    const rawTargetUs = targetSeconds * 1e6;
+    // Same wrap-detection heuristic as _onFrame, applied independently to the
+    // caller's wrapped position — both sides converge on the same global
+    // timeline because they're driven by the same real-time progression, even
+    // though neither knows the other's lap count directly.
+    if (this._lastTargetRawTs !== null && rawTargetUs < this._lastTargetRawTs - (this.cycleSeconds * 1e6 * 0.5)) {
+      this.displayLapIndex++;
+    }
+    this._lastTargetRawTs = rawTargetUs;
+    const globalTargetUs = this.displayLapIndex * this.cycleSeconds * 1e6 + rawTargetUs;
     let chosen = null, chosenIdx = -1;
     for (let i = 0; i < this.frameQueue.length; i++) {
-      if (this.frameQueue[i].timestamp <= targetUs) { chosen = this.frameQueue[i]; chosenIdx = i; }
+      if (this.frameQueue[i].globalTimestamp <= globalTargetUs) { chosen = this.frameQueue[i]; chosenIdx = i; }
       else break;
     }
     if (chosen) {
@@ -168,9 +204,28 @@ class WebCodecsVideoEngine {
     // than flashing black — render() is a no-op in that case.
   }
 
+  // Blit the full decoded frame to a plain 2D offscreen canvas ONCE per render
+  // step, then crop all 9 destination views (8 grid tiles + focus) FROM that
+  // canvas rather than directly from the VideoFrame. Some WebKit/Safari
+  // WebCodecs builds have inconsistent support for the 9-argument
+  // drawImage(source, sx,sy,sw,sh, dx,dy,dw,dh) crop overload specifically
+  // when the source is a VideoFrame — observed symptom is exactly "the whole
+  // uncropped frame gets forced into every destination box instead of its
+  // tile" (reported on real iOS Safari + real footage; this sandbox's
+  // browsers can't reproduce it since neither has H.264 decode). Canvas-to-
+  // canvas cropped drawImage is one of the oldest, most universally correct
+  // Canvas2D code paths, so reading the crop from an intermediate canvas
+  // sidesteps the VideoFrame-specific edge case entirely.
   _draw(frame) {
-    drawGridFromFrame(this.gridCtx, frame, this.muted, this.selected);
-    drawFocusFromFrame(this.focusCtx, frame, this.selected);
+    const w = frame.displayWidth, h = frame.displayHeight;
+    if (!this._offscreen || this._offscreen.width !== w || this._offscreen.height !== h) {
+      this._offscreen = document.createElement('canvas');
+      this._offscreen.width = w; this._offscreen.height = h;
+      this._offscreenCtx = this._offscreen.getContext('2d', { alpha: false });
+    }
+    this._offscreenCtx.drawImage(frame, 0, 0, w, h); // full-frame blit — no cropping here, universally safe
+    drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected);
+    drawFocusFromSource(this.focusCtx, this._offscreen, w, h, this.selected);
   }
 }
 
@@ -179,13 +234,12 @@ function tileRect(i, w, h) {
   return [(i % 4) * tw, Math.floor(i / 4) * th, tw, th];
 }
 
-function drawGridFromFrame(ctx, frame, muted, selected) {
-  const w = frame.displayWidth, h = frame.displayHeight;
+function drawGridFromSource(ctx, source, w, h, muted, selected) {
   const S = ctx.canvas.width / 4, Sh = ctx.canvas.height / 2;
   for (let i = 0; i < 8; i++) {
     const [sx, sy, sw, sh] = tileRect(i, w, h);
     const dx = (i % 4) * S, dy = Math.floor(i / 4) * Sh;
-    ctx.drawImage(frame, sx, sy, sw, sh, dx, dy, S, Sh);
+    ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
     if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S, Sh); }
     ctx.strokeStyle = i === selected ? '#63d7ff' : '#050607';
     ctx.lineWidth = i === selected ? 4 : 2;
@@ -193,10 +247,9 @@ function drawGridFromFrame(ctx, frame, muted, selected) {
   }
 }
 
-function drawFocusFromFrame(ctx, frame, selected) {
-  const w = frame.displayWidth, h = frame.displayHeight;
+function drawFocusFromSource(ctx, source, w, h, selected) {
   const [sx, sy, sw, sh] = tileRect(selected, w, h);
-  ctx.drawImage(frame, sx, sy, sw, sh, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, ctx.canvas.width, ctx.canvas.height);
 }
 
-if (typeof module !== 'undefined') module.exports = { WebCodecsVideoEngine, drawGridFromFrame, drawFocusFromFrame, tileRect };
+if (typeof module !== 'undefined') module.exports = { WebCodecsVideoEngine, drawGridFromSource, drawFocusFromSource, tileRect };
