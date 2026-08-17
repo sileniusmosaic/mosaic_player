@@ -128,7 +128,7 @@ const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro']
 const STEM_URLS=['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac'];
 const $=s=>document.querySelector(s);
 const video=$('#mosaicVideo'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
-video.loop=false; // we handle looping manually — see the 'ended' listener below
+video.loop=true; // back to native looping — video is left alone, audio stems are the truth we defend
 const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel');
 const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
 let selected=0, muted=Array(8).fill(false), hasLiveFrame=false;
@@ -185,7 +185,7 @@ async function setVideoSource(quality,keepPos){
 // Recovery is a microscopic forward nudge (not a seek to an old position), since
 // seeking was the actual cause of the earlier skip-back/rewind glitch.
 let framePresentCount=-1,frameProgressAt=0,lastNudgeAt=0,hardRecoverAt=0;
-function resetFrameWatch(){framePresentCount=-1;frameProgressAt=performance.now();lastNudgeAt=0;hardRecoverAt=0;}
+function resetFrameWatch(){framePresentCount=-1;frameProgressAt=performance.now();lastNudgeAt=0;hardRecoverAt=0;lastVideoTimeSeen=-1;}
 async function recoverStalledVideo(mode){
   if(recovering)return;recovering=true;
   try{
@@ -403,9 +403,24 @@ function checkStemDrift(now){
   if(Math.abs(d)>0.05)startStems(actual);
 }
 function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)}
+let lastVideoTimeSeen=-1;
+function catchVideoUpAfterNativeLoop(now){
+  const vt=video.currentTime||0;
+  if(lastVideoTimeSeen>=0&&vt<lastVideoTimeSeen-1.0&&playing&&!video.seeking){
+    // The browser's own native loop just wrapped the video back to ~0. Audio never
+    // stopped (it loops natively via Web Audio), so jump the picture — just the
+    // picture, never the audio — to wherever the audio genuinely is right now.
+    const target=wrappedAudioPos();
+    if(Math.abs(target-vt)>0.02){
+      console.warn('Native loop detected: video was at',vt.toFixed(3),'→ catching up to',target.toFixed(3),'(jump of',(target-vt).toFixed(3),'s)');
+      try{video.currentTime=target;}catch{}
+    }
+  }
+  lastVideoTimeSeen=vt;
+}
 function tick(now=performance.now()){
   if(!playing)return;
-  checkStemDrift(now);updateUI();raf=requestAnimationFrame(tick);
+  catchVideoUpAfterNativeLoop(now);checkStemDrift(now);updateUI();raf=requestAnimationFrame(tick);
 }
 function onVideoFrame(now,metadata){
   if(now-lastGridPaint>=16){drawLive();lastGridPaint=now}
@@ -449,18 +464,6 @@ async function endScrub(e){
 timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginScrub);timeline.addEventListener('pointermove',moveScrub);timeline.addEventListener('pointerup',endScrub);timeline.addEventListener('pointercancel',endScrub);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause()});window.addEventListener('pagehide',()=>{if(playing)pause()});
 video.addEventListener('loadedmetadata',calibrateVideo);video.addEventListener('durationchange',calibrateVideo);video.addEventListener('loadeddata',()=>{calibrateVideo();if(!hasLiveFrame)drawLive()});
-video.addEventListener('ended',async()=>{
-  if(!playing)return;
-  // Video has genuinely paused here (loop is off). Audio never stopped — it's still
-  // running via Web Audio's own gapless buffer loop. So catch the picture up to
-  // wherever the audio truly is right now, in one decisive jump, then resume.
-  const target=wrappedAudioPos();
-  const before=video.currentTime;
-  try{video.currentTime=target;}catch{}
-  try{await video.play();}catch(err){console.warn('Resume after manual loop failed:',err);}
-  resetFrameWatch();
-  console.warn('Manual loop: video was at',before.toFixed(3),'→ caught up to',target.toFixed(3),'(jump of',(target-before).toFixed(3),'s)');
-});
 video.addEventListener('error',()=>{
   setStatus('Video stream error — attempting recovery…','error');
   if(playing)recoverStalledVideo('hard');
