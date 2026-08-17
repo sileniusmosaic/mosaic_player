@@ -157,7 +157,6 @@ function setVideoSource(quality,keepPos){
     video.removeEventListener('loadedmetadata',resume);
     calibrateVideo();
     try{video.currentTime=pos}catch{}
-    video.volume=muted[0]?0:1;
     if(playing)video.play().catch(()=>{});
   };
   video.addEventListener('loadedmetadata',resume);
@@ -203,7 +202,10 @@ function currentPos(){
   return playing?(video.currentTime||0):pausedPos;
 }
 function setTrackMute(i,isMuted){
-  if(i===0){video.volume=isMuted?0:1;return}
+  if(i===0){
+    if(claveGain&&ctx){const now=ctx.currentTime,target=isMuted?0:1;try{claveGain.gain.cancelScheduledValues(now);claveGain.gain.setTargetAtTime(target,now,0.006);}catch{claveGain.gain.value=target;}}
+    return;
+  }
   const g=gains[tileToStem(i)];if(!g||!ctx)return;
   const now=ctx.currentTime,target=isMuted?0:1;
   try{g.gain.cancelScheduledValues(now);g.gain.setTargetAtTime(target,now,0.006);}catch{g.gain.value=target;}
@@ -219,11 +221,24 @@ function startStems(pos){
     s.connect(gains[idx]);s.start(when,Math.min(pos,buf.duration-0.001));return s;
   });
 }
+let claveGain=null,claveRouted=false;
 async function unlockContext(){
   if(!ctx){const C=AC();if(!C)throw new Error('Web Audio is not supported in this browser');ctx=new C({latencyHint:'interactive'});}
   if(ctx.state!=='running')await ctx.resume();
   // iOS/WebKit-safe gesture unlock: schedule an inaudibly quiet oscillator now.
   const o=ctx.createOscillator(),g=ctx.createGain();g.gain.value=0.000001;o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+0.025);
+  // Route Clave's embedded video audio through Web Audio too, so its mute works
+  // exactly like the other 7 stems — iOS ignores video.volume entirely, and
+  // video.muted can trigger an OS-level audio-session reset that silences everything.
+  if(!claveRouted){
+    try{
+      const src=ctx.createMediaElementSource(video);
+      claveGain=ctx.createGain();
+      claveGain.gain.value=muted[0]?0:1;
+      src.connect(claveGain).connect(ctx.destination);
+      claveRouted=true;
+    }catch(e){console.warn('Could not route Clave through Web Audio; mute may be unreliable.',e);}
+  }
 }
 function tempoUrls(percent){
   if(percent===100)return STEM_URLS;
@@ -303,7 +318,6 @@ async function switchVideoSource(percent,phase){
     video.addEventListener('loadedmetadata',onMeta);
   });
   calibrateVideo();
-  video.volume=muted[0]?0:1;
   await seekVideoAndWait(phase);
 }
 async function changeTempo(percent){
@@ -336,7 +350,6 @@ async function changeTempo(percent){
       video.addEventListener('loadedmetadata',onMeta);
     });
     calibrateVideo();
-    video.volume=muted[0]?0:1;
     const newPos=proportion*videoCycle;
     pausedPos=newPos;
     await seekVideoAndWait(newPos);
@@ -372,7 +385,6 @@ async function playFromGesture(){
   const pos=pausedPos;calibrateVideo();
   try{
     try{video.currentTime=pos}catch{}
-    video.volume=muted[0]?0:1;
     await video.play();
     if(!fallbackMode){await unlockContext();startStems(video.currentTime||pos);}
     else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
