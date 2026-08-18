@@ -363,8 +363,14 @@ async function changeTempo(percent){
     // Prepare the audio bank AND the video buffer in parallel while the existing
     // transport remains untouched — this intentionally mirrors the reliable Reset path.
     const oldCycle=videoCycle||LOOP_END;
-    const proportion=clamp(currentPos()/oldCycle,0,1);
     const [bank]=await Promise.all([loadBank(percent),loadVideoBuffer(percent)]);
+    // Capture position AFTER that load finishes, not before it. The OLD tempo's
+    // audio keeps playing normally for however long the fetch/decode takes (often
+    // under a second if prefetched, longer if not) — reading currentPos() before
+    // the await captured a stale, tap-time position, so every tempo switch quietly
+    // rewound playback by however long the load took instead of continuing from
+    // wherever the music actually was by the time the new tempo was ready.
+    const proportion=clamp(currentPos()/oldCycle,0,1);
 
     playing=false;
     cancelAnimationFrame(raf);raf=0;
@@ -456,15 +462,34 @@ function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle
 // keeps playing exactly on time, since it's the one clock this whole app
 // follows. If the picture visibly stops changing for a bit, decode has fallen
 // behind (e.g. a slow device catching up after a tempo switch); a spinner
-// shows so it's obvious what's happening instead of looking broken. If it
-// stays stuck for longer, self-heal by asking the engine to jump straight to
-// a keyframe near wherever the audio is RIGHT NOW — exactly what a manual
-// Reset used to force you to do — up to a few attempts before giving up and
-// just saying so, still without ever pausing the audio.
+// shows so it's obvious what's happening instead of looking broken.
+//
+// Two very different situations look identical from here (no new frame for a
+// while), so we tell them apart using engine.decodedFrameCount:
+//  - The decoder is TRULY STUCK (zero frames produced for the whole stall
+//    window) — this is the real "needs a kick" case, e.g. the Android
+//    double-configure decoder stall. Self-heal by asking the engine to jump
+//    to a keyframe near wherever the audio is RIGHT NOW — exactly what a
+//    manual Reset used to force you to do.
+//  - The decoder is ALIVE but just slower than real-time (still producing
+//    frames, only not fast enough to keep the picture caught up to the
+//    audio) — here, seeking would be actively counter-productive: it throws
+//    away whatever partial progress was made and forces a restart from a
+//    keyframe, and if the device can't out-decode real-time in the first
+//    place, every restart just resets the same losing race, permanently
+//    stuck by our own hand rather than the device's. In this case we back
+//    off entirely and just let it keep decoding forward at whatever pace it
+//    can sustain.
 let lastDisplayedTs=null,lastDisplayedChangeAt=performance.now(),pictureStalled=false;
 let lastRecoveryAttemptAt=0,recoveryAttempts=0;
-const STALL_SHOW_SPINNER_MS=800,STALL_AUTO_RECOVER_MS=3500,STALL_MAX_AUTO_RECOVERIES=4;
-function resetStallWatchdog(){lastDisplayedTs=null;lastDisplayedChangeAt=performance.now();pictureStalled=false;recoveryAttempts=0;lastRecoveryAttemptAt=0;bufferingSpinner.hidden=true;}
+let lastFrameCountCheckAt=performance.now(),lastFrameCountSeen=0,decoderConfirmedAlive=false;
+const STALL_SHOW_SPINNER_MS=800,STALL_AUTO_RECOVER_MS=3500,STALL_MAX_AUTO_RECOVERIES=3,DECODER_ALIVE_CHECK_MS=1800;
+function resetStallWatchdog(){
+  lastDisplayedTs=null;lastDisplayedChangeAt=performance.now();pictureStalled=false;
+  recoveryAttempts=0;lastRecoveryAttemptAt=0;
+  lastFrameCountCheckAt=performance.now();lastFrameCountSeen=engine.decodedFrameCount;decoderConfirmedAlive=false;
+  bufferingSpinner.hidden=true;
+}
 function tick(now=performance.now()){
   if(!playing)return;
   updateUI();
@@ -473,19 +498,36 @@ function tick(now=performance.now()){
   const changed=dts!==null&&dts!==lastDisplayedTs; // a null dts (e.g. right after a seek) never counts as "changed" — only a genuinely new picture does
   if(changed){
     lastDisplayedTs=dts;lastDisplayedChangeAt=now;
-    if(pictureStalled){pictureStalled=false;recoveryAttempts=0;bufferingSpinner.hidden=true;setStatus('Playing at '+tempoPercent+'%.','good');}
+    // Keep the "is the decoder alive" baseline fresh continuously, not just while
+    // stalled — otherwise, after any long stretch of healthy playback, the count
+    // it's compared against next time is minutes stale, and a decoder that just
+    // died THIS instant would still look "alive" purely from old growth.
+    lastFrameCountSeen=engine.decodedFrameCount;lastFrameCountCheckAt=now;
+    if(pictureStalled){pictureStalled=false;recoveryAttempts=0;decoderConfirmedAlive=false;bufferingSpinner.hidden=true;setStatus('Playing at '+tempoPercent+'%.','good');}
   }else{
     const stalledFor=now-lastDisplayedChangeAt;
     if(stalledFor>STALL_SHOW_SPINNER_MS&&!pictureStalled){
       pictureStalled=true;bufferingSpinner.hidden=false;setStatus('Picture is buffering — audio keeps playing normally.','error');
     }
-    if(pictureStalled&&stalledFor>STALL_AUTO_RECOVER_MS&&now-lastRecoveryAttemptAt>STALL_AUTO_RECOVER_MS){
+    // Check every DECODER_ALIVE_CHECK_MS whether the decoder has produced ANY
+    // frames since the last check — proof it's alive even if too slow to keep
+    // the picture caught up. Once confirmed alive, stop trying to seek-recover
+    // for the rest of this stall: let it decode forward at its own pace.
+    if(pictureStalled&&!decoderConfirmedAlive&&now-lastFrameCountCheckAt>DECODER_ALIVE_CHECK_MS){
+      if(engine.decodedFrameCount>lastFrameCountSeen){
+        decoderConfirmedAlive=true;
+        bufferingSpinner.hidden=true;
+        setStatus('Picture is behind on this device — audio stays correct, catching up as it can.','error');
+      }
+      lastFrameCountSeen=engine.decodedFrameCount;lastFrameCountCheckAt=now;
+    }
+    if(pictureStalled&&!decoderConfirmedAlive&&stalledFor>STALL_AUTO_RECOVER_MS&&now-lastRecoveryAttemptAt>STALL_AUTO_RECOVER_MS){
       if(recoveryAttempts<STALL_MAX_AUTO_RECOVERIES){
         recoveryAttempts++;lastRecoveryAttemptAt=now;
-        console.warn('Picture stalled for '+Math.round(stalledFor)+'ms — auto-recovering (attempt '+recoveryAttempts+' of '+STALL_MAX_AUTO_RECOVERIES+').');
+        console.warn('Decoder produced zero frames for '+Math.round(stalledFor)+'ms — auto-recovering (attempt '+recoveryAttempts+' of '+STALL_MAX_AUTO_RECOVERIES+').');
         engine.seekTo(wrappedAudioPos());
       }else{
-        setStatus('Picture is having trouble keeping up on this device — audio is still perfectly in time.','error');
+        setStatus('Picture is stuck on this device — audio is still perfectly in time.','error');
       }
     }
   }
