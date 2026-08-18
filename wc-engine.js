@@ -51,6 +51,18 @@ class WebCodecsVideoEngine {
 
   // --- lifecycle -----------------------------------------------------------
 
+  // NOTE: does NOT start decoding on its own — the caller MUST follow this with
+  // seekTo(pos) (0 is fine for "start at the beginning") to actually kick off
+  // the decode-ahead pump. This is deliberate: a tempo change loads a brand new
+  // file and then immediately seeks into it to resume at the right spot, and if
+  // loadTempo() auto-pumped from sample 0 first, that seek would have to
+  // reset()+reconfigure() a decoder that was JUST configured a moment earlier —
+  // two hardware decoder session setups back-to-back for one tempo switch.
+  // Observed on a Pixel 6a as a permanent stall (picture frozen forever, only a
+  // full Reset recovered it) — some Android hardware decoders don't tolerate
+  // being reset that soon after configure(). Requiring an explicit seekTo()
+  // after every load means the decoder is configured exactly once per load,
+  // full stop, and only genuinely-in-flight decodes ever get reset.
   async loadTempo(arrayBuffer) {
     this._teardownDecoder();
     const info = parseMP4(arrayBuffer);
@@ -69,7 +81,7 @@ class WebCodecsVideoEngine {
     });
     this._config = config;
     this.decoder.configure(config);
-    this._pump(); // start filling the decode-ahead buffer immediately
+    this._everPumped = false; // nothing fed to this decoder instance yet — seekTo() can skip reset()
   }
 
   destroy() {
@@ -114,7 +126,7 @@ class WebCodecsVideoEngine {
         duration: Math.round((s.duration / this.info.timescale) * 1e6),
         data
       });
-      try { this.decoder.decode(chunk); } catch (e) { console.error('decode() threw', e); break; }
+      try { this.decoder.decode(chunk); this._everPumped = true; } catch (e) { console.error('decode() threw', e); break; }
       this.sampleIdx++;
       if (this.sampleIdx >= samples.length) this.sampleIdx = 0; // loop: sample 0 is always sync
     }
@@ -141,30 +153,39 @@ class WebCodecsVideoEngine {
   }
 
   // --- seeking ---------------------------------------------------------------
-  // Resets the decoder and re-feeds from the nearest keyframe at/before the
-  // target, so the very next render() call converges on the right picture
-  // within a handful of frames once decode catches up.
+  // Re-feeds from the nearest keyframe at/before the target, so the very next
+  // render() call converges on the right picture within a handful of frames
+  // once decode catches up. Only resets+reconfigures the actual hardware
+  // decoder if it had already been fed samples (a real seek mid-playback) —
+  // right after loadTempo(), the decoder is brand new and has decoded nothing,
+  // so there's nothing to abandon and reconfiguring it again is both wasted
+  // work and the thing that was stalling decode permanently on Android (see
+  // loadTempo()'s comment).
 
   seekTo(targetSeconds) {
     if (!this.info) return;
     this.seeking = true;
+    const keyIdx = this._keyframeIndexFor(targetSeconds);
+    this._clearQueue();
+    this._resetLapTracking(); // fresh baseline — old lap count is meaningless after a jump
+    if (this._everPumped && this.decoder && this.decoder.state === 'configured') {
+      try { this.decoder.reset(); } catch {}
+      try { this.decoder.configure(this._config); } catch (e) { console.error('re-configure after seek failed', e); }
+      this._everPumped = false;
+    }
+    this.sampleIdx = keyIdx;
+    this._pump();
+    this.seeking = false;
+  }
+
+  _keyframeIndexFor(targetSeconds) {
     const targetUnits = targetSeconds * this.info.timescale;
     let keyIdx = 0;
     for (let i = 0; i < this.info.samples.length; i++) {
       const s = this.info.samples[i];
       if (s.isSync && s.pts <= targetUnits) keyIdx = i; else if (s.pts > targetUnits) break;
     }
-    this._clearQueue();
-    this._resetLapTracking(); // fresh baseline — old lap count is meaningless after a jump
-    if (this.decoder && this.decoder.state === 'configured') {
-      try { this.decoder.reset(); } catch {}
-      try {
-        this.decoder.configure({ codec: this.info.codec, codedWidth: this.info.codedWidth, codedHeight: this.info.codedHeight, description: this.info.description });
-      } catch (e) { console.error('re-configure after seek failed', e); }
-    }
-    this.sampleIdx = keyIdx;
-    this._pump();
-    this.seeking = false;
+    return keyIdx;
   }
 
   // --- rendering ---------------------------------------------------------------

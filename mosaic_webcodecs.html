@@ -35,6 +35,10 @@
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 .focus-label{position:absolute;left:10px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
+.buffering-spinner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
+.buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
+.buffering-spinner span{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
+@keyframes mosaic-spin{to{transform:rotate(360deg)}}
 .grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:1px solid var(--border);border-radius:10px;overflow:hidden;contain:paint}
 .grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
@@ -79,6 +83,7 @@
         <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
       </div>
       <div id="focusLabel" class="focus-label">Clave</div>
+      <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Buffering…</span></div>
     </div>
     <div class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
   </div>
@@ -134,6 +139,7 @@ const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro']
 const STEM_URLS=['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac'];
 const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
+const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
 const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel');
 const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
@@ -198,7 +204,10 @@ async function loadVideoForTempo(percent,keepPos){
   await engine.loadTempo(ab);
   videoCycle=engine.cycleSeconds||LOOP_END;
   engine.selected=selected;
-  if(keepPos)engine.seekTo(pos);
+  // loadTempo() no longer starts decoding by itself — always kick it off with an
+  // explicit seekTo(), even for a fresh 0-position load, so the decoder only ever
+  // gets configured once here (see wc-engine.js loadTempo()/seekTo() for why).
+  engine.seekTo(pos);
 }
 // Paints the frame at `pos` as soon as decode catches up to it — used whenever
 // we're NOT in the middle of the regular playing tick() loop (paused reset,
@@ -373,6 +382,7 @@ async function changeTempo(percent){
       startStems(newPos);
       playing=true;
       playBtn.textContent='Pause';
+      resetStallWatchdog();
       if(!raf)tick();
     }else{
       playBtn.textContent='Play';
@@ -404,16 +414,16 @@ async function playFromGesture(){
     try{
       if(!fallbackMode){await unlockContext();startStems(pos);}
       else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
-      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');if(!raf)tick();
+      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');resetStallWatchdog();if(!raf)tick();
     }catch(err){console.warn(err);stopStems();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
   }finally{startingPlayback=false;}
 }
-function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;updateUI()}
+function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
 function reset(){
   playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};pausedPos=0;
   playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';
-  cancelAnimationFrame(raf);raf=0;
+  cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
   if(engine.info){engine.seekTo(0);paintAt(0);}else drawPoster();
   updateUI();
 }
@@ -441,22 +451,42 @@ function wrappedAudioPos(){
   return v;
 }
 function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)}
-// Picture-buffering watchdog: purely informational. Audio is completely
-// unaffected by video decode health — this only lets the user know why the
-// picture has frozen if decode ever genuinely falls behind (e.g. a slow first
-// load on a bad connection). There is nothing to "correct" video against
-// anymore, since it has no clock of its own to drift.
+// Picture-buffering watchdog. Audio is NEVER touched by any of this — it just
+// keeps playing exactly on time, since it's the one clock this whole app
+// follows. If the picture visibly stops changing for a bit, decode has fallen
+// behind (e.g. a slow device catching up after a tempo switch); a spinner
+// shows so it's obvious what's happening instead of looking broken. If it
+// stays stuck for longer, self-heal by asking the engine to jump straight to
+// a keyframe near wherever the audio is RIGHT NOW — exactly what a manual
+// Reset used to force you to do — up to a few attempts before giving up and
+// just saying so, still without ever pausing the audio.
 let lastDisplayedTs=null,lastDisplayedChangeAt=performance.now(),pictureStalled=false;
+let lastRecoveryAttemptAt=0,recoveryAttempts=0;
+const STALL_SHOW_SPINNER_MS=800,STALL_AUTO_RECOVER_MS=3500,STALL_MAX_AUTO_RECOVERIES=4;
+function resetStallWatchdog(){lastDisplayedTs=null;lastDisplayedChangeAt=performance.now();pictureStalled=false;recoveryAttempts=0;lastRecoveryAttemptAt=0;bufferingSpinner.hidden=true;}
 function tick(now=performance.now()){
   if(!playing)return;
   updateUI();
   engine.render(wrappedAudioPos());
   const dts=engine.displayedFrame?engine.displayedFrame.timestamp:null;
-  if(dts!==lastDisplayedTs){
+  const changed=dts!==null&&dts!==lastDisplayedTs; // a null dts (e.g. right after a seek) never counts as "changed" — only a genuinely new picture does
+  if(changed){
     lastDisplayedTs=dts;lastDisplayedChangeAt=now;
-    if(pictureStalled){pictureStalled=false;setStatus('Playing at '+tempoPercent+'%.','good');}
-  }else if(now-lastDisplayedChangeAt>2500&&!pictureStalled){
-    pictureStalled=true;setStatus('Picture is buffering — audio keeps playing normally.','error');
+    if(pictureStalled){pictureStalled=false;recoveryAttempts=0;bufferingSpinner.hidden=true;setStatus('Playing at '+tempoPercent+'%.','good');}
+  }else{
+    const stalledFor=now-lastDisplayedChangeAt;
+    if(stalledFor>STALL_SHOW_SPINNER_MS&&!pictureStalled){
+      pictureStalled=true;bufferingSpinner.hidden=false;setStatus('Picture is buffering — audio keeps playing normally.','error');
+    }
+    if(pictureStalled&&stalledFor>STALL_AUTO_RECOVER_MS&&now-lastRecoveryAttemptAt>STALL_AUTO_RECOVER_MS){
+      if(recoveryAttempts<STALL_MAX_AUTO_RECOVERIES){
+        recoveryAttempts++;lastRecoveryAttemptAt=now;
+        console.warn('Picture stalled for '+Math.round(stalledFor)+'ms — auto-recovering (attempt '+recoveryAttempts+' of '+STALL_MAX_AUTO_RECOVERIES+').');
+        engine.seekTo(wrappedAudioPos());
+      }else{
+        setStatus('Picture is having trouble keeping up on this device — audio is still perfectly in time.','error');
+      }
+    }
   }
   raf=requestAnimationFrame(tick);
 }
@@ -472,9 +502,9 @@ async function endScrub(e){
     try{
       if(fallbackMode){fallbackAudio.currentTime=scrubPos;if(fallbackAudio.paused)await fallbackAudio.play();}
       else{await unlockContext();startStems(scrubPos);}
-      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');if(!raf)tick();
+      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');resetStallWatchdog();if(!raf)tick();
     }catch(err){console.warn(err)}
-  }else{playing=false;playBtn.textContent='Play';badge.textContent='Paused';paintAt(scrubPos);}
+  }else{playing=false;playBtn.textContent='Play';badge.textContent='Paused';bufferingSpinner.hidden=true;paintAt(scrubPos);}
   scrubPointerId=null;updateUI();e.preventDefault();
 }
 timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginScrub);timeline.addEventListener('pointermove',moveScrub);timeline.addEventListener('pointerup',endScrub);timeline.addEventListener('pointercancel',endScrub);
