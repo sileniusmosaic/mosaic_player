@@ -303,7 +303,15 @@ async function fetchWithRetry(u,attempts=3){
   let lastErr;
   for(let i=0;i<attempts;i++){
     try{
-      const r=await fetch(u,{cache:'force-cache'});
+      // 'no-cache' (misleadingly named — it still uses the cache) always makes
+      // the browser check with the server first: a tiny, near-instant request
+      // asking "has this changed since I last saw it?" using the file's own
+      // fingerprint. If nothing changed, the cached copy is reused with no
+      // re-download; if it has, the fresh version comes down automatically —
+      // no manual version numbers needed. 'force-cache' (the old setting) never
+      // asked at all once it had a copy, which is why updated video/audio files
+      // could go on being served stale to returning visitors indefinitely.
+      const r=await fetch(u,{cache:'no-cache'});
       if(!r.ok)throw new Error('HTTP '+r.status+' for '+u);
       return await r.arrayBuffer();
     }catch(e){
