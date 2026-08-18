@@ -457,7 +457,21 @@ function wrappedAudioPos(){
   if(v<0)v+=cyc;
   return v;
 }
-function updateUI(){const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)}
+function updateUI(){
+  const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;
+  if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}
+  timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)+(playing&&shownFps!==null?'  ·  '+shownFps+' fps':'');
+}
+// Displayed-frame-rate readout: counts how often the PICTURE actually visibly
+// changes per second — not the video's encoded frame rate, and not how many
+// frames the decoder managed to produce (decodedFrameCount) — the number that
+// actually reaches your eyes. It can never exceed the source video's own
+// frame rate (60fps here) no matter how fast the device or its screen is,
+// since there's simply no new picture to show more often than that; landing
+// noticeably under 60 on a fast device is a genuine sign decode can't quite
+// keep up, same signal as the buffering watchdog above but visible at a glance.
+let fpsWindowStart=performance.now(),fpsChangeCount=0,shownFps=null;
+function resetFpsReadout(){fpsWindowStart=performance.now();fpsChangeCount=0;shownFps=null;}
 // Picture-buffering watchdog. Audio is NEVER touched by any of this — it just
 // keeps playing exactly on time, since it's the one clock this whole app
 // follows. If the picture visibly stops changing for a bit, decode has fallen
@@ -489,6 +503,7 @@ function resetStallWatchdog(){
   recoveryAttempts=0;lastRecoveryAttemptAt=0;
   lastFrameCountCheckAt=performance.now();lastFrameCountSeen=engine.decodedFrameCount;decoderConfirmedAlive=false;
   bufferingSpinner.hidden=true;
+  resetFpsReadout();
 }
 function tick(now=performance.now()){
   if(!playing)return;
@@ -498,6 +513,7 @@ function tick(now=performance.now()){
   const changed=dts!==null&&dts!==lastDisplayedTs; // a null dts (e.g. right after a seek) never counts as "changed" — only a genuinely new picture does
   if(changed){
     lastDisplayedTs=dts;lastDisplayedChangeAt=now;
+    fpsChangeCount++;
     // Keep the "is the decoder alive" baseline fresh continuously, not just while
     // stalled — otherwise, after any long stretch of healthy playback, the count
     // it's compared against next time is minutes stale, and a decoder that just
@@ -530,6 +546,10 @@ function tick(now=performance.now()){
         setStatus('Picture is stuck on this device — audio is still perfectly in time.','error');
       }
     }
+  }
+  if(now-fpsWindowStart>=1000){
+    shownFps=Math.round(fpsChangeCount*1000/(now-fpsWindowStart));
+    fpsChangeCount=0;fpsWindowStart=now;
   }
   raf=requestAnimationFrame(tick);
 }
