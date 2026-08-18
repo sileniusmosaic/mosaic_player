@@ -505,10 +505,28 @@ function resetStallWatchdog(){
   bufferingSpinner.hidden=true;
   resetFpsReadout();
 }
+// The audio stems' own decoded duration can differ from the video's by a few
+// tens of milliseconds (AAC encoder priming/padding — see wrappedAudioPos()).
+// That's inaudible, but it means the audio-driven playhead and the video's
+// own internal loop point don't happen at exactly the same real moment.
+// Coasting through the loop (relying on the video decoder's own wraparound,
+// with no reseek) assumes those two line up — when they don't, the video's
+// decode-ahead buffer and the audio clock disagree about exactly when the
+// loop happened, and decode visibly falls behind for a while afterwards.
+// Confirmed with a dedicated test: even a ~50ms mismatch reproduces a sustained
+// frame-rate drop right after a loop, exactly matching real-world reports.
+// Fix: the instant the audio position visibly jumps backward (a loop just
+// happened), force the video to reseek to that exact position — this is
+// cheap now that every file has a keyframe every 1s, and it's exactly what a
+// manual Reset already did to clear the same symptom.
+let lastLoopPos=null;
 function tick(now=performance.now()){
   if(!playing)return;
   updateUI();
-  engine.render(wrappedAudioPos());
+  const pos=wrappedAudioPos();
+  if(lastLoopPos!==null&&pos<lastLoopPos-0.25)engine.seekTo(pos);
+  lastLoopPos=pos;
+  engine.render(pos);
   const dts=engine.displayedFrame?engine.displayedFrame.timestamp:null;
   const changed=dts!==null&&dts!==lastDisplayedTs; // a null dts (e.g. right after a seek) never counts as "changed" — only a genuinely new picture does
   if(changed){
