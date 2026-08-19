@@ -83,6 +83,15 @@
 .browse-strip{display:flex;gap:3px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
 .browse-tile{flex:0 0 auto;width:50px;aspect-ratio:1/1;border-radius:4px;background-color:#030405;background-repeat:no-repeat;border:1px solid var(--border)}
 @media(min-width:620px){.grid-stage{margin-top:8px}}
+/* Desktop (pointer:fine, gated by the .is-desktop class the app sets on
+   <html> at load — see IS_DESKTOP in the script): focus square and tile
+   grid sit side by side instead of stacked, using the extra horizontal
+   room a desktop window has. Everything below the viewer (tempo row,
+   transport, browse list) stays exactly as on mobile, just wider. */
+.is-desktop .app{max-width:900px}
+.is-desktop .viewer{display:flex;gap:16px;align-items:center}
+.is-desktop .focus-wrap{flex:0 1 480px}
+.is-desktop .grid-stage{flex:1;margin-top:0;align-self:center}
 </style>
 </head>
 <body>
@@ -113,7 +122,7 @@
     </div>
     <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
-    <p class="note">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
+    <p class="note" id="noteText">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
     <div id="badge" class="badge" hidden>Ready to start</div>
   </section>
   <section class="panel browse-panel">
@@ -141,6 +150,18 @@
 <script>
 (() => {
 'use strict';
+// --- environment detection ------------------------------------------------
+// "Desktop" here means "has a precise pointer" (a real mouse/trackpad), not a
+// screen-size guess — a touchscreen laptop with a trackpad still correctly
+// reads as desktop, and a large tablet with only touch still reads as touch.
+// This is what gates Solo (desktop-only per the DAW-mixer analogy — Solo is
+// a power-user precision tool; touch just gets quick Mute/unmute) and, next
+// stage, the horizontal desktop layout. Read once at load — if someone plugs
+// in a mouse mid-session the layout won't hot-swap, which is an acceptable
+// simplification for now.
+const IS_DESKTOP=matchMedia('(pointer:fine)').matches;
+document.documentElement.classList.toggle('is-desktop',IS_DESKTOP);
+document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
 // grid shape (cols x rows baked into the composite video by the ffmpeg
@@ -196,7 +217,10 @@ const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
 const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), pieceNameEl=$('#pieceName'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList');
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText');
+noteText.textContent=IS_DESKTOP
+  ?'Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.'
+  :'Tap a square to select focus. Mute is instantaneous. Tempo presets are pitch-correct: 50, 75 and 100%.';
 let selected=0, muted=Array(TILE_COUNT).fill(false);
 // Solo, DAW-style: multiple tiles can be soloed at once (additive, like Logic
 // Pro), and Solo takes priority over Mute — a muted-but-soloed tile still
@@ -351,13 +375,18 @@ function buildControls(){
   NAMES.forEach((name,i)=>{
     const t=document.createElement('div');t.className='tile';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
-    const solo=document.createElement('button');solo.type='button';solo.className='dawBtn soloBtn';solo.textContent='S';solo.setAttribute('aria-label','Solo '+name);
+    // Solo is desktop/mouse-only (a precision mixing tool); touch just gets
+    // quick Mute/unmute, so the Solo button is never created at all on touch
+    // — soloBtns[i] stays undefined there and every solo-aware code path
+    // already guards on that (soloed[] simply never becomes true on touch).
+    let solo=null;
+    if(IS_DESKTOP){solo=document.createElement('button');solo.type='button';solo.className='dawBtn soloBtn';solo.textContent='S';solo.setAttribute('aria-label','Solo '+name);}
     const mute=document.createElement('button');mute.type='button';mute.className='dawBtn muteBtn';mute.textContent='M';mute.setAttribute('aria-label','Mute '+name);
     const label=document.createElement('span');label.className='tile-name';label.textContent=name;
-    t.appendChild(label);t.appendChild(tap);t.appendChild(solo);t.appendChild(mute);controls.appendChild(t);
+    t.appendChild(label);t.appendChild(tap);if(solo)t.appendChild(solo);t.appendChild(mute);controls.appendChild(t);
     tileEls.push(t);muteBtns.push(mute);soloBtns.push(solo);
     tap.addEventListener('click',()=>{selected=i;document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));updateFocusUI();});
-    solo.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();soloed[i]=!soloed[i];solo.setAttribute('aria-label',(soloed[i]?'Unsolo ':'Solo ')+name);refreshSoloMuteState();});
+    if(solo)solo.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();soloed[i]=!soloed[i];solo.setAttribute('aria-label',(soloed[i]?'Unsolo ':'Solo ')+name);refreshSoloMuteState();});
     mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);refreshSoloMuteState();});
   });
   if(controls.children[0])controls.children[0].classList.add('is-selected');
