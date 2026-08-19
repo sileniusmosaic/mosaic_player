@@ -497,6 +497,12 @@ async function switchMosaic(id){
     muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
     engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
     prepared=false;fallbackMode=false;buffers=[];
+    // Tempo (and the loop-boundary resync tracker) must not carry over from the
+    // previous piece: the video we're about to load below is always the 100%
+    // variant, so a stale tempoPercent from the last mosaic would silently
+    // desync audio/video tempo the moment the user hits Play on the new piece.
+    tempoPercent=100;updateTempoUI();
+    lastLoopPos=null;
     if(ctx)ensureGains(true);
 
     document.title='Mosaic — '+cfg.label;
