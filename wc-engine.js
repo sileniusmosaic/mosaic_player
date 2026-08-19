@@ -33,6 +33,13 @@ class WebCodecsVideoEngine {
     this.selected = 0;         // focus tile index 0..tileCount-1
     this.cols = cols; this.rows = rows; this.tileCount = tileCount;
     this.muted = new Array(tileCount).fill(false);
+    // Tiles silenced as a SIDE EFFECT of some other tile being soloed (distinct
+    // from `muted`, which is only ever true for a tile the user explicitly
+    // muted). Drawn as a grey wash rather than the black mute overlay so the
+    // two reasons a tile is silent stay visually distinguishable. Owned by the
+    // app the same way `muted` is — reassigned by reference whenever solo
+    // state changes.
+    this.soloDim = new Array(tileCount).fill(false);
     this.cycleSeconds = 0;
     this.decodedFrameCount = 0;
     this.pumpBudgetMs = 6;     // don't let one pump call hog the main thread
@@ -263,7 +270,7 @@ class WebCodecsVideoEngine {
       this._offscreenCtx = this._offscreen.getContext('2d', { alpha: false });
     }
     this._offscreenCtx.drawImage(frame, 0, 0, w, h); // full-frame blit — no cropping here, universally safe
-    drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount);
+    drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim);
     drawFocusFromSource(this.focusCtx, this._offscreen, w, h, this.selected, this.cols, this.rows);
   }
 }
@@ -277,13 +284,16 @@ function tileRect(i, w, h, cols = 4, rows = 2) {
 // tileCount = how many of cols*rows cells are actually populated for this
 // mosaic (a piece with fewer tiles than cols*rows just never draws/selects
 // the remaining cell(s), which are left blank in the source video itself).
-function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows) {
+function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim) {
   const S = ctx.canvas.width / cols, Sh = ctx.canvas.height / rows;
   for (let i = 0; i < tileCount; i++) {
     const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
     const dx = (i % cols) * S, dy = Math.floor(i / cols) * Sh;
     ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
+    // Explicit mute always wins the visual (black); a tile silenced only
+    // because something ELSE is soloed gets the lighter grey "dimmed" wash.
     if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S, Sh); }
+    else if (soloDim && soloDim[i]) { ctx.fillStyle = 'rgba(130,130,130,.55)'; ctx.fillRect(dx, dy, S, Sh); }
     ctx.strokeStyle = i === selected ? '#cbe0e6' : 'rgba(203,224,230,0.35)';
     ctx.lineWidth = i === selected ? 4 : 2;
     ctx.strokeRect(dx + 1, dy + 1, S - 2, Sh - 2);

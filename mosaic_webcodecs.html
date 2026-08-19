@@ -34,6 +34,7 @@
 .focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:3px solid var(--tile-border);border-radius:10px;overflow:hidden;contain:paint}
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
+.focus-solo-dim{position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;display:none}.focus-wrap.is-solo-dimmed .focus-solo-dim{display:block}
 .focus-label{position:absolute;left:10px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
@@ -45,11 +46,14 @@
 .grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
 .focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
-.muteBtn{position:absolute;right:4px;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:4px;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation}
-.muteBtn svg{width:14px;height:14px;display:block;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.muteBtn.is-muted{background:var(--accent);color:#1a1309;border-color:#1a1309}
+.dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 12px -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;line-height:1}
+.muteBtn{right:4px}
+.soloBtn{left:4px}
+.muteBtn.is-muted{background:#ff453a;color:#2a0806;border-color:#2a0806}
+.soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
+.tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
 .tile.is-selected{outline:2px solid var(--tile-border);outline-offset:-2px}
 .tempo-strip{margin-top:6px}
 .panel{margin-top:6px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
@@ -63,9 +67,21 @@
 .tempo-buttons button{font:inherit;border:1px solid var(--border);border-radius:6px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:700}
 .tempo-buttons button.active{background:var(--accent);color:#1a1309;border-color:transparent}
 .tempo-buttons button:disabled{opacity:.4}
+.tempo-buttons button#play{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
+.tempo-buttons button#play.active{background:var(--danger);color:var(--text)}
 .status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
 .note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
+.browse-panel .rail-title{margin-bottom:8px}
+.browse-list{display:flex;flex-direction:column}
+.browse-item{display:flex;flex-direction:column;gap:7px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;text-align:left;font:inherit;color:inherit;width:100%}
+.browse-item:last-child{border-bottom:none}
+.browse-item-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.browse-item-title{font-family:'Fraunces',serif;font-weight:600;font-size:14px}
+.browse-item.active .browse-item-title{color:var(--accent)}
+.browse-item-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--good);white-space:nowrap}
+.browse-strip{display:flex;gap:3px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.browse-tile{flex:0 0 auto;width:50px;aspect-ratio:1/1;border-radius:4px;background-color:#030405;background-repeat:no-repeat;border:1px solid var(--border)}
 @media(min-width:620px){.grid-stage{margin-top:8px}}
 </style>
 </head>
@@ -76,6 +92,7 @@
     <div id="focusWrap" class="focus-wrap">
       <canvas id="mosaicFocus" class="focus-video"></canvas>
       <div class="focus-dim"></div>
+      <div class="focus-solo-dim"></div>
       <div class="focus-topbar">
         <div>
           <div class="wordmark">Mo<span>saic</span></div>
@@ -88,17 +105,20 @@
     </div>
     <div class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
   </div>
-  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Tempo presets"></div></div>
+  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary" type="button">Play</button></div></div>
   <section class="panel">
     <div class="transport">
-      <button id="play" class="primary" type="button">Play</button>
       <button id="reset" type="button">Reset</button>
       <span id="time" class="time">0.000 / 45.600</span>
     </div>
     <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
-    <p class="note">Tap a square to select focus. Mute remains instantaneous. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
+    <p class="note">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
     <div id="badge" class="badge" hidden>Ready to start</div>
+  </section>
+  <section class="panel browse-panel">
+    <p class="rail-title">Mosaics</p>
+    <div id="mosaicBrowseList" class="browse-list"></div>
   </section>
   <img id="poster" src="poster_abakua.jpg" alt="" hidden>
   <audio id="fallbackAudio" preload="none" playsinline loop hidden></audio>
@@ -175,9 +195,15 @@ const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), pieceNameEl=$('#pieceName'), mosaicRail=$('#mosaicRail');
+const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), pieceNameEl=$('#pieceName'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList');
 const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
 let selected=0, muted=Array(TILE_COUNT).fill(false);
+// Solo, DAW-style: multiple tiles can be soloed at once (additive, like Logic
+// Pro), and Solo takes priority over Mute — a muted-but-soloed tile still
+// plays. tileEls/muteBtns/soloBtns are index-aligned with NAMES/TILE_COUNT,
+// rebuilt every time buildControls() runs.
+let soloed=Array(TILE_COUNT).fill(false);
+let tileEls=[], muteBtns=[], soloBtns=[];
 let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
 let startingPlayback=false; // guards a fast double-tap on Play from starting two overlapping playback attempts
@@ -218,6 +244,7 @@ const engine=new WebCodecsVideoEngine({
   }
 });
 engine.muted=muted; // shared by reference — toggling muted[i] is automatically visible to the engine
+engine.soloDim=soloed.map(()=>false);
 
 function sizeFocusCanvas(){
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -278,10 +305,12 @@ function drawPoster(){
   if(!poster.complete||!poster.naturalWidth)return;
   const w=poster.naturalWidth,h=poster.naturalHeight;
   const S=grid.width/TILE_COLS,Sh=grid.height/TILE_ROWS;
+  const anySolo=soloed.some(Boolean);
   for(let i=0;i<TILE_COUNT;i++){
     const [sx,sy,sw,sh]=tileSource(i,w,h),dx=(i%TILE_COLS)*S,dy=Math.floor(i/TILE_COLS)*Sh;
     gctx.drawImage(poster,sx,sy,sw,sh,dx,dy,S,Sh);
     if(muted[i]){gctx.fillStyle='rgba(0,0,0,.55)';gctx.fillRect(dx,dy,S,Sh)}
+    else if(anySolo&&!soloed[i]){gctx.fillStyle='rgba(130,130,130,.55)';gctx.fillRect(dx,dy,S,Sh)}
     gctx.strokeStyle=i===selected?'#63d7ff':'#050607';gctx.lineWidth=i===selected?4:2;gctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
   }
   const [fsx,fsy,fsw,fsh]=tileSource(selected,w,h);
@@ -289,22 +318,47 @@ function drawPoster(){
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
+  const anySolo=soloed.some(Boolean);
   focusWrap.classList.toggle('is-muted',muted[selected]);
+  focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
   engine.selected=selected;
   if(engine.decodedFrameCount>0)engine.render(currentPos());
   else drawPoster();
 }
+// Single source of truth for mute+solo, called after EITHER a mute or a solo
+// click. Solo has priority: while any tile is soloed, a tile is only audible
+// if it is itself soloed (its own mute state is ignored — matches Logic
+// Pro/standard DAW behaviour); with no solo active, plain mute state applies.
+// Recomputes every tile's gain + visuals, not just the one clicked, since
+// toggling solo on one tile changes whether every OTHER tile should be heard.
+function refreshSoloMuteState(){
+  const anySolo=soloed.some(Boolean);
+  for(let j=0;j<TILE_COUNT;j++){
+    const silent=anySolo?!soloed[j]:muted[j];
+    const dimmedBySolo=anySolo&&!soloed[j];
+    if(tileEls[j]){tileEls[j].classList.toggle('is-muted',muted[j]);tileEls[j].classList.toggle('is-solo-dimmed',dimmedBySolo);}
+    if(muteBtns[j])muteBtns[j].classList.toggle('is-muted',muted[j]);
+    if(soloBtns[j])soloBtns[j].classList.toggle('is-solo',soloed[j]);
+    setTrackMute(j,silent);
+  }
+  engine.muted=muted;
+  engine.soloDim=soloed.map(s=>anySolo&&!s);
+  updateFocusUI();
+}
 function buildControls(){
   controls.innerHTML=''; // clear any tiles from a previously-loaded mosaic
+  tileEls=[];muteBtns=[];soloBtns=[];
   NAMES.forEach((name,i)=>{
     const t=document.createElement('div');t.className='tile';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
-    const mute=document.createElement('button');mute.type='button';mute.className='muteBtn';mute.setAttribute('aria-label','Mute '+name);
-    mute.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"></path><path d="M17 9l4 6"></path><path d="M21 9l-4 6"></path></svg>';
+    const solo=document.createElement('button');solo.type='button';solo.className='dawBtn soloBtn';solo.textContent='S';solo.setAttribute('aria-label','Solo '+name);
+    const mute=document.createElement('button');mute.type='button';mute.className='dawBtn muteBtn';mute.textContent='M';mute.setAttribute('aria-label','Mute '+name);
     const label=document.createElement('span');label.className='tile-name';label.textContent=name;
-    t.appendChild(label);t.appendChild(tap);t.appendChild(mute);controls.appendChild(t);
+    t.appendChild(label);t.appendChild(tap);t.appendChild(solo);t.appendChild(mute);controls.appendChild(t);
+    tileEls.push(t);muteBtns.push(mute);soloBtns.push(solo);
     tap.addEventListener('click',()=>{selected=i;document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));updateFocusUI();});
-    mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];t.classList.toggle('is-muted',muted[i]);mute.classList.toggle('is-muted',muted[i]);mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);updateFocusUI();setTrackMute(i,muted[i]);});
+    solo.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();soloed[i]=!soloed[i];solo.setAttribute('aria-label',(soloed[i]?'Unsolo ':'Solo ')+name);refreshSoloMuteState();});
+    mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);refreshSoloMuteState();});
   });
   if(controls.children[0])controls.children[0].classList.add('is-selected');
 }
@@ -316,6 +370,35 @@ function buildMosaicRail(){
     item.innerHTML='<div><div class="rail-name">'+m.label+'</div><div class="rail-tag">'+(id===mosaicId?'● playing now':'')+'</div></div>';
     item.addEventListener('click',()=>{if(id!==mosaicId)switchMosaic(id);const mt=document.getElementById('menuToggle');if(mt)mt.checked=false;});
     mosaicRail.appendChild(item);
+  });
+}
+// Scrollable list below the player (separate from the burger-menu rail):
+// each mosaic's title plus a horizontal filmstrip of its tile squares, so
+// you can browse everything just by scrolling down instead of opening the
+// menu. The filmstrip is sliced straight out of that piece's poster image
+// (a CSS-sprite crop per tile, cols x rows from its own config) rather than
+// needing separate thumbnail assets.
+function buildMosaicBrowseList(){
+  mosaicBrowseList.innerHTML='';
+  MOSAIC_ORDER.forEach(id=>{
+    const m=MOSAICS[id];
+    const item=document.createElement('button');item.type='button';item.className='browse-item'+(id===mosaicId?' active':'');
+    const head=document.createElement('div');head.className='browse-item-head';
+    const title=document.createElement('span');title.className='browse-item-title';title.textContent=m.label;
+    head.appendChild(title);
+    if(id===mosaicId){const tag=document.createElement('span');tag.className='browse-item-tag';tag.textContent='● playing now';head.appendChild(tag);}
+    const strip=document.createElement('div');strip.className='browse-strip';
+    for(let i=0;i<m.tileCount;i++){
+      const sq=document.createElement('div');sq.className='browse-tile';
+      sq.style.backgroundImage='url('+m.poster+')';
+      sq.style.backgroundSize=(m.cols*100)+'% '+(m.rows*100)+'%';
+      const px=m.cols>1?(i%m.cols)/(m.cols-1)*100:0, py=m.rows>1?Math.floor(i/m.cols)/(m.rows-1)*100:0;
+      sq.style.backgroundPosition=px+'% '+py+'%';
+      strip.appendChild(sq);
+    }
+    item.appendChild(head);item.appendChild(strip);
+    item.addEventListener('click',()=>{if(id!==mosaicId)switchMosaic(id);});
+    mosaicBrowseList.appendChild(item);
   });
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
@@ -395,7 +478,12 @@ async function loadBank(percent){
 function ensureGains(force){
   if(!force&&gains.length===TILE_COUNT)return;
   for(const g of gains){try{g.disconnect()}catch{}}
-  gains=Array.from({length:TILE_COUNT},(_,idx)=>{const g=ctx.createGain();g.gain.value=muted[idx]?0:1;g.connect(ctx.destination);return g;});
+  // Respect solo state at creation time too — a listener can tap Solo/Mute
+  // before ever pressing Play (no AudioContext exists yet, so those clicks
+  // only update the muted/soloed arrays + visuals); the gains created here
+  // on first prepare must come up already reflecting whatever they chose.
+  const anySolo=soloed.some(Boolean);
+  gains=Array.from({length:TILE_COUNT},(_,idx)=>{const g=ctx.createGain();g.gain.value=(anySolo?!soloed[idx]:muted[idx])?0:1;g.connect(ctx.destination);return g;});
 }
 async function ensurePrepared(){
   if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
@@ -414,6 +502,7 @@ async function ensurePrepared(){
 }
 function buildTempoButtons(){
   tempoButtons.innerHTML='';
+  tempoButtons.appendChild(playBtn); // Play + 50/75/100 share one row, in that order
   TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));tempoButtons.appendChild(b)});updateTempoUI();
 }
 function updateTempoUI(){tempoButtons.querySelectorAll('button').forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
@@ -495,6 +584,7 @@ async function switchMosaic(id){
     VIDEO_SOURCES=videoSourcesFor(cfg);STEM_URLS=cfg.stemFiles;
     videoCycle=LOOP_END;pausedPos=0;selected=0;
     muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
+    soloed=Array(TILE_COUNT).fill(false);engine.soloDim=soloed.map(()=>false);
     engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
     prepared=false;fallbackMode=false;buffers=[];
     // Tempo (and the loop-boundary resync tracker) must not carry over from the
@@ -518,7 +608,7 @@ async function switchMosaic(id){
     gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
     focusCtx.fillStyle='#030405';focusCtx.fillRect(0,0,focusCanvas.width,focusCanvas.height);
 
-    buildControls();buildMosaicRail();
+    buildControls();buildMosaicRail();buildMosaicBrowseList();
     // Avoid calling engine.render() here — engine.info/frameQueue still belong
     // to the OLD mosaic until loadVideoForTempo() below finishes, and its cols/
     // rows/tileCount have already been switched to the new layout, so a render
@@ -723,7 +813,7 @@ sizeFocusCanvas();
 document.title='Mosaic — '+cfg.label;
 pieceNameEl.textContent=cfg.label;
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
-buildControls();buildTempoButtons();buildMosaicRail();updateFocusUI();updateUI();
+buildControls();buildTempoButtons();buildMosaicRail();buildMosaicBrowseList();updateFocusUI();updateUI();
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
 })();
