@@ -26,7 +26,7 @@
 .menu-links a.active{color:var(--accent)}
 .menu-sub{margin-top:22px}
 .rail-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1.5px;color:var(--brass);text-transform:uppercase;margin:0 0 10px}
-.rail-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:3px;margin-bottom:8px;border:1px solid var(--border);background:var(--panel)}
+.rail-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:3px;margin-bottom:8px;border:1px solid var(--border);background:var(--panel);cursor:pointer}
 .rail-item.active{border-color:var(--accent)}
 .rail-name{font-family:'Fraunces',serif;font-weight:600;font-size:13px}
 .rail-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;margin-top:2px;color:var(--good)}
@@ -79,7 +79,7 @@
       <div class="focus-topbar">
         <div>
           <div class="wordmark">Mo<span>saic</span></div>
-          <div class="piece-name">Abakuá</div>
+          <div class="piece-name" id="pieceName">Abakuá</div>
         </div>
         <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
       </div>
@@ -112,9 +112,7 @@
     </div>
     <div class="menu-sub">
       <p class="rail-title">Mosaics</p>
-      <div class="rail-item active">
-        <div><div class="rail-name">Abakuá</div><div class="rail-tag">● playing now</div></div>
-      </div>
+      <div id="mosaicRail"></div>
     </div>
   </div>
 </main>
@@ -123,33 +121,68 @@
 <script>
 (() => {
 'use strict';
-const LOOP_END=45.600;
-const TEMPO_PRESETS=[50,75,100]; // 25% dropped for now to reduce scope — can add back later
-const VIDEO_SOURCES={
-  100:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_100.mp4',
-  75:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_75.mp4',
-  50:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_50.mp4'
+// --- per-mosaic configuration -------------------------------------------
+// Each entry describes everything that differs between pieces: tile names,
+// grid shape (cols x rows baked into the composite video by the ffmpeg
+// build, tileCount = how many of those cells are actually used — a piece
+// with fewer tiles than cols*rows just leaves the remaining cell(s) blank
+// in the source video), audio stem filenames, and the R2 base path the
+// tempo-variant videos live under. Adding a new mosaic is just adding an
+// entry here — nothing else in this file is piece-specific.
+const MOSAICS={
+  abakua:{
+    id:'abakua', label:'Abakuá', poster:'poster_abakua.jpg',
+    cols:4, rows:2, tileCount:8, loopEnd:45.600,
+    names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
+    videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_',
+    stemFiles:['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac']
+  },
+  congo:{
+    id:'congo', label:'Congo Yambumba', poster:'poster_congo.jpg',
+    cols:4, rows:2, tileCount:8, loopEnd:24.050,
+    names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
+    videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
+    stemFiles:['01_clave_congoyambumba.aac','02_cata_congoyambumba.aac','03_erikundi_congoyambumba.aac','04_quinto_congoyambumba.aac','05_conga_congoyambumba.aac','06_tumba_congoyambumba.aac','07_coro1_congoyambumba.aac','08_coro2_congoyambumba.aac']
+  },
+  flipswing:{
+    id:'flipswing', label:'Flip Swing', poster:'poster_flip_swing.jpg',
+    cols:4, rows:2, tileCount:7, loopEnd:15.567,
+    names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
+    videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
+    stemFiles:['01_bass_flipswing.aac','02_coro1_flipswing.aac','03_coro2_flipswing.aac','04_repenique_flipswing.aac','05_guitar1_flipswing.aac','06_guitar2_flipswing.aac','07_kit_flipswing.aac']
+  }
 };
-const NAMES=['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'];
-// All 8 tiles are separate Web Audio stems (sample-accurate, gapless native looping).
+const MOSAIC_ORDER=['abakua','congo','flipswing'];
+const TEMPO_PRESETS=[50,75,100]; // 25% dropped for now to reduce scope — can add back later
+function videoSourcesFor(c){return {100:c.videoBase+'100.mp4',75:c.videoBase+'75.mp4',50:c.videoBase+'50.mp4'}}
+
+let mosaicId=(new URLSearchParams(location.search).get('mosaic')||'abakua').toLowerCase();
+if(!MOSAICS[mosaicId])mosaicId='abakua';
+let cfg=MOSAICS[mosaicId];
+// All tiles are separate Web Audio stems (sample-accurate, gapless native looping).
 // This part is UNCHANGED from the previous architecture — it was already proven
 // gapless and reliable. Audio is the one and only master clock: video has no
 // clock of its own anymore (see the WebCodecs engine section below), so there is
 // no more "which one is master" question at all, and nothing for the two to drift
 // against — the whole class of sync bugs the old build fought is gone by construction.
-const STEM_URLS=['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac'];
+let LOOP_END=cfg.loopEnd, NAMES=cfg.names, TILE_COLS=cfg.cols, TILE_ROWS=cfg.rows, TILE_COUNT=cfg.tileCount;
+let VIDEO_SOURCES=videoSourcesFor(cfg), STEM_URLS=cfg.stemFiles;
 const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel');
+const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), pieceNameEl=$('#pieceName'), mosaicRail=$('#mosaicRail');
 const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge');
-let selected=0, muted=Array(8).fill(false);
+let selected=0, muted=Array(TILE_COUNT).fill(false);
 let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
 let startingPlayback=false; // guards a fast double-tap on Play from starting two overlapping playback attempts
 let videoCycle=LOOP_END;
-let tempoPercent=100, bankBusy=false;
+let tempoPercent=100, bankBusy=false, switchingMosaic=false;
+// Caches are keyed by "mosaicId|percent" so switching pieces — and switching
+// back to one visited earlier this session — never re-fetches or re-decodes
+// anything already prepared.
+function cacheKey(percent){return mosaicId+'|'+percent}
 const bankCache=new Map(), bankLoads=new Map();
 
 // Audio engine — UNCHANGED from the previous architecture.
@@ -170,6 +203,7 @@ function setStatus(msg,cls=''){status.textContent=msg;status.className='status'+
 let lastRecoverAt=0;
 const engine=new WebCodecsVideoEngine({
   gridCanvas:grid, focusCanvas:focusCanvas,
+  cols:TILE_COLS, rows:TILE_ROWS, tileCount:TILE_COUNT,
   onStatus:(msg,cls)=>setStatus(msg,cls),
   onError:(err)=>{
     const now=performance.now();
@@ -190,14 +224,15 @@ window.addEventListener('resize',sizeFocusCanvas);
 
 const videoBufferCache=new Map(), videoLoads=new Map();
 async function loadVideoBuffer(percent){
-  if(videoBufferCache.has(percent))return videoBufferCache.get(percent);
-  if(videoLoads.has(percent))return videoLoads.get(percent);
+  const key=cacheKey(percent);
+  if(videoBufferCache.has(key))return videoBufferCache.get(key);
+  if(videoLoads.has(key))return videoLoads.get(key);
   const promise=(async()=>{
     setStatus('Downloading '+percent+'% video…');
     const ab=await fetchWithRetry(VIDEO_SOURCES[percent],3);
-    videoBufferCache.set(percent,ab);videoLoads.delete(percent);return ab;
-  })().catch(e=>{videoLoads.delete(percent);throw e});
-  videoLoads.set(percent,promise);return promise;
+    videoBufferCache.set(key,ab);videoLoads.delete(key);return ab;
+  })().catch(e=>{videoLoads.delete(key);throw e});
+  videoLoads.set(key,promise);return promise;
 }
 async function loadVideoForTempo(percent,keepPos){
   const pos=keepPos?currentPos():0;
@@ -234,13 +269,13 @@ function paintAt(pos){
   };
   requestAnimationFrame(tryPaint);
 }
-function tileSource(i,w,h){const tw=w/4,th=h/2;return [(i%4)*tw,Math.floor(i/4)*th,tw,th]}
+function tileSource(i,w,h){const tw=w/TILE_COLS,th=h/TILE_ROWS;return [(i%TILE_COLS)*tw,Math.floor(i/TILE_COLS)*th,tw,th]}
 function drawPoster(){
   if(!poster.complete||!poster.naturalWidth)return;
   const w=poster.naturalWidth,h=poster.naturalHeight;
-  const S=grid.width/4,Sh=grid.height/2;
-  for(let i=0;i<8;i++){
-    const [sx,sy,sw,sh]=tileSource(i,w,h),dx=(i%4)*S,dy=Math.floor(i/4)*Sh;
+  const S=grid.width/TILE_COLS,Sh=grid.height/TILE_ROWS;
+  for(let i=0;i<TILE_COUNT;i++){
+    const [sx,sy,sw,sh]=tileSource(i,w,h),dx=(i%TILE_COLS)*S,dy=Math.floor(i/TILE_COLS)*Sh;
     gctx.drawImage(poster,sx,sy,sw,sh,dx,dy,S,Sh);
     if(muted[i]){gctx.fillStyle='rgba(0,0,0,.55)';gctx.fillRect(dx,dy,S,Sh)}
     gctx.strokeStyle=i===selected?'#63d7ff':'#050607';gctx.lineWidth=i===selected?4:2;gctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
@@ -256,6 +291,7 @@ function updateFocusUI(){
   else drawPoster();
 }
 function buildControls(){
+  controls.innerHTML=''; // clear any tiles from a previously-loaded mosaic
   NAMES.forEach((name,i)=>{
     const t=document.createElement('div');t.className='tile';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
@@ -267,6 +303,16 @@ function buildControls(){
     mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];t.classList.toggle('is-muted',muted[i]);mute.classList.toggle('is-muted',muted[i]);mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);updateFocusUI();setTrackMute(i,muted[i]);});
   });
   if(controls.children[0])controls.children[0].classList.add('is-selected');
+}
+function buildMosaicRail(){
+  mosaicRail.innerHTML='';
+  MOSAIC_ORDER.forEach(id=>{
+    const m=MOSAICS[id];
+    const item=document.createElement('div');item.className='rail-item'+(id===mosaicId?' active':'');
+    item.innerHTML='<div><div class="rail-name">'+m.label+'</div><div class="rail-tag">'+(id===mosaicId?'● playing now':'')+'</div></div>';
+    item.addEventListener('click',()=>{if(id!==mosaicId)switchMosaic(id);const mt=document.getElementById('menuToggle');if(mt)mt.checked=false;});
+    mosaicRail.appendChild(item);
+  });
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
 function currentPos(){
@@ -280,7 +326,7 @@ function setTrackMute(i,isMuted){
 }
 function stopStems(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[]}
 function startStems(pos){
-  if(!ctx||buffers.length!==8)return;
+  if(!ctx||buffers.length!==TILE_COUNT)return;
   stopStems();
   const when=ctx.currentTime+0.02;
   stemStartCtx=when;stemStartPos=pos;
@@ -322,8 +368,9 @@ async function fetchWithRetry(u,attempts=3){
   throw lastErr;
 }
 async function loadBank(percent){
-  if(bankCache.has(percent))return bankCache.get(percent);
-  if(bankLoads.has(percent))return bankLoads.get(percent);
+  const key=cacheKey(percent);
+  if(bankCache.has(key))return bankCache.get(key);
+  if(bankLoads.has(key))return bankLoads.get(key);
   const promise=(async()=>{
     const urls=tempoUrls(percent),rate=percent/100;
     setStatus('Preparing '+percent+'% pitch-correct audio…');
@@ -333,15 +380,18 @@ async function loadBank(percent){
       const decoded=await ctx.decodeAudioData(arrays[i].slice(0));
       const exact=ctx.createBuffer(1,targetFrames,ctx.sampleRate),dst=exact.getChannelData(0),src=decoded.getChannelData(0);
       dst.set(src.subarray(0,Math.min(src.length,dst.length)));out.push(exact);
-      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of 8…');
+      setStatus('Preparing '+percent+'% audio: '+(i+1)+' of '+arrays.length+'…');
     }
-    bankCache.set(percent,out);bankLoads.delete(percent);return out;
-  })().catch(e=>{bankLoads.delete(percent);throw e});
-  bankLoads.set(percent,promise);return promise;
+    bankCache.set(key,out);bankLoads.delete(key);return out;
+  })().catch(e=>{bankLoads.delete(key);throw e});
+  bankLoads.set(key,promise);return promise;
 }
-function ensureGains(){
-  if(gains.length===8)return;
-  gains=Array.from({length:8},(_,idx)=>{const g=ctx.createGain();g.gain.value=muted[idx]?0:1;g.connect(ctx.destination);return g;});
+// force=true always rebuilds (used on mosaic switch, since old gain nodes'
+// mute state/count belonged to the previous piece even when tileCount matches).
+function ensureGains(force){
+  if(!force&&gains.length===TILE_COUNT)return;
+  for(const g of gains){try{g.disconnect()}catch{}}
+  gains=Array.from({length:TILE_COUNT},(_,idx)=>{const g=ctx.createGain();g.gain.value=muted[idx]?0:1;g.connect(ctx.destination);return g;});
 }
 async function ensurePrepared(){
   if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
@@ -359,6 +409,7 @@ async function ensurePrepared(){
   }finally{preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';}
 }
 function buildTempoButtons(){
+  tempoButtons.innerHTML='';
   TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));tempoButtons.appendChild(b)});updateTempoUI();
 }
 function updateTempoUI(){tempoButtons.querySelectorAll('button').forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
@@ -386,7 +437,7 @@ async function changeTempo(percent){
     fallbackAudio.pause();
 
     buffers=bank;tempoPercent=percent;
-    await engine.loadTempo(videoBufferCache.get(percent));
+    await engine.loadTempo(videoBufferCache.get(cacheKey(percent)));
     videoCycle=engine.cycleSeconds||LOOP_END;
     const newPos=proportion*videoCycle;
     pausedPos=newPos;
@@ -420,6 +471,57 @@ function prefetchTempoBanks(){
     }
   },1200);
 }
+// --- switching between mosaics ------------------------------------------
+// Tears down playback state and swaps every piece-specific variable over to
+// the new mosaic's config, then loads its 100% video the same way the very
+// first page load does. Deliberately does NOT clear videoBufferCache/
+// bankCache — they're keyed by "mosaicId|percent" already, so switching back
+// to a piece visited earlier this session is instant, no re-fetch/re-decode.
+async function switchMosaic(id){
+  if(!MOSAICS[id]||id===mosaicId||switchingMosaic)return;
+  switchingMosaic=true;
+  try{
+    playing=false;cancelAnimationFrame(raf);raf=0;
+    stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};
+    bufferingSpinner.hidden=true;
+    engine.decodedFrameCount=0; // fresh baseline for the stall watchdog on the new piece
+
+    mosaicId=id;cfg=MOSAICS[id];
+    LOOP_END=cfg.loopEnd;NAMES=cfg.names;TILE_COLS=cfg.cols;TILE_ROWS=cfg.rows;TILE_COUNT=cfg.tileCount;
+    VIDEO_SOURCES=videoSourcesFor(cfg);STEM_URLS=cfg.stemFiles;
+    videoCycle=LOOP_END;pausedPos=0;selected=0;
+    muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
+    engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
+    prepared=false;fallbackMode=false;buffers=[];
+    if(ctx)ensureGains(true);
+
+    document.title='Mosaic — '+cfg.label;
+    pieceNameEl.textContent=cfg.label;
+    poster.src=cfg.poster;
+    timeline.max=String(LOOP_END);timeline.value='0';
+
+    buildControls();buildMosaicRail();
+    // Avoid calling engine.render() here — engine.info/frameQueue still belong
+    // to the OLD mosaic until loadVideoForTempo() below finishes, and its cols/
+    // rows/tileCount have already been switched to the new layout, so a render
+    // right now would crop the old decoded frame using the new piece's grid.
+    focusLabel.textContent=NAMES[selected];
+    focusWrap.classList.toggle('is-muted',muted[selected]);
+    engine.selected=selected;
+    drawPoster();
+    updateUI();
+    badge.textContent='Ready to start';playBtn.textContent='Play';
+    setStatus('Loading '+cfg.label+'…');
+
+    await loadVideoForTempo(100,false);
+    paintAt(0);
+    setStatus('Tap Play to start '+cfg.label+'.');
+  }catch(err){
+    console.error(err);
+    setStatus('Failed to load '+(MOSAICS[id]&&MOSAICS[id].label||id)+': '+(err?.message||err),'error');
+  }finally{switchingMosaic=false;}
+}
+
 async function playFromGesture(){
   if(startingPlayback||playing)return; // a fast double-tap can otherwise land here twice before `playing` flips
   startingPlayback=true;
@@ -600,7 +702,10 @@ timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginS
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause()});window.addEventListener('pagehide',()=>{if(playing)pause()});
 poster.addEventListener('load',drawPoster);if(poster.complete)drawPoster();
 sizeFocusCanvas();
-buildControls();buildTempoButtons();updateFocusUI();updateUI();
+document.title='Mosaic — '+cfg.label;
+pieceNameEl.textContent=cfg.label;
+if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
+buildControls();buildTempoButtons();buildMosaicRail();updateFocusUI();updateUI();
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
 })();

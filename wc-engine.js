@@ -1,8 +1,9 @@
 // WebCodecs video engine for Mosaic Player.
 //
 // Core idea: decode video frames manually from a fully-fetched MP4 ArrayBuffer,
-// and paint BOTH the focus square and the 8-tile grid from the exact same
-// decoded VideoFrame in the same synchronous step. This structurally eliminates
+// and paint BOTH the focus square and the tile grid (shape/count configurable
+// per mosaic — see cols/rows/tileCount) from the exact same decoded VideoFrame
+// in the same synchronous step. This structurally eliminates
 // the old "two independently-timed processes" drift bug (live <video> element vs
 // canvas repeatedly snapshotting it) — there is now only one video pipeline,
 // sampled once per render step and drawn twice.
@@ -12,7 +13,14 @@
 // the matching picture. It never advances time itself.
 
 class WebCodecsVideoEngine {
-  constructor({ gridCanvas, focusCanvas, onStatus, onError }) {
+  // cols/rows describe the fixed grid baked into the SOURCE composite video by
+  // the ffmpeg build (e.g. 4 columns x 2 rows); tileCount is how many of those
+  // cells are actually in use for the current mosaic (a piece with fewer tiles
+  // than cols*rows — e.g. 7 — simply leaves the remaining cell(s) blank in the
+  // source video and never draws/selects them). Per-mosaic layout is settable
+  // after construction via setLayout(), since one player instance now switches
+  // between multiple pieces rather than being built for a single fixed grid.
+  constructor({ gridCanvas, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8 }) {
     this.gridCtx = gridCanvas.getContext('2d', { alpha: false });
     this.focusCtx = focusCanvas.getContext('2d', { alpha: false });
     this.onStatus = onStatus || (() => {});
@@ -22,8 +30,9 @@ class WebCodecsVideoEngine {
     this.sampleIdx = 0;        // next sample to feed to the decoder (decode order)
     this.frameQueue = [];      // decoded VideoFrames, in presentation order (by construction)
     this.displayedFrame = null; // the frame currently painted (kept open until replaced)
-    this.selected = 0;         // focus tile index 0-7
-    this.muted = new Array(8).fill(false);
+    this.selected = 0;         // focus tile index 0..tileCount-1
+    this.cols = cols; this.rows = rows; this.tileCount = tileCount;
+    this.muted = new Array(tileCount).fill(false);
     this.cycleSeconds = 0;
     this.decodedFrameCount = 0;
     this.pumpBudgetMs = 6;     // don't let one pump call hog the main thread
@@ -31,6 +40,15 @@ class WebCodecsVideoEngine {
     this.destroyed = false;
     this.seeking = false;
     this._resetLapTracking();
+  }
+
+  // Switch grid geometry when the app loads a different mosaic. Does NOT touch
+  // `muted` — the caller (app) owns that array and reassigns it to match the
+  // new tileCount right alongside calling this, same pattern as `engine.muted`
+  // already being shared by reference.
+  setLayout(cols, rows, tileCount) {
+    this.cols = cols; this.rows = rows; this.tileCount = tileCount;
+    if (this.selected >= tileCount) this.selected = 0;
   }
 
   // Frame timestamps reset to ~0 at every loop point (sample 0's pts is always
@@ -245,21 +263,25 @@ class WebCodecsVideoEngine {
       this._offscreenCtx = this._offscreen.getContext('2d', { alpha: false });
     }
     this._offscreenCtx.drawImage(frame, 0, 0, w, h); // full-frame blit — no cropping here, universally safe
-    drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected);
-    drawFocusFromSource(this.focusCtx, this._offscreen, w, h, this.selected);
+    drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount);
+    drawFocusFromSource(this.focusCtx, this._offscreen, w, h, this.selected, this.cols, this.rows);
   }
 }
 
-function tileRect(i, w, h) {
-  const tw = w / 4, th = h / 2;
-  return [(i % 4) * tw, Math.floor(i / 4) * th, tw, th];
+// cols/rows = the fixed grid shape baked into the source composite (e.g. 4x2).
+function tileRect(i, w, h, cols = 4, rows = 2) {
+  const tw = w / cols, th = h / rows;
+  return [(i % cols) * tw, Math.floor(i / cols) * th, tw, th];
 }
 
-function drawGridFromSource(ctx, source, w, h, muted, selected) {
-  const S = ctx.canvas.width / 4, Sh = ctx.canvas.height / 2;
-  for (let i = 0; i < 8; i++) {
-    const [sx, sy, sw, sh] = tileRect(i, w, h);
-    const dx = (i % 4) * S, dy = Math.floor(i / 4) * Sh;
+// tileCount = how many of cols*rows cells are actually populated for this
+// mosaic (a piece with fewer tiles than cols*rows just never draws/selects
+// the remaining cell(s), which are left blank in the source video itself).
+function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows) {
+  const S = ctx.canvas.width / cols, Sh = ctx.canvas.height / rows;
+  for (let i = 0; i < tileCount; i++) {
+    const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
+    const dx = (i % cols) * S, dy = Math.floor(i / cols) * Sh;
     ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
     if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S, Sh); }
     ctx.strokeStyle = i === selected ? '#cbe0e6' : 'rgba(203,224,230,0.35)';
@@ -268,8 +290,8 @@ function drawGridFromSource(ctx, source, w, h, muted, selected) {
   }
 }
 
-function drawFocusFromSource(ctx, source, w, h, selected) {
-  const [sx, sy, sw, sh] = tileRect(selected, w, h);
+function drawFocusFromSource(ctx, source, w, h, selected, cols = 4, rows = 2) {
+  const [sx, sy, sw, sh] = tileRect(selected, w, h, cols, rows);
   ctx.drawImage(source, sx, sy, sw, sh, 0, 0, ctx.canvas.width, ctx.canvas.height);
 }
 
