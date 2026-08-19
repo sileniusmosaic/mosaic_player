@@ -500,6 +500,14 @@ async function switchMosaic(id){
     poster.src=cfg.poster;
     timeline.max=String(LOOP_END);timeline.value='0';
 
+    // Wipe the grid canvas before drawing anything for the new mosaic. Without
+    // this, a piece with fewer tiles than the previous one (e.g. Flip Swing's 7
+    // vs Congo/Abakuá's 8) never repaints the leftover cell(s) — nothing in
+    // drawGridFromSource() ever touches indices >= the new tileCount, so
+    // whatever was drawn there by the OLD mosaic just sits frozen on screen.
+    gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
+    focusCtx.fillStyle='#030405';focusCtx.fillRect(0,0,focusCanvas.width,focusCanvas.height);
+
     buildControls();buildMosaicRail();
     // Avoid calling engine.render() here — engine.info/frameQueue still belong
     // to the OLD mosaic until loadVideoForTempo() below finishes, and its cols/
