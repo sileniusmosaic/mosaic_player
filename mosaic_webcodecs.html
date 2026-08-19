@@ -142,14 +142,18 @@ const MOSAICS={
     cols:4, rows:2, tileCount:8, loopEnd:24.050,
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
-    stemFiles:['01_clave_congoyambumba.aac','02_cata_congoyambumba.aac','03_erikundi_congoyambumba.aac','04_quinto_congoyambumba.aac','05_conga_congoyambumba.aac','06_tumba_congoyambumba.aac','07_coro1_congoyambumba.aac','08_coro2_congoyambumba.aac']
+    // Unlike Abakuá's stems (committed into the git repo, served from the app's
+    // own origin as bare relative filenames), Congo/Flip Swing's audio actually
+    // lives in the R2 bucket — so these need the full R2 URL, not a bare name.
+    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_clave_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_cata_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_erikundi_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_quinto_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_conga_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_tumba_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_coro1_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_coro2_congoyambumba.aac']
   },
   flipswing:{
     id:'flipswing', label:'Flip Swing', poster:'poster_flip_swing.jpg',
     cols:4, rows:2, tileCount:7, loopEnd:15.567,
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
-    stemFiles:['01_bass_flipswing.aac','02_coro1_flipswing.aac','03_coro2_flipswing.aac','04_repenique_flipswing.aac','05_guitar1_flipswing.aac','06_guitar2_flipswing.aac','07_kit_flipswing.aac']
+    // Same reason as Congo above — these need the full R2 URL, not a bare name.
+    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac']
   }
 };
 const MOSAIC_ORDER=['abakua','congo','flipswing'];
