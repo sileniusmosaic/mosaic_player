@@ -35,7 +35,10 @@
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 .focus-solo-dim{position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;display:none}.focus-wrap.is-solo-dimmed .focus-solo-dim{display:block}
-.focus-label{position:absolute;left:10px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
+.focus-label{position:absolute;left:44px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
+.metroBtn{position:absolute;top:auto;left:10px;bottom:10px;width:28px;height:28px;color:var(--muted);font-size:14px;cursor:pointer}
+.metroBtn.is-active{background:var(--tile-border);color:#0a2530;border-color:#0a2530}
+.metroBtn:disabled{opacity:.35;cursor:default}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -132,6 +135,7 @@
         </div>
         <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
       </div>
+      <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>♩</button>
       <div id="focusLabel" class="focus-label">Clave</div>
       <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Buffering…</span></div>
     </div>
@@ -216,6 +220,13 @@ const MOSAICS={
   flipswing:{
     id:'flipswing', label:'Flip Swing', poster:'poster_flip_swing.jpg',
     cols:4, rows:2, tileCount:7, loopEnd:15.567,
+    // Beat counter: 12 bars x 3 beats/bar = 36 beats per loop, counting
+    // 1-2-3 repeating, with beat 1 landing exactly on the loop start (no
+    // pickup/count-in). This is all that's needed to derive the live BPM —
+    // seconds-per-beat is just the ACTUAL current-tempo loop length divided
+    // by 36, so it stays correct automatically at 50%/75% too, no separate
+    // per-tempo numbers required.
+    beatsPerBar:3, bars:12,
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
@@ -245,7 +256,31 @@ const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#foc
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn');
+// Visual beat counter, off by default, only enabled for pieces with
+// beatsPerBar+bars set in their config (Flip Swing for now). Deliberately
+// NOT tied to tempoPercent or any per-tempo number — it derives
+// seconds-per-beat from the loop's ACTUAL current-tempo length (videoCycle)
+// divided by total beats, so it stays correct across every tempo automatically.
+let metroActive=false;
+function metroReady(){return !!(cfg.beatsPerBar&&cfg.bars);}
+function updateMetro(){
+  if(!metroReady()){metroBtn.textContent='♩';return;}
+  if(!metroActive){metroBtn.textContent='♩';return;}
+  const totalBeats=cfg.beatsPerBar*cfg.bars;
+  const dur=videoCycle||LOOP_END;
+  const p=scrubbing?scrubPos:currentPos();
+  const beatFloat=(((p/dur)*totalBeats)%totalBeats+totalBeats)%totalBeats;
+  const beatInBar=Math.floor(beatFloat%cfg.beatsPerBar)+1;
+  metroBtn.textContent=String(beatInBar);
+}
+metroBtn.addEventListener('click',()=>{
+  if(!metroReady())return;
+  metroActive=!metroActive;
+  metroBtn.classList.toggle('is-active',metroActive);
+  metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
+  updateMetro();
+});
 noteText.textContent=IS_DESKTOP
   ?'Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.'
   :'Tap a square to select focus. Mute is instantaneous. Tempo presets are pitch-correct: 50, 75 and 100%.';
@@ -650,6 +685,8 @@ async function switchMosaic(id){
     // desync audio/video tempo the moment the user hits Play on the new piece.
     tempoPercent=100;updateTempoUI();
     lastLoopPos=null;
+    metroActive=false;metroBtn.classList.remove('is-active');metroBtn.disabled=!metroReady();
+    metroBtn.setAttribute('aria-label','Beat counter: off');metroBtn.textContent='♩';
     if(ctx)ensureGains(true);
 
     document.title='Mosaic — '+cfg.label;
@@ -736,6 +773,7 @@ function updateUI(){
   const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;
   if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}
   timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)+(playing&&shownFps!==null?'  ·  '+shownFps+' fps':'');
+  updateMetro();
 }
 // Displayed-frame-rate readout: counts how often the PICTURE actually visibly
 // changes per second — not the video's encoded frame rate, and not how many
@@ -870,6 +908,7 @@ sizeFocusCanvas();
 document.title='Mosaic — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
+metroBtn.disabled=!metroReady();
 buildControls();buildTempoButtons();buildMosaicRail();buildMosaicBrowseList();updateFocusUI();updateUI();
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
