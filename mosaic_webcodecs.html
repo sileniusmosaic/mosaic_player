@@ -5,16 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090b0d">
 <title>Mosaic — Abakuá</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- Fraunces/Work Sans/IBM Plex Mono webfonts removed — everything now renders
+     in Arial per request, so there's no reason to still fetch them. -->
 <style>
 :root{--bg:#15100b;--panel:#1f1812;--panel2:#2a2117;--border:#3a2f22;--text:#f1e6d0;--muted:#c9bca3;--accent:#cf9f5f;--danger:#a3402a;--good:#8fae72;--brass:#b98a2e;--tile-border:#cbe0e6}
-*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Work Sans',-apple-system,sans-serif}body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
+*{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif!important}html,body{margin:0;background:var(--bg);color:var(--text)}body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
 .app{max-width:480px;margin:0 auto;padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
 .focus-topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:flex-start;justify-content:space-between;padding:10px 10px 22px;z-index:5;background:linear-gradient(to bottom, rgba(3,4,5,.72) 0%, rgba(3,4,5,.32) 60%, transparent 100%)}
-.wordmark{font-family:'Fraunces',serif;font-weight:700;font-size:17px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
+.wordmark{font-family:'Fraunces',serif;font-weight:700;font-size:34px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
 .wordmark span{color:var(--accent);font-style:italic;font-weight:500}
-.piece-name{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--brass);letter-spacing:1px;margin-top:1px;text-shadow:0 1px 4px rgba(0,0,0,.85)}
+.piece-name{font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--brass);letter-spacing:1px;margin-top:1px;text-shadow:0 1px 4px rgba(0,0,0,.85)}
 .burger{width:34px;height:34px;border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;background:none}
 .burger span{width:16px;height:2px;background:var(--accent);display:block;border-radius:2px}
 #menuToggle{display:none}
@@ -112,7 +112,7 @@
 .page-header{display:none;align-items:flex-start;justify-content:space-between;padding:0 0 10px}
 .is-desktop .page-header{display:flex}
 .is-desktop .focus-topbar{display:none}
-.page-header .wordmark{font-size:19px;text-shadow:none}
+.page-header .wordmark{font-size:38px;text-shadow:none}
 .page-header .piece-name{color:var(--brass);text-shadow:none}
 .page-header .burger{border-color:var(--border)}
 /* Reset + timeline + time now share one row on both mobile and desktop —
@@ -174,6 +174,7 @@
   <section class="panel footer-panel">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
     <p class="note" id="noteText">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
+    <div id="fpsReadout" class="note" hidden></div>
     <div id="badge" class="badge" hidden>Ready to start</div>
   </section>
   <img id="poster" src="poster_abakua.jpg" alt="" hidden>
@@ -285,13 +286,13 @@ const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#foc
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout');
 // Visual beat counter, off by default, only enabled for pieces with
 // beatsPerBar+bars set in their config (Flip Swing for now). Deliberately
 // NOT tied to tempoPercent or any per-tempo number — it derives
 // seconds-per-beat from the loop's ACTUAL current-tempo length (videoCycle)
 // divided by total beats, so it stays correct across every tempo automatically.
-let metroActive=false;
+let metroActive=true; // defaults ON — tap to turn off, per-piece (see metroReady())
 function metroReady(){return !!(cfg.beatsPerBar&&(cfg.bars||cfg.bpm));}
 function updateMetro(){
   if(!metroReady()||!metroActive)return; // idle look (metronome icon) is pure CSS via .is-active
@@ -725,8 +726,12 @@ async function switchMosaic(id){
     // desync audio/video tempo the moment the user hits Play on the new piece.
     tempoPercent=100;updateTempoUI();
     lastLoopPos=null;
-    metroActive=false;metroBtn.classList.remove('is-active');metroBtn.disabled=!metroReady();
-    metroBtn.setAttribute('aria-label','Beat counter: off');metroNum.textContent='';
+    // Beat counter now defaults to ON (counting) for every piece that has
+    // beat data — tap to switch it off, rather than tap to switch it on.
+    metroActive=metroReady();
+    metroBtn.classList.toggle('is-active',metroActive);
+    metroBtn.disabled=!metroReady();
+    metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
     if(ctx)ensureGains(true);
 
     document.title='Mosaic — '+cfg.label;
@@ -812,7 +817,14 @@ function wrappedAudioPos(){
 function updateUI(){
   const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;
   if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}
-  timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3)+(playing&&shownFps!==null?'  ·  '+shownFps+' fps':'');
+  // Fixed-format time text (no fps suffix) — the fps readout used to live
+  // here too, but its length changes as digits appear/disappear, which was
+  // reflowing the Reset/timeline/time row (the range slider is flex:1, so
+  // it visibly resized every time the fps text changed). Moved down to the
+  // footer panel instead, where a changing width doesn't affect anything else.
+  timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3);
+  if(playing&&shownFps!==null){fpsReadout.hidden=false;fpsReadout.textContent='Playing at '+shownFps+' fps.';}
+  else{fpsReadout.hidden=true;}
   updateMetro();
 }
 // Displayed-frame-rate readout: counts how often the PICTURE actually visibly
@@ -948,7 +960,10 @@ sizeFocusCanvas();
 document.title='Mosaic — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
+metroActive=metroReady();
+metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
+metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
 buildControls();buildTempoButtons();buildMosaicRail();buildMosaicBrowseList();updateFocusUI();updateUI();
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
