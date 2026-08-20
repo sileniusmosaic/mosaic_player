@@ -35,7 +35,7 @@
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 .focus-solo-dim{position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;display:none}.focus-wrap.is-solo-dimmed .focus-solo-dim{display:block}
-.focus-label{position:absolute;left:62px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
+.focus-label{position:absolute;left:10px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -57,9 +57,9 @@
    default) or it renders up near the wordmark/burger instead of down here.
    Deliberately bigger than the tile mute/solo buttons — the number needs to
    be readable at a glance while playing, not just identifiable. */
-.metroBtn{top:auto;left:10px;bottom:10px;width:44px;height:44px;color:var(--muted);font-size:26px}
-.metroBtn.is-active{background:var(--tile-border);color:#0a2530;border-color:#0a2530}
-.metroBtn:disabled{opacity:.35;cursor:default}
+.metroBtn{top:auto;right:10px;left:auto;bottom:10px;width:55px;height:55px;color:var(--tile-border);font-size:33px;border-color:var(--tile-border);opacity:.55}
+.metroBtn.is-active{opacity:1}
+.metroBtn:disabled{opacity:.25;cursor:default}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
@@ -209,12 +209,12 @@ const MOSAICS={
   abakua:{
     id:'abakua', label:'Abakuá', poster:'poster_abakua.jpg',
     cols:4, rows:2, tileCount:8, loopEnd:45.600,
-    // Beat counter: 16 bars x 4 beats/bar = 64 beats per loop (bar-count
+    // Beat counter: 18 bars x 4 beats/bar = 72 beats per loop (bar-count
     // mode — see updateMetro(): with `bars` set, beat spacing is derived
     // from the loop's actual measured length rather than a fixed BPM, so
     // it can't drift even if the real duration differs slightly from
     // loopEnd above).
-    beatsPerBar:4, bars:16,
+    beatsPerBar:4, bars:18,
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_',
     stemFiles:['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac']
