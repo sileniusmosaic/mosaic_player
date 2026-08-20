@@ -36,9 +36,6 @@
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 .focus-solo-dim{position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;display:none}.focus-wrap.is-solo-dimmed .focus-solo-dim{display:block}
 .focus-label{position:absolute;left:44px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
-.metroBtn{position:absolute;top:auto;left:10px;bottom:10px;width:28px;height:28px;color:var(--muted);font-size:14px;cursor:pointer}
-.metroBtn.is-active{background:var(--tile-border);color:#0a2530;border-color:#0a2530}
-.metroBtn:disabled{opacity:.35;cursor:default}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -54,6 +51,13 @@
 .soloBtn{left:4px}
 .muteBtn.is-muted{background:#ff453a;color:#2a0806;border-color:#2a0806}
 .soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
+/* Beat counter: bottom-left of the focus square, sized/colored differently
+   from the mute/solo tile buttons it otherwise shares .dawBtn's round-button
+   look with — must explicitly override top (dawBtn pins it to top:4px by
+   default) or it renders up near the wordmark/burger instead of down here. */
+.metroBtn{top:auto;left:10px;bottom:10px;width:28px;height:28px;color:var(--muted);font-size:14px}
+.metroBtn.is-active{background:var(--tile-border);color:#0a2530;border-color:#0a2530}
+.metroBtn:disabled{opacity:.35;cursor:default}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
