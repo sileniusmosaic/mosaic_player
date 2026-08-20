@@ -57,9 +57,14 @@
    default) or it renders up near the wordmark/burger instead of down here.
    Deliberately bigger than the tile mute/solo buttons — the number needs to
    be readable at a glance while playing, not just identifiable. */
-.metroBtn{top:auto;right:10px;left:auto;bottom:10px;width:55px;height:55px;color:var(--tile-border);font-size:33px;border-color:var(--tile-border);opacity:.55}
-.metroBtn.is-active{opacity:1}
-.metroBtn:disabled{opacity:.25;cursor:default}
+.metroBtn{top:auto;right:10px;left:auto;bottom:10px;width:55px;height:55px;color:var(--tile-border);font-size:33px;border-color:var(--border);background:#0c0906}
+.metroBtn .metro-icon{width:56%;height:56%;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:.7}
+.metroBtn .metro-icon circle{fill:currentColor;stroke:none}
+.metroBtn .metro-num{display:none}
+.metroBtn.is-active{border-color:var(--tile-border)}
+.metroBtn.is-active .metro-icon{display:none}
+.metroBtn.is-active .metro-num{display:block}
+.metroBtn:disabled{opacity:.3;cursor:default}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
@@ -141,7 +146,14 @@
         </div>
         <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
       </div>
-      <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>♩</button>
+      <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
+        <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
+          <line x1="12" y1="5.3" x2="15.4" y2="16.6"></line>
+          <circle cx="13.95" cy="11" r="1.15"></circle>
+        </svg>
+        <span id="metroNum" class="metro-num"></span>
+      </button>
       <div id="focusLabel" class="focus-label">Clave</div>
       <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Buffering…</span></div>
     </div>
@@ -209,12 +221,12 @@ const MOSAICS={
   abakua:{
     id:'abakua', label:'Abakuá', poster:'poster_abakua.jpg',
     cols:4, rows:2, tileCount:8, loopEnd:45.600,
-    // Beat counter: 18 bars x 4 beats/bar = 72 beats per loop (bar-count
+    // Beat counter: 19 bars x 4 beats/bar = 76 beats per loop (bar-count
     // mode — see updateMetro(): with `bars` set, beat spacing is derived
     // from the loop's actual measured length rather than a fixed BPM, so
     // it can't drift even if the real duration differs slightly from
     // loopEnd above).
-    beatsPerBar:4, bars:18,
+    beatsPerBar:4, bars:19,
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_',
     stemFiles:['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac']
@@ -273,7 +285,7 @@ const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#foc
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum');
 // Visual beat counter, off by default, only enabled for pieces with
 // beatsPerBar+bars set in their config (Flip Swing for now). Deliberately
 // NOT tied to tempoPercent or any per-tempo number — it derives
@@ -282,8 +294,7 @@ const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoBu
 let metroActive=false;
 function metroReady(){return !!(cfg.beatsPerBar&&(cfg.bars||cfg.bpm));}
 function updateMetro(){
-  if(!metroReady()){metroBtn.textContent='♩';return;}
-  if(!metroActive){metroBtn.textContent='♩';return;}
+  if(!metroReady()||!metroActive)return; // idle look (metronome icon) is pure CSS via .is-active
   const dur=videoCycle||LOOP_END;
   const p=scrubbing?scrubPos:currentPos();
   let beatFloat;
@@ -301,7 +312,7 @@ function updateMetro(){
     beatFloat=((p/secondsPerBeat)%cfg.beatsPerBar+cfg.beatsPerBar)%cfg.beatsPerBar;
   }
   const beatInBar=Math.floor(beatFloat%cfg.beatsPerBar)+1;
-  metroBtn.textContent=String(beatInBar);
+  metroNum.textContent=String(beatInBar);
 }
 metroBtn.addEventListener('click',()=>{
   if(!metroReady())return;
@@ -715,7 +726,7 @@ async function switchMosaic(id){
     tempoPercent=100;updateTempoUI();
     lastLoopPos=null;
     metroActive=false;metroBtn.classList.remove('is-active');metroBtn.disabled=!metroReady();
-    metroBtn.setAttribute('aria-label','Beat counter: off');metroBtn.textContent='♩';
+    metroBtn.setAttribute('aria-label','Beat counter: off');metroNum.textContent='';
     if(ctx)ensureGains(true);
 
     document.title='Mosaic — '+cfg.label;
