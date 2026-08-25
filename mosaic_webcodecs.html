@@ -1095,6 +1095,19 @@ function tick(now=performance.now()){
 }
 
 playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('click',reset);
+// Spacebar always starts/stops playback, full stop — regardless of which
+// button was last clicked/focused. Without this, the browser's own default
+// behaviour re-activates whatever control currently has focus on a space
+// press (native buttons respond to Space same as a click), which is exactly
+// the "whatever button I last pressed" bug being fixed here: a document-level
+// listener catches Space before it ever reaches the focused element, and
+// preventDefault() stops that default re-activation from also firing.
+// e.repeat is ignored so holding the key down doesn't rapid-fire toggles.
+document.addEventListener('keydown',(e)=>{
+  if(e.code!=='Space'||e.repeat)return;
+  e.preventDefault();
+  toggleFromGesture();
+});
 function scrubValueFromClientX(clientX){const dur=videoCycle||LOOP_END;const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*dur,0,dur-.001)}
 function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
 function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);e.preventDefault()}
