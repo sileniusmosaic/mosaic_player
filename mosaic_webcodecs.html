@@ -122,6 +122,12 @@
    page (see markup) so they stop eating vertical space right next to the
    transport controls. */
 .footer-panel{margin-top:14px}
+/* Notation: full sheet-music page(s) rendered directly below the player
+   (converted from a PDF export — white-background score), sitting between
+   the transport row and the mosaic browse list. Hidden entirely for any
+   piece with no `notation` array in its config — see renderNotation(). */
+.notation-pages img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--border);background:#fff}
+.notation-pages img+img{margin-top:10px}
 </style>
 </head>
 <body>
@@ -166,6 +172,10 @@
       <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
       <span id="time" class="time">0.000 / 45.600</span>
     </div>
+  </section>
+  <section class="panel notation-panel" id="notationPanel" hidden>
+    <p class="rail-title">Notation</p>
+    <div id="notationPages" class="notation-pages"></div>
   </section>
   <section class="panel browse-panel">
     <p class="rail-title">Mosaics</p>
@@ -228,6 +238,12 @@ const MOSAICS={
     // it can't drift even if the real duration differs slightly from
     // loopEnd above).
     beatsPerBar:4, bars:19,
+    // Sheet-music page(s) rendered directly below the player (see
+    // renderNotation()) — converted from a single-page PDF export. Bare
+    // relative filename, same convention as poster: committed into the git
+    // repo, served from the app's own origin. Only Abakuá has this for now;
+    // the section stays hidden for any piece with no `notation` array set.
+    notation:['abakua_notation_1.png'],
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_',
     stemFiles:['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac']
@@ -282,7 +298,7 @@ const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList');
+const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -534,6 +550,23 @@ function buildMosaicBrowseList(){
     mosaicBrowseList.appendChild(item);
   });
 }
+// Renders whatever notation pages the current piece has (cfg.notation — an
+// array of image filenames, page 1 first) directly below the player, or
+// hides the whole section for a piece that doesn't have any yet. Plain
+// <img> tags, not a second video/canvas: a static image is essentially free
+// to display compared to another decode pipeline, and stacking pages is
+// just normal page flow — no extra scroll container needed, the page
+// itself scrolls.
+function renderNotation(){
+  notationPages.innerHTML='';
+  if(!cfg.notation||!cfg.notation.length){notationPanel.hidden=true;return;}
+  cfg.notation.forEach((src,i)=>{
+    const img=document.createElement('img');
+    img.src=src;img.loading='lazy';img.alt=cfg.label+' notation, page '+(i+1);
+    notationPages.appendChild(img);
+  });
+  notationPanel.hidden=false;
+}
 function AC(){return window.AudioContext||window.webkitAudioContext}
 function currentPos(){
   if(fallbackMode)return playing?(fallbackAudio.currentTime||0):pausedPos;
@@ -737,6 +770,7 @@ async function switchMosaic(id){
     document.title='Mosaic — '+cfg.label;
     setPieceNameText(cfg.label);
     poster.src=cfg.poster;
+    renderNotation();
     timeline.max=String(LOOP_END);timeline.value='0';
 
     // Wipe the grid canvas before drawing anything for the new mosaic. Without
@@ -964,7 +998,7 @@ metroActive=metroReady();
 metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
-buildControls();buildTempoButtons();buildMosaicRail();buildMosaicBrowseList();updateFocusUI();updateUI();
+buildControls();buildTempoButtons();buildMosaicRail();buildMosaicBrowseList();renderNotation();updateFocusUI();updateUI();
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
 })();
