@@ -256,6 +256,7 @@ const MOSAICS={
     // spacing is a fixed 60/bpm seconds, scaled by the current tempo
     // control the same way the audio/video already are).
     beatsPerBar:4, bpm:80,
+    notation:['congo_notation_1.png'],
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -273,6 +274,7 @@ const MOSAICS={
     // by 36, so it stays correct automatically at 50%/75% too, no separate
     // per-tempo numbers required.
     beatsPerBar:3, bars:12,
+    notation:['flipswing_notation_1.png'],
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
@@ -336,6 +338,19 @@ metroBtn.addEventListener('click',()=>{
   metroActive=!metroActive;
   metroBtn.classList.toggle('is-active',metroActive);
   metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
+  // Sound follows the same on/off flag as the number — toggling one toggles
+  // both. Off: immediately cancel anything already scheduled so it doesn't
+  // keep clicking after the tap. On: if audio is already unlocked, load the
+  // click samples (first time only) and top up the schedule right away
+  // rather than waiting for the next tick(); if audio isn't unlocked yet
+  // (metronome switched on before the first Play), ensurePrepared() picks
+  // this up when Play is eventually pressed.
+  if(metroActive){
+    if(ctx)ensureMetroBuffers().then(()=>{if(metroActive&&playing)scheduleMetroClicks();});
+    if(playing)scheduleMetroClicks();
+  }else{
+    cancelScheduledMetroClicks();
+  }
   updateMetro();
 });
 noteText.textContent=IS_DESKTOP
@@ -363,6 +378,102 @@ const bankCache=new Map(), bankLoads=new Map();
 let ctx=null, buffers=[], gains=[], sources=[];
 let stemStartCtx=0, stemStartPos=0, lastDriftCheck=0;
 let fallbackMode=false;
+
+// --- Metronome click sound --------------------------------------------------
+// The visual beat number is fine being driven by a per-frame "where is the
+// audio right now?" check (updateMetro(), ~16ms tolerance — imperceptible for
+// a digit). An audible click needs to be much tighter than that, so it does
+// NOT reuse that per-frame check: it's scheduled ahead of time against the
+// AudioContext's own high-precision clock (ctx.currentTime), the same
+// technique startStems() already uses to start the instrument stems
+// sample-accurately, rather than reacting the instant a frame notices a beat
+// has arrived. A short click doesn't need re-recording per tempo the way the
+// instrument audio does — only its SPACING changes with tempo, so one pair of
+// samples (a soft regular click + a slightly brighter one for beat 1 of each
+// bar) covers every piece and every tempo.
+let metroGain=null, metroBuffers={normal:null,accent:null}, metroBuffersLoaded=false, metroBuffersLoading=null;
+let metroBeatTimes=null, metroBeatTimesKey=null, metroScheduledUntil=0, metroScheduledNodes=[];
+const METRO_LOOKAHEAD=0.6; // seconds kept scheduled ahead of "now" — topped up every tick()
+async function ensureMetroBuffers(){
+  if(metroBuffersLoaded)return;
+  if(metroBuffersLoading)return metroBuffersLoading;
+  metroBuffersLoading=(async()=>{
+    try{
+      const [n,a]=await Promise.all([fetchWithRetry('metro_click.wav',2),fetchWithRetry('metro_click_accent.wav',2)]);
+      metroBuffers.normal=await ctx.decodeAudioData(n.slice(0));
+      metroBuffers.accent=await ctx.decodeAudioData(a.slice(0));
+      metroBuffersLoaded=true;
+    }catch(e){
+      // Graceful degradation, matching the app's general philosophy elsewhere:
+      // the beat NUMBER keeps working regardless — only the click sound is lost.
+      console.warn('Metronome click sound failed to load — beat counter stays visual-only.',e);
+    }finally{metroBuffersLoading=null;}
+  })();
+  return metroBuffersLoading;
+}
+// Beat offsets (seconds within ONE loop cycle) + which ones are bar downbeats
+// (get the accent sample). Mirrors updateMetro()'s own bars/bpm math exactly
+// so the sound and the number can never disagree about where a beat falls.
+// Cached per mosaic+tempo+cycle-length; recomputed automatically whenever any
+// of those change (the cache key includes all three).
+function computeMetroBeatTimes(cyc){
+  const beats=[];
+  if(cfg.bars){
+    const totalBeats=cfg.beatsPerBar*cfg.bars;
+    for(let i=0;i<totalBeats;i++)beats.push({t:(i/totalBeats)*cyc,accent:i%cfg.beatsPerBar===0});
+  }else{
+    const secondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
+    for(let t=0,i=0;t<cyc;t+=secondsPerBeat,i++)beats.push({t,accent:i%cfg.beatsPerBar===0});
+  }
+  return beats;
+}
+function metroBeatTimesFor(cyc){
+  const key=mosaicId+'|'+tempoPercent+'|'+cyc.toFixed(4);
+  if(metroBeatTimesKey!==key){metroBeatTimes=computeMetroBeatTimes(cyc);metroBeatTimesKey=key;}
+  return metroBeatTimes;
+}
+function cancelScheduledMetroClicks(){
+  for(const n of metroScheduledNodes){try{n.stop()}catch{}try{n.disconnect()}catch{}}
+  metroScheduledNodes=[];
+  metroScheduledUntil=0;
+}
+// Tops up the schedule to METRO_LOOKAHEAD seconds ahead of "now", called right
+// after startStems() (so a fresh transport start fills the window immediately)
+// and again every tick() while playing (so it keeps extending as playback
+// continues). Natural loop wraparound needs no special handling at all here —
+// beat times are expressed as absolute AudioContext times derived from the
+// same stemStartCtx/stemStartPos reference wrappedAudioPos() already uses, so
+// they stay correct across any number of loops. A genuine discontinuity
+// (tempo change, scrub, reset, pause, mosaic switch) already calls
+// stopStems()+startStems() — which is exactly where the schedule gets
+// cancelled and rebuilt from the new position.
+function scheduleMetroClicks(){
+  if(!metroActive||!metroReady()||!ctx||!metroBuffersLoaded||fallbackMode)return;
+  const cyc=(buffers[0]&&buffers[0].duration)||videoCycle||LOOP_END;
+  const beats=metroBeatTimesFor(cyc);
+  if(!beats.length||!cyc)return;
+  const now=ctx.currentTime, horizon=now+METRO_LOOKAHEAD;
+  const from=Math.max(metroScheduledUntil,now);
+  const base=stemStartCtx-stemStartPos;
+  let k=Math.floor((from-base)/cyc)-1; if(k<0)k=0;
+  let guard=0;
+  outer:
+  while(guard++<500){
+    for(let i=0;i<beats.length;i++){
+      const when=base+beats[i].t+k*cyc;
+      if(when<=from)continue;
+      if(when>horizon)break outer;
+      const buf=beats[i].accent?metroBuffers.accent:metroBuffers.normal;
+      if(!buf)continue;
+      const src=ctx.createBufferSource();src.buffer=buf;src.connect(metroGain);
+      src.onended=()=>{const idx=metroScheduledNodes.indexOf(src);if(idx>=0)metroScheduledNodes.splice(idx,1);};
+      src.start(when);
+      metroScheduledNodes.push(src);
+      metroScheduledUntil=when;
+    }
+    k++;
+  }
+}
 
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function setStatus(msg,cls=''){status.textContent=msg;status.className='status'+(cls?' '+cls:'')}
@@ -577,7 +688,7 @@ function setTrackMute(i,isMuted){
   const now=ctx.currentTime,target=isMuted?0:1;
   try{g.gain.cancelScheduledValues(now);g.gain.setTargetAtTime(target,now,0.006);}catch{g.gain.value=target;}
 }
-function stopStems(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[]}
+function stopStems(){for(const s of sources){try{s.stop()}catch{}try{s.disconnect()}catch{}}sources=[];cancelScheduledMetroClicks();}
 function startStems(pos){
   if(!ctx||buffers.length!==TILE_COUNT)return;
   stopStems();
@@ -587,10 +698,12 @@ function startStems(pos){
     const s=ctx.createBufferSource();s.buffer=buf;s.loop=true;s.loopStart=0;s.loopEnd=buf.duration;
     s.connect(gains[idx]);s.start(when,Math.min(pos,buf.duration-0.001));return s;
   });
+  scheduleMetroClicks(); // fills the lookahead window immediately; tick() tops it up from here
 }
 async function unlockContext(){
   if(!ctx){const C=AC();if(!C)throw new Error('Web Audio is not supported in this browser');ctx=new C({latencyHint:'interactive'});}
   if(ctx.state!=='running')await ctx.resume();
+  if(!metroGain){metroGain=ctx.createGain();metroGain.gain.value=0.55;metroGain.connect(ctx.destination);}
   // iOS/WebKit-safe gesture unlock: schedule an inaudibly quiet oscillator now.
   const o=ctx.createOscillator(),g=ctx.createGain();g.gain.value=0.000001;o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+0.025);
 }
@@ -654,7 +767,9 @@ function ensureGains(force){
 async function ensurePrepared(){
   if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
   try{
-    await unlockContext();ensureGains();buffers=await loadBank(tempoPercent);prepared=true;fallbackMode=false;badge.textContent='Audio ready';setStatus(tempoPercent+'% ready.','good');return true;
+    await unlockContext();ensureGains();
+    const [bank]=await Promise.all([loadBank(tempoPercent),ensureMetroBuffers()]);
+    buffers=bank;prepared=true;fallbackMode=false;badge.textContent='Audio ready';setStatus(tempoPercent+'% ready.','good');return true;
   }catch(err){
     console.error(err);
     try{
@@ -926,6 +1041,7 @@ function tick(now=performance.now()){
   if(lastLoopPos!==null&&pos<lastLoopPos-0.25)engine.seekTo(pos);
   lastLoopPos=pos;
   engine.render(pos);
+  scheduleMetroClicks();
   const dts=engine.displayedFrame?engine.displayedFrame.timestamp:null;
   const changed=dts!==null&&dts!==lastDisplayedTs; // a null dts (e.g. right after a seek) never counts as "changed" — only a genuinely new picture does
   if(changed){
