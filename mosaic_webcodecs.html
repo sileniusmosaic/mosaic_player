@@ -935,6 +935,13 @@ function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fall
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
 function reset(){
   playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};pausedPos=0;
+  // Reset clears every Mute and Solo too, not just the transport position —
+  // back to a completely clean slate. refreshSoloMuteState() handles all of
+  // it in one call: tile/button visuals, engine.muted/soloDim, and the actual
+  // per-track gains (a no-op safely if no AudioContext exists yet).
+  muted=Array(TILE_COUNT).fill(false);
+  soloed=Array(TILE_COUNT).fill(false);
+  refreshSoloMuteState();
   playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';
   cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
   if(engine.info){engine.seekTo(0);paintAt(0);}else drawPoster();
