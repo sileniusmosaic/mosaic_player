@@ -542,6 +542,12 @@ function paintAt(pos){
   const myToken=++paintToken; // invalidates any earlier still-running paintAt loop
   drawPoster();
   if(!engine.info)return;
+  // Position 0 is exactly what the poster image already depicts — decoding and
+  // swapping in a "live" frame here just to show the same moment risks a visible
+  // one-frame jump the instant it arrives (the poster and a freshly-decoded frame
+  // 0 are never pixel-identical). Only bother live-rendering a genuinely different
+  // position (after a tempo change or a scrub), where the poster can't help.
+  if(!pos)return;
   let attempts=0;
   const tryPaint=()=>{
     // Bail if superseded by a newer paintAt() call, OR if playback has started
@@ -855,6 +861,7 @@ function prefetchTempoBanks(){
 async function switchMosaic(id){
   if(!MOSAICS[id]||id===mosaicId||switchingMosaic)return;
   switchingMosaic=true;
+  window.scrollTo({top:0,behavior:'smooth'}); // land back at the top of the page on the new piece, not wherever the browse list happened to be scrolled to
   try{
     playing=false;cancelAnimationFrame(raf);raf=0;
     stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};
