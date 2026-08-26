@@ -418,13 +418,23 @@ async function ensureMetroBuffers(){
 // of those change (the cache key includes all three).
 function computeMetroBeatTimes(cyc){
   const beats=[];
+  let totalBeats;
   if(cfg.bars){
-    const totalBeats=cfg.beatsPerBar*cfg.bars;
-    for(let i=0;i<totalBeats;i++)beats.push({t:(i/totalBeats)*cyc,accent:i%cfg.beatsPerBar===0});
+    totalBeats=cfg.beatsPerBar*cfg.bars;
   }else{
-    const secondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
-    for(let t=0,i=0;t<cyc;t+=secondsPerBeat,i++)beats.push({t,accent:i%cfg.beatsPerBar===0});
+    // Snap to the nearest whole number of beats that actually fits this cycle,
+    // then space them evenly across it — same as the bars branch — rather than
+    // ticking forward in fixed 60/bpm steps from zero. A raw tick doesn't know
+    // where the loop point is, so any tiny mismatch between the nominal BPM and
+    // the real measured loop length (rounding, export tolerance, a recording
+    // that isn't perfectly click-quantized) leaves a short leftover gap right at
+    // the seam — heard as a double-hit when the next lap's beat 1 fires almost
+    // immediately after the previous lap's last beat. Rounding to a whole beat
+    // count and fitting it exactly to `cyc` removes that seam gap entirely.
+    const nominalSecondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
+    totalBeats=Math.max(1,Math.round(cyc/nominalSecondsPerBeat));
   }
+  for(let i=0;i<totalBeats;i++)beats.push({t:(i/totalBeats)*cyc,accent:i%cfg.beatsPerBar===0});
   return beats;
 }
 function metroBeatTimesFor(cyc){
