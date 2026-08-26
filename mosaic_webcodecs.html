@@ -101,9 +101,9 @@
    grid sit side by side instead of stacked, using the extra horizontal
    room a desktop window has. Everything below the viewer (tempo row,
    transport, browse list) stays exactly as on mobile, just wider. */
-.is-desktop .app{max-width:900px}
+.is-desktop .app{max-width:1120px}
 .is-desktop .viewer{display:flex;gap:16px;align-items:center}
-.is-desktop .focus-wrap{flex:0 1 480px}
+.is-desktop .focus-wrap{flex:0 1 520px}
 .is-desktop .grid-stage{flex:1;margin-top:0;align-self:center}
 /* Page header: on mobile the wordmark/piece name/burger live as an overlay
    on top of the focus square (.focus-topbar, unchanged below); on desktop
@@ -503,7 +503,8 @@ engine.soloDim=soloed.map(()=>false);
 
 function sizeFocusCanvas(){
   const dpr=Math.min(window.devicePixelRatio||1,3);
-  const px=Math.round(480*dpr);
+  const cssPx=IS_DESKTOP?520:480;
+  const px=Math.round(cssPx*dpr);
   if(focusCanvas.width!==px){focusCanvas.width=px;focusCanvas.height=px;}
 }
 window.addEventListener('resize',sizeFocusCanvas);
