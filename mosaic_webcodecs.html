@@ -250,7 +250,8 @@ const MOSAICS={
   },
   congo:{
     id:'congo', label:'Congo Yambumba', poster:'poster_congo.jpg',
-    cols:4, rows:2, tileCount:8, loopEnd:24.050,
+    cols:4, rows:2, tileCount:8, loopEnd:24.000, // was 24.050 — the real recording measures exactly 24.000s (1,152,000 samples @ 48kHz, verified from the raw Clave master); the wrong-by-50ms value was padding every stem's loop buffer with 50ms of silence at the end, which is the double-hit/flam on loop
+
     // Beat counter: given directly as 80 BPM rather than a bar count (BPM
     // mode — see updateMetro(): with `bpm` set instead of `bars`, beat
     // spacing is a fixed 60/bpm seconds, scaled by the current tempo
