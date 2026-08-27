@@ -5,17 +5,36 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090b0d">
 <title>Mosaic — Abakuá</title>
-<!-- Fraunces/Work Sans/IBM Plex Mono webfonts removed — everything now renders
-     in Arial per request, so there's no reason to still fetch them. -->
+<!-- Typeface direction (Aug 2026 redesign): Roboto Condensed everywhere,
+     replacing the earlier Arial-everywhere pass. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#15100b;--panel:#1f1812;--panel2:#2a2117;--border:#3a2f22;--text:#f1e6d0;--muted:#c9bca3;--accent:#cf9f5f;--danger:#a3402a;--good:#8fae72;--brass:#b98a2e;--tile-border:#cbe0e6}
-*{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif!important}html,body{margin:0;background:var(--bg);color:var(--text)}body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
+:root{--bg:#15100b;--panel:#1f1812;--panel2:#2a2117;--border:#3a2f22;--text:#f1e6d0;--muted:#c9bca3;--accent:#cf9f5f;--danger:#a3402a;--good:#8fae72;--brass:#b98a2e;--tile-border:#cbe0e6;
+/* Redesign accent (Aug 2026): purple for selection/primary-action highlights —
+   piece-strip active thumbnail, Play/Reset, active tempo button. Everything
+   else (Mute blue, Solo yellow, the warm background palette) is untouched. */
+--accent-purple:#8b5cf6;--accent-purple-dim:#5b3ea8;--window-border:#000}
+*{box-sizing:border-box;font-family:'Roboto Condensed',Arial,Helvetica,sans-serif!important}html,body{margin:0;background:var(--bg);color:var(--text)}body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
 .app{max-width:480px;margin:0 auto;padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
-.focus-topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:flex-start;justify-content:space-between;padding:10px 10px 22px;z-index:5;background:linear-gradient(to bottom, rgba(3,4,5,.72) 0%, rgba(3,4,5,.32) 60%, transparent 100%)}
-.wordmark{font-family:'Fraunces',serif;font-weight:700;font-size:34px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
-.wordmark span{color:var(--accent);font-style:italic;font-weight:500}
-.piece-name{font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--brass);letter-spacing:1px;margin-top:1px;text-shadow:0 1px 4px rgba(0,0,0,.85)}
-.burger{width:34px;height:34px;border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;background:none}
+/* Piece strip (Aug 2026 redesign): replaces the old separate mobile focus-topbar
+   overlay and desktop page-header — one unified bar, identical on mobile and
+   desktop, with the hamburger plus a horizontally-scrollable row of pieces.
+   Each thumbnail is a single tile square cropped from that piece's own poster
+   (same sprite-crop technique the old browse-list filmstrip used). The active
+   piece is at full brightness with a purple border; the others are dimmed —
+   tap any one to switch, same switchMosaic() as everywhere else. Built to
+   scroll from day one (overflow-x:auto) so adding a 4th+ piece later needs no
+   layout change, even though today's 3 pieces fit without scrolling.*/
+.piece-strip-bar{display:flex;align-items:center;gap:8px;padding-bottom:8px}
+.piece-strip-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1;min-width:0}
+.piece-strip-scroll::-webkit-scrollbar{display:none}
+.piece-thumb{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:5px 10px 5px 5px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel);cursor:pointer;opacity:.55;filter:brightness(.75);transition:opacity .15s,filter .15s,border-color .15s;-webkit-tap-highlight-color:transparent}
+.piece-thumb.active{opacity:1;filter:none;border-color:var(--accent-purple);box-shadow:0 0 0 1px var(--accent-purple),0 0 10px rgba(139,92,246,.55)}
+.piece-thumb-img{width:36px;height:36px;border-radius:6px;background-color:#030405;background-repeat:no-repeat;flex:0 0 auto}
+.piece-thumb-name{font-size:12px;font-weight:700;line-height:1.15;white-space:nowrap;color:var(--text)}
+.burger{width:34px;height:34px;flex:0 0 auto;border:2px solid var(--window-border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;background:var(--panel)}
 .burger span{width:16px;height:2px;background:var(--accent);display:block;border-radius:2px}
 #menuToggle{display:none}
 .menu-panel{position:fixed;inset:0;background:rgba(15,11,7,.97);z-index:50;padding:18px 16px;transform:translateY(-100%);transition:transform .25s ease}
@@ -31,7 +50,7 @@
 .rail-name{font-family:'Fraunces',serif;font-weight:600;font-size:13px}
 .rail-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;margin-top:2px;color:var(--good)}
 .badge{font-size:12px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
-.focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:3px solid var(--tile-border);border-radius:10px;overflow:hidden;contain:paint}
+.focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:3px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 .focus-solo-dim{position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;display:none}.focus-wrap.is-solo-dimmed .focus-solo-dim{display:block}
@@ -41,7 +60,7 @@
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
 .buffering-spinner span{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
 @keyframes mosaic-spin{to{transform:rotate(360deg)}}
-.grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:1px solid var(--border);border-radius:10px;overflow:hidden;contain:paint}
+.grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
@@ -70,18 +89,19 @@
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
 .tile.is-selected{outline:2px solid var(--tile-border);outline-offset:-2px}
 .tempo-strip{margin-top:6px}
-.panel{margin-top:6px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
+.panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
 .transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.transport button{font:inherit;border:1px solid var(--border);border-radius:8px;padding:9px 14px;background:var(--panel2);color:var(--text)}
+.transport button{font:inherit;border:2px solid var(--window-border);border-radius:8px;padding:9px 14px;background:var(--panel2);color:var(--text)}
 .transport button.primary{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
 .transport button:disabled{opacity:.5}
+.settingsBtn{margin-left:auto}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
 .tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0}
-.tempo-buttons button{font:inherit;border:1px solid var(--border);border-radius:6px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:700}
-.tempo-buttons button.active{background:var(--accent);color:#1a1309;border-color:transparent}
+.tempo-buttons button{font:inherit;border:2px solid var(--window-border);border-radius:6px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:700}
+.tempo-buttons button.active{background:var(--accent-purple);color:#fff;border-color:var(--window-border)}
 .tempo-buttons button:disabled{opacity:.4}
-.tempo-buttons button#play{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
-.tempo-buttons button#play.active{background:var(--danger);color:var(--text)}
+.tempo-buttons button#play{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750}
+.tempo-buttons button#play.active{background:var(--accent-purple-dim);color:#fff}
 .status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
 .note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
@@ -105,16 +125,9 @@
 .is-desktop .viewer{display:flex;gap:16px;align-items:center}
 .is-desktop .focus-wrap{flex:0 1 520px}
 .is-desktop .grid-stage{flex:1;margin-top:0;align-self:center}
-/* Page header: on mobile the wordmark/piece name/burger live as an overlay
-   on top of the focus square (.focus-topbar, unchanged below); on desktop
-   they move up into a normal in-flow header above the viewer instead, and
-   the overlay copy is hidden so it doesn't show twice. */
-.page-header{display:none;align-items:flex-start;justify-content:space-between;padding:0 0 10px}
-.is-desktop .page-header{display:flex}
-.is-desktop .focus-topbar{display:none}
-.page-header .wordmark{font-size:38px;text-shadow:none}
-.page-header .piece-name{color:var(--brass);text-shadow:none}
-.page-header .burger{border-color:var(--border)}
+/* The old separate mobile focus-topbar overlay + desktop page-header (each
+   showing a wordmark/piece-name/burger) are gone — .piece-strip-bar above
+   replaces both with one bar identical on mobile and desktop. */
 /* Reset + timeline + time now share one row on both mobile and desktop —
    the timeline no longer needs its own full-width row below. */
 .timeline{flex:1;min-width:0;margin:0;accent-color:var(--accent)}
@@ -133,25 +146,15 @@
 <body>
 <main class="app">
   <input type="checkbox" id="menuToggle">
-  <div class="page-header">
-    <div>
-      <div class="wordmark">Mo<span>saic</span></div>
-      <div class="piece-name">Abakuá</div>
-    </div>
+  <div class="piece-strip-bar">
     <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
+    <div id="pieceStrip" class="piece-strip-scroll" role="tablist" aria-label="Choose a piece"></div>
   </div>
   <div class="viewer">
     <div id="focusWrap" class="focus-wrap">
       <canvas id="mosaicFocus" class="focus-video"></canvas>
       <div class="focus-dim"></div>
       <div class="focus-solo-dim"></div>
-      <div class="focus-topbar">
-        <div>
-          <div class="wordmark">Mo<span>saic</span></div>
-          <div class="piece-name">Abakuá</div>
-        </div>
-        <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
-      </div>
       <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
         <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
@@ -171,16 +174,18 @@
       <button id="reset" type="button">Reset</button>
       <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
       <span id="time" class="time">0.000 / 45.600</span>
+      <button id="settingsBtn" type="button" class="settingsBtn" aria-label="Settings">⚙ Settings</button>
     </div>
   </section>
   <section class="panel notation-panel" id="notationPanel" hidden>
     <p class="rail-title">Notation</p>
     <div id="notationPages" class="notation-pages"></div>
   </section>
-  <section class="panel browse-panel">
-    <p class="rail-title">Mosaics</p>
-    <div id="mosaicBrowseList" class="browse-list"></div>
-  </section>
+  <!-- The old standalone "Mosaics" browse-list filmstrip (scrollable strip of
+       every piece's tiles) is removed — the piece-strip-bar at the top of the
+       page is now the one place to switch pieces; the burger menu's Pieces
+       rail (#mosaicRail) is the other. buildMosaicBrowseList()/mosaicBrowseList
+       are unused now but left defined in case this needs to come back. -->
   <section class="panel footer-panel">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
     <p class="note" id="noteText">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
@@ -301,7 +306,7 @@ const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages');
+const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), settingsBtn=$('#settingsBtn');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -679,6 +684,31 @@ function buildMosaicBrowseList(){
     mosaicBrowseList.appendChild(item);
   });
 }
+// New top piece-strip (Aug 2026 redesign): one thumbnail per piece, cropped to
+// a single tile (index 0) from that piece's own poster — same sprite-crop
+// math as buildMosaicBrowseList() above, just one square instead of a whole
+// filmstrip. The current piece is full-brightness with a purple border; the
+// others sit dimmed. Built with overflow-x:auto from the start (see CSS) so
+// a 4th+ piece later just scrolls, no layout change needed.
+function buildPieceStrip(){
+  if(!pieceStrip)return;
+  pieceStrip.innerHTML='';
+  MOSAIC_ORDER.forEach(id=>{
+    const m=MOSAICS[id];
+    const isActive=id===mosaicId;
+    const item=document.createElement('button');
+    item.type='button';item.className='piece-thumb'+(isActive?' active':'');
+    item.setAttribute('role','tab');item.setAttribute('aria-selected',String(isActive));item.setAttribute('aria-label',m.label);
+    const img=document.createElement('div');img.className='piece-thumb-img';
+    img.style.backgroundImage='url('+m.poster+')';
+    img.style.backgroundSize=(m.cols*100)+'% '+(m.rows*100)+'%';
+    img.style.backgroundPosition='0% 0%'; // tile index 0 — same one square from every piece
+    const name=document.createElement('span');name.className='piece-thumb-name';name.textContent=m.label;
+    item.appendChild(img);item.appendChild(name);
+    item.addEventListener('click',()=>{if(id!==mosaicId)switchMosaic(id);});
+    pieceStrip.appendChild(item);
+  });
+}
 // Renders whatever notation pages the current piece has (cfg.notation — an
 // array of image filenames, page 1 first) directly below the player, or
 // hides the whole section for a piece that doesn't have any yet. Plain
@@ -915,7 +945,7 @@ async function switchMosaic(id){
     gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
     focusCtx.fillStyle='#030405';focusCtx.fillRect(0,0,focusCanvas.width,focusCanvas.height);
 
-    buildControls();buildMosaicRail();buildMosaicBrowseList();
+    buildControls();buildMosaicRail();buildPieceStrip();
     // Avoid calling engine.render() here — engine.info/frameQueue still belong
     // to the OLD mosaic until loadVideoForTempo() below finishes, and its cols/
     // rows/tileCount have already been switched to the new layout, so a render
@@ -1146,6 +1176,11 @@ function tick(now=performance.now()){
 }
 
 playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('click',reset);
+// Settings: a second, always-visible entry point into the same burger-menu
+// panel (matching the mockup's bottom-row "Settings" tile) — not a separate
+// screen yet, just another way in until the menu panel grows its own
+// Settings/Notation Library/Latency/Help/About sections.
+if(settingsBtn)settingsBtn.addEventListener('click',()=>{const mt=document.getElementById('menuToggle');if(mt)mt.checked=true;});
 // Spacebar always starts/stops playback, full stop — regardless of which
 // button was last clicked/focused. Without this, the browser's own default
 // behaviour re-activates whatever control currently has focus on a space
@@ -1185,7 +1220,7 @@ metroActive=metroReady();
 metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
-buildControls();buildTempoButtons();buildMosaicRail();buildMosaicBrowseList();renderNotation();updateFocusUI();updateUI();
+buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();updateFocusUI();updateUI();
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
 })();
