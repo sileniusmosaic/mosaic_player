@@ -110,23 +110,20 @@
 /* Play/Pause doubles as a loading indicator whenever audio/video is being
    fetched or decoded (first-ever prepare in ensurePrepared(), or a live
    tempo switch in changeTempo()): its own label always reads "Loading…" for
-   that whole window (see playBtnLoadingStart()/playBtnLoadingDone()), and a
-   ::before layer fills the button left-to-right like a bucket, in the
-   brighter purple, over the dimmed idle background — a pseudo-element
-   rather than a real child node, so it survives the many call sites that
-   just do playBtn.textContent='Loading…' etc. without wiping it out.
-   is-loading eases the fill toward ~88% (real load time is unknown, so it
-   never promises 100% on its own); is-done snaps it the rest of the way the
-   instant the real load actually finishes; reset-instant briefly kills the
-   transition/animation so the fill can jump back to empty for next time
-   without visibly draining back out. */
-.tempo-buttons button#play{position:relative;overflow:hidden}
-.tempo-buttons button#play::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(0);transition:transform .25s ease-out}
+   that whole window, and a ::before layer fills the button left-to-right
+   like a bucket, in the brighter purple, over the dimmed idle background —
+   a pseudo-element rather than a real child node, so it survives the many
+   call sites that just do playBtn.textContent='Loading…' etc. without
+   wiping it out. The fill's width is driven by the real --play-progress
+   custom property (0..1) — see makeLoadProgress()/setPlayFill() — tracking
+   actual bytes received against each fetch's Content-Length, not a guessed
+   duration; a short linear transition just smooths the steps between chunk
+   events. reset-instant briefly kills that transition so the fill can jump
+   back to empty for next time without visibly draining back out. */
+.tempo-buttons button#play{position:relative;overflow:hidden;--play-progress:0}
+.tempo-buttons button#play::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
 .tempo-buttons button#play.is-loading{background:var(--accent-purple-dim)}
-.tempo-buttons button#play.is-loading::before{animation:mosaic-play-fill 1.6s cubic-bezier(.22,.61,.36,1) forwards}
-.tempo-buttons button#play.is-loading.is-done::before{animation:none;transform:scaleX(1)}
-.tempo-buttons button#play.reset-instant::before{transition:none!important;animation:none!important}
-@keyframes mosaic-play-fill{0%{transform:scaleX(0)}100%{transform:scaleX(.88)}}
+.tempo-buttons button#play.reset-instant::before{transition:none!important}
 .status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
 .note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
@@ -551,20 +548,28 @@ function sizeFocusCanvas(){
 window.addEventListener('resize',sizeFocusCanvas);
 
 const videoBufferCache=new Map(), videoLoads=new Map();
-async function loadVideoBuffer(percent){
+async function loadVideoBuffer(percent,tracker){
   const key=cacheKey(percent);
   if(videoBufferCache.has(key))return videoBufferCache.get(key);
+  // A load already in flight (e.g. prefetchTempoBanks() racing a user-
+  // initiated one) was started without knowledge of THIS tracker — it just
+  // won't get real progress numbers for that rare race, same as before this
+  // feature existed.
   if(videoLoads.has(key))return videoLoads.get(key);
   const promise=(async()=>{
     setStatus('Downloading '+percent+'% video…');
-    const ab=await fetchWithRetry(VIDEO_SOURCES[percent],3);
+    const ab=await fetchWithRetry(VIDEO_SOURCES[percent],3,tracker&&((r,t)=>tracker.track('video:'+key,r,t)));
     videoBufferCache.set(key,ab);videoLoads.delete(key);return ab;
   })().catch(e=>{videoLoads.delete(key);throw e});
   videoLoads.set(key,promise);return promise;
 }
-async function loadVideoForTempo(percent,keepPos){
+async function loadVideoForTempo(percent,keepPos,tracker){
   const pos=keepPos?currentPos():0;
-  const ab=await loadVideoBuffer(percent);
+  const ab=await loadVideoBuffer(percent,tracker);
+  // engine.loadTempo() (decoder configure + first frames) has no progress
+  // signal of its own — nudge the button into its brief "still working"
+  // creep for this last, normally-quick, unmeasurable stretch.
+  if(tracker)tracker.startDecodePulse();
   await engine.loadTempo(ab);
   videoCycle=engine.cycleSeconds||LOOP_END;
   engine.selected=selected;
@@ -794,7 +799,17 @@ function tempoUrls(percent){
   if(percent===100)return STEM_URLS;
   return STEM_URLS.map(u=>u.replace('.aac','_'+percent+'.aac'));
 }
-async function fetchWithRetry(u,attempts=3){
+// onChunk(receivedBytes, totalBytesOrNull), when passed, is called as each
+// network chunk arrives — used to drive real download progress on the Play
+// button (see makeLoadProgress()) instead of a guessed animation duration.
+// Reading the stream ourselves via getReader() costs no extra network
+// traffic (it's the exact same bytes .arrayBuffer() would already have
+// pulled in and reassembled internally) and only a negligible amount of
+// extra JS bookkeeping — a Uint8Array.set() per chunk — so this is added
+// unconditionally rather than gated behind a flag. Callers that don't pass
+// onChunk (or when a browser doesn't expose a readable stream body) fall
+// straight back to the plain .arrayBuffer() path, unchanged from before.
+async function fetchWithRetry(u,attempts=3,onChunk){
   let lastErr;
   for(let i=0;i<attempts;i++){
     try{
@@ -808,7 +823,19 @@ async function fetchWithRetry(u,attempts=3){
       // could go on being served stale to returning visitors indefinitely.
       const r=await fetch(u,{cache:'no-cache'});
       if(!r.ok)throw new Error('HTTP '+r.status+' for '+u);
-      return await r.arrayBuffer();
+      if(!onChunk||!r.body)return await r.arrayBuffer();
+      const total=(()=>{const h=+r.headers.get('content-length');return h>0?h:null})();
+      const reader=r.body.getReader();
+      const chunks=[];let received=0;
+      for(;;){
+        const {done,value}=await reader.read();
+        if(done)break;
+        chunks.push(value);received+=value.byteLength;
+        onChunk(received,total);
+      }
+      const out=new Uint8Array(received);let off=0;
+      for(const c of chunks){out.set(c,off);off+=c.byteLength;}
+      return out.buffer;
     }catch(e){
       lastErr=e;
       if(i<attempts-1)await new Promise(res=>setTimeout(res,250*Math.pow(2,i)));
@@ -816,14 +843,20 @@ async function fetchWithRetry(u,attempts=3){
   }
   throw lastErr;
 }
-async function loadBank(percent){
+async function loadBank(percent,tracker){
   const key=cacheKey(percent);
   if(bankCache.has(key))return bankCache.get(key);
   if(bankLoads.has(key))return bankLoads.get(key);
   const promise=(async()=>{
     const urls=tempoUrls(percent),rate=percent/100;
     setStatus('Preparing '+percent+'% pitch-correct audio…');
-    const arrays=await Promise.all(urls.map(u=>fetchWithRetry(u,3)));
+    const arrays=await Promise.all(urls.map((u,i)=>fetchWithRetry(u,3,tracker&&((r,t)=>tracker.track('bank:'+key+':'+i,r,t)))));
+    // decodeAudioData below has no progress signal of its own, same as the
+    // video decoder — see loadVideoForTempo(). Native AAC decode is normally
+    // fast even for a piece's longest (50%) variant, so this is expected to
+    // be a brief tail on top of the real download progress above, not the
+    // whole story the way a fixed-duration guess was.
+    if(tracker)tracker.startDecodePulse();
     const targetFrames=Math.round((LOOP_END/rate)*ctx.sampleRate),out=[];
     for(let i=0;i<arrays.length;i++){
       const decoded=await ctx.decodeAudioData(arrays[i].slice(0));
@@ -851,31 +884,96 @@ function ensureGains(force){
 // long as it's the one saying "Loading…" — shared by the first-ever prepare
 // (ensurePrepared()) and a live tempo switch (changeTempo()), so the visual
 // language for "something's loading" is the same everywhere the button owns
-// that job. is-loading eases toward ~88% on its own; is-done snaps the rest
-// of the way the instant the real load actually finishes; reset-instant
-// briefly kills the transition so the fill can jump back to empty afterwards
-// without visibly draining back out.
+// that job.
+function setPlayFill(f){playBtn.style.setProperty('--play-progress',String(clamp(f,0,1)));}
+// Aggregates real byte progress across every concurrent fetch belonging to
+// ONE load (e.g. 8 audio stems + 1 video, all in flight together) into a
+// single fraction — Abakuá's 50% variant in particular is a genuinely much
+// longer download+decode than any other piece/tempo combination, and the
+// old fixed-duration eased animation had already claimed "nearly done" and
+// sat there for several more real seconds on that one, which read as
+// broken. track() is called by fetchWithRetry()'s onChunk for every chunk of
+// every tracked fetch; the fraction is real received-bytes / real
+// content-length total, capped short of 100% until every download is
+// actually in hand. startDecodePulse() covers the parts with no browser
+// progress API at all (decodeAudioData, WebCodecs decoder configure) — a
+// slow, decelerating creep from wherever real progress left off up toward
+// (but never quite reaching) 100%, so the bar keeps visibly moving instead
+// of freezing during that last unmeasurable stretch, which is expected to
+// be brief relative to the download itself. It self-guards via
+// allDownloaded(): changeTempo() runs the audio bank and video buffer
+// downloads in parallel, and loadBank() finishes its own downloads (then
+// starts decoding) independently of whether the video fetch is still going
+// — without the guard, that decode-only wait would jump the bar ahead of a
+// sibling fetch that's genuinely still transferring, reintroducing the same
+// "claims to be further along than it is" problem this whole feature exists
+// to fix.
+function makeLoadProgress(){
+  const tasks=new Map();
+  let pulseTimer=null,pulseVal=0,highWater=0;
+  function recompute(){
+    let received=0,total=0;
+    for(const t of tasks.values()){received+=t.received;total+=t.total||0;}
+    return total>0?received/total:null;
+  }
+  // The fill only ever moves forward. Real bytes for a fetch that only just
+  // started (e.g. video, registering its first small chunk right as the
+  // audio bank's decode-pulse has already crept the shared fraction up)
+  // would otherwise pull the combined received/total ratio — and the bar —
+  // backward the instant it's tracked; clamping to a running high-water mark
+  // keeps the two signals (real bytes, decode pulse) from ever visibly
+  // fighting each other regardless of which one is currently ahead.
+  function advance(f){if(f>highWater){highWater=f;setPlayFill(f);}}
+  function stopPulse(){if(pulseTimer){clearTimeout(pulseTimer);pulseTimer=null;}}
+  const api={
+    track(id,received,total){
+      tasks.set(id,{received,total});
+      const f=recompute();
+      if(f!==null)advance(Math.min(f,0.96));
+    },
+    allDownloaded(){
+      if(tasks.size===0)return false; // nothing registered yet — don't claim "done"
+      for(const t of tasks.values())if(t.total==null||t.received<t.total)return false;
+      return true;
+    },
+    startDecodePulse(){
+      if(!api.allDownloaded())return; // a sibling fetch is still transferring — let its real progress keep driving the bar instead
+      stopPulse();
+      pulseVal=Math.max(pulseVal,highWater,0.55); // downloads that never reported a usable total (no content-length) start the pulse from a reasonable midpoint instead of 0
+      const step=()=>{pulseVal+=(0.985-pulseVal)*0.06;advance(pulseVal);pulseTimer=setTimeout(step,180);};
+      step();
+    },
+    stop(){stopPulse();}
+  };
+  return api;
+}
+let currentLoadProgress=null;
 function playBtnLoadingStart(){
-  playBtn.classList.remove('is-done');
+  if(currentLoadProgress)currentLoadProgress.stop();
   playBtn.classList.add('reset-instant');
   playBtn.classList.add('is-loading');
-  void playBtn.offsetWidth; // force layout so the instant reset above actually commits before the transition/animation below re-engages
+  setPlayFill(0);
+  void playBtn.offsetWidth; // force layout so the instant reset above actually commits before the transition below re-engages
   playBtn.classList.remove('reset-instant');
+  currentLoadProgress=makeLoadProgress();
+  return currentLoadProgress;
 }
 function playBtnLoadingDone(){
-  playBtn.classList.add('is-done');
+  if(currentLoadProgress){currentLoadProgress.stop();currentLoadProgress=null;}
+  setPlayFill(1); // real completion — snap the rest of the way via the base .18s transition
   setTimeout(()=>{
     playBtn.classList.add('reset-instant');
-    playBtn.classList.remove('is-loading','is-done');
+    setPlayFill(0);
+    playBtn.classList.remove('is-loading');
     void playBtn.offsetWidth;
     playBtn.classList.remove('reset-instant');
-  },260); // roughly matches the is-done snap-to-full transition (.25s) before resetting for next time
+  },220);
 }
 async function ensurePrepared(){
-  if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';playBtnLoadingStart();badge.textContent='Preparing '+tempoPercent+'%…';
+  if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';const tracker=playBtnLoadingStart();badge.textContent='Preparing '+tempoPercent+'%…';
   try{
     await unlockContext();ensureGains();
-    const [bank]=await Promise.all([loadBank(tempoPercent),ensureMetroBuffers()]);
+    const [bank]=await Promise.all([loadBank(tempoPercent,tracker),ensureMetroBuffers()]);
     buffers=bank;
     // A non-100% tempo can be picked before Play is ever pressed (changeTempo()'s
     // !prepared branch just remembers the choice, since there's no transport
@@ -890,7 +988,7 @@ async function ensurePrepared(){
     if(tempoPercent!==100){
       const oldCycle=videoCycle||LOOP_END;
       const proportion=clamp(pausedPos/oldCycle,0,1);
-      await loadVideoForTempo(tempoPercent,false);
+      await loadVideoForTempo(tempoPercent,false,tracker);
       pausedPos=proportion*videoCycle;
       engine.seekTo(pausedPos);
     }
@@ -921,12 +1019,12 @@ async function changeTempo(percent){
   // takes — the button is the only visible sign a switch is even happening,
   // so it always says "Loading…" (not "Pause") and fills like a bucket for
   // the whole wait, exactly like the first-ever prepare above.
-  playBtn.textContent='Loading…';playBtnLoadingStart();
+  playBtn.textContent='Loading…';const tracker=playBtnLoadingStart();
   try{
     // Prepare the audio bank AND the video buffer in parallel while the existing
     // transport remains untouched — this intentionally mirrors the reliable Reset path.
     const oldCycle=videoCycle||LOOP_END;
-    const [bank]=await Promise.all([loadBank(percent),loadVideoBuffer(percent)]);
+    const [bank]=await Promise.all([loadBank(percent,tracker),loadVideoBuffer(percent,tracker)]);
     // Capture position AFTER that load finishes, not before it. The OLD tempo's
     // audio keeps playing normally for however long the fetch/decode takes (often
     // under a second if prefetched, longer if not) — reading currentPos() before
@@ -941,6 +1039,10 @@ async function changeTempo(percent){
     fallbackAudio.pause();
 
     buffers=bank;tempoPercent=percent;
+    // Both downloads (and the audio bank's own decode) are done by this
+    // point — only engine.loadTempo()'s decoder configure is left, which has
+    // no progress signal of its own.
+    tracker.startDecodePulse();
     await engine.loadTempo(videoBufferCache.get(cacheKey(percent)));
     videoCycle=engine.cycleSeconds||LOOP_END;
     const newPos=proportion*videoCycle;
