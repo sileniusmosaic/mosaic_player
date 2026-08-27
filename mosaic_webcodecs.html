@@ -403,7 +403,72 @@ let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 // (which already knows how to put bankBusy/preparing/the buttons back)
 // finishes before anything else touches shared state like buffers/tempoPercent.
 let currentLoad=null, currentLoadPromise=null;
+// Bumped every time a NEW load (ensurePrepared()/changeTempo()) takes over.
+// Needed once Reset/switchMosaic() can give up on waiting for an abandoned
+// load (see DECODE_STEP_TIMEOUT_MS and the Reset/switchMosaic code below):
+// that abandoned load's fetches are aborted, but decodeAudioData()/
+// engine.loadTempo() are NOT cancellable and may still be quietly running in
+// the background when Reset moves on and starts a fresh load of its own. If
+// that stale call eventually settles, its own finally/success-path checks
+// this against loadGeneration first — a mismatch means a newer load already
+// owns the UI, so the stale one no-ops instead of stomping on it (clearing
+// preparing/bankBusy out from under the new load, or overwriting `buffers`
+// with its own late, no-longer-relevant result).
+let loadGeneration=0;
 const FETCH_TIMEOUT_MS=20000; // STALL ceiling (see fetchWithRetry) — resets on every chunk received, so it only fires on real silence, never on a big file that's just slow; bounds every fetch, tracker or no
+// decodeAudioData() and engine.loadTempo() (decoder configure) have no
+// AbortSignal support of their own — nothing in this file can truly
+// interrupt them once started. This is the ceiling that stops OUR code from
+// waiting on one forever if it does genuinely hang (a real symptom seen on
+// a flaky connection: downloads finished, then the button was stuck on
+// "Loading…" indefinitely and Reset couldn't do anything about it, because
+// nothing timed-out this specific step). It does NOT free whatever resource
+// the browser API itself is stuck holding — see withTimeout() below.
+const DECODE_STEP_TIMEOUT_MS=15000;
+// Races a non-cancellable promise (decodeAudioData()/engine.loadTempo())
+// against a timeout so OUR code can give up and move on — the caller's
+// existing catch/finally then runs exactly as it would for any other
+// failure (cleans up preparing/bankBusy, re-enables buttons, shows a real
+// error instead of hanging forever). The original promise is left running;
+// if it does eventually settle, whatever "is this still the current load?"
+// check the caller has (loadGeneration/tracker.signal) is what keeps its
+// late arrival from mattering.
+function withTimeout(promise,ms,label){
+  return new Promise((resolve,reject)=>{
+    const t=setTimeout(()=>reject(new Error((label||'Operation')+' timed out')),ms);
+    promise.then(v=>{clearTimeout(t);resolve(v);},e=>{clearTimeout(t);reject(e);});
+  });
+}
+// Reset and switchMosaic() both need to guarantee THEY move on within a
+// bounded time, no matter what the in-flight load is doing — cancel() only
+// reaches the network fetches (via AbortSignal); it can't touch
+// decodeAudioData()/engine.loadTempo() once those have started, since
+// neither supports cancellation. DECODE_STEP_TIMEOUT_MS already bounds how
+// long the load ITSELF will wait on those, but if this abandon call races
+// ahead of that (e.g. the decode step's own timeout hasn't fired yet), this
+// gives up on waiting anyway and forces the shared busy-flags/UI back to a
+// clean state itself — bumping loadGeneration first so that if the old load
+// does eventually settle (its own timeout firing, or genuinely finishing
+// late), its now-stale finally/success-path checks see the mismatch and
+// no-op instead of clobbering whatever loads next.
+const ABANDON_WAIT_MS=4000;
+async function abandonCurrentLoad(reason){
+  if(!currentLoad)return;
+  const tracker=currentLoad,promise=currentLoadPromise;
+  tracker.cancel(new Error(reason));
+  const settled=await Promise.race([
+    promise.catch(()=>{}).then(()=>true),
+    new Promise(res=>setTimeout(()=>res(false),ABANDON_WAIT_MS))
+  ]);
+  if(!settled){
+    console.warn(reason+': the in-flight load did not wind down within '+ABANDON_WAIT_MS+'ms (likely stuck in decodeAudioData()/engine.loadTempo(), which cannot be cancelled) — forcing it to be treated as abandoned so the app can continue.');
+    loadGeneration++; // any late arrival from `promise` now sees a mismatch and no-ops
+    preparing=false;bankBusy=false;
+    tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
+    playBtnLoadingDone();
+  }
+  if(currentLoad===tracker){currentLoad=null;currentLoadPromise=null;}
+}
 let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
 let startingPlayback=false; // guards a fast double-tap on Play from starting two overlapping playback attempts
 let videoCycle=LOOP_END;
@@ -588,7 +653,7 @@ async function loadVideoForTempo(percent,keepPos,tracker){
   // signal of its own — nudge the button into its brief "still working"
   // creep for this last, normally-quick, unmeasurable stretch.
   if(tracker)tracker.startDecodePulse();
-  await engine.loadTempo(ab);
+  await withTimeout(engine.loadTempo(ab),DECODE_STEP_TIMEOUT_MS,'Video decoder setup');
   videoCycle=engine.cycleSeconds||LOOP_END;
   engine.selected=selected;
   // loadTempo() no longer starts decoding by itself — always kick it off with an
@@ -930,7 +995,7 @@ async function loadBank(percent,tracker){
       // NEXT one once Reset/switchMosaic has aborted, instead of grinding
       // through every remaining stem regardless.
       if(tracker?.signal?.aborted)throw tracker.signal.reason||new Error('Cancelled');
-      const decoded=await ctx.decodeAudioData(arrays[i].slice(0));
+      const decoded=await withTimeout(ctx.decodeAudioData(arrays[i].slice(0)),DECODE_STEP_TIMEOUT_MS,'Audio decode');
       const exact=ctx.createBuffer(1,targetFrames,ctx.sampleRate),dst=exact.getChannelData(0),src=decoded.getChannelData(0);
       dst.set(src.subarray(0,Math.min(src.length,dst.length)));out.push(exact);
       setStatus('Preparing '+percent+'% audio: '+(i+1)+' of '+arrays.length+'…');
@@ -1054,17 +1119,24 @@ function playBtnLoadingDone(){
 // they'd stomp on a DIFFERENT operation's in-flight tracker.
 async function ensurePrepared(){
   if(prepared)return true;if(preparing)return false;preparing=true;
+  const myGen=++loadGeneration;
   const tracker=playBtnLoadingStart();
   currentLoad=tracker;
-  currentLoadPromise=ensurePreparedImpl(tracker);
+  currentLoadPromise=ensurePreparedImpl(tracker,myGen);
   try{return await currentLoadPromise;}
   finally{if(currentLoad===tracker){currentLoad=null;currentLoadPromise=null;}}
 }
-async function ensurePreparedImpl(tracker){
+async function ensurePreparedImpl(tracker,myGen){
   playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
   try{
     await unlockContext();ensureGains();
     const [bank]=await Promise.all([loadBank(tempoPercent,tracker),ensureMetroBuffers()]);
+    // Reset/switchMosaic() may have given up waiting on THIS load (see the
+    // DECODE_STEP_TIMEOUT_MS-guarded steps below and reset()'s own timeout)
+    // and already started a newer one of their own — loadGeneration no longer
+    // matching means this call is stale and must not touch shared state a
+    // fresher load already owns.
+    if(myGen!==loadGeneration)return false;
     buffers=bank;
     // A non-100% tempo can be picked before Play is ever pressed (changeTempo()'s
     // !prepared branch just remembers the choice, since there's no transport
@@ -1080,6 +1152,7 @@ async function ensurePreparedImpl(tracker){
       const oldCycle=videoCycle||LOOP_END;
       const proportion=clamp(pausedPos/oldCycle,0,1);
       await loadVideoForTempo(tempoPercent,false,tracker);
+      if(myGen!==loadGeneration)return false;
       pausedPos=proportion*videoCycle;
       engine.seekTo(pausedPos);
     }
@@ -1088,16 +1161,24 @@ async function ensurePreparedImpl(tracker){
     // Reset/switchMosaic() cancelling this on purpose is not a real failure —
     // don't alarm the user with an error message or try starting the full-mix
     // fallback; whatever cancelled this is about to do its own thing next.
-    if(tracker.signal.aborted)return false;
+    if(tracker.signal.aborted||myGen!==loadGeneration)return false;
     console.error(err);
     try{
       setStatus('Multitrack audio failed, switching to full mix…','error');
       await fallbackAudio.play().then(()=>fallbackAudio.pause()).catch(()=>{});
+      if(myGen!==loadGeneration)return false;
       fallbackMode=true;prepared=true;badge.textContent='Audio ready (full mix)';setStatus('Multitrack audio unavailable; using full-mix fallback.','error');return true;
     }catch(err2){
       console.error(err2);badge.textContent='Audio error';setStatus('Audio setup failed: '+(err?.message||err),'error');return false;
     }
-  }finally{preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';playBtnLoadingDone();}
+  }finally{
+    // Only touch shared UI-facing state if a newer load hasn't already taken
+    // over — otherwise this stale finally (settling late after Reset/
+    // switchMosaic gave up on it) would clear preparing/re-enable/re-caption
+    // the Play button out from under whatever the newer load is actively
+    // doing right now.
+    if(myGen===loadGeneration){preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';playBtnLoadingDone();}
+  }
 }
 function buildTempoButtons(){
   tempoButtons.innerHTML='';
@@ -1112,13 +1193,14 @@ async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
   bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+  const myGen=++loadGeneration;
   const tracker=playBtnLoadingStart();
   currentLoad=tracker;
-  currentLoadPromise=changeTempoImpl(percent,tracker);
+  currentLoadPromise=changeTempoImpl(percent,tracker,myGen);
   try{await currentLoadPromise;}
   finally{if(currentLoad===tracker){currentLoad=null;currentLoadPromise=null;}}
 }
-async function changeTempoImpl(percent,tracker){
+async function changeTempoImpl(percent,tracker,myGen){
   const wasPlaying=playing;
   // The old tempo keeps audibly playing normally for however long this load
   // takes — the button is the only visible sign a switch is even happening,
@@ -1137,6 +1219,9 @@ async function changeTempoImpl(percent,tracker){
     // rewound playback by however long the load took instead of continuing from
     // wherever the music actually was by the time the new tempo was ready.
     const proportion=clamp(currentPos()/oldCycle,0,1);
+    // Same staleness guard as ensurePreparedImpl() — Reset/switchMosaic() may
+    // have already given up waiting on this load and started a fresh one.
+    if(myGen!==loadGeneration)return;
 
     playing=false;
     cancelAnimationFrame(raf);raf=0;
@@ -1148,7 +1233,8 @@ async function changeTempoImpl(percent,tracker){
     // point — only engine.loadTempo()'s decoder configure is left, which has
     // no progress signal of its own.
     tracker.startDecodePulse();
-    await engine.loadTempo(videoBufferCache.get(cacheKey(percent)));
+    await withTimeout(engine.loadTempo(videoBufferCache.get(cacheKey(percent))),DECODE_STEP_TIMEOUT_MS,'Video decoder setup');
+    if(myGen!==loadGeneration)return;
     videoCycle=engine.cycleSeconds||LOOP_END;
     const newPos=proportion*videoCycle;
     pausedPos=newPos;
@@ -1168,13 +1254,16 @@ async function changeTempoImpl(percent,tracker){
     updateTempoUI();
     setStatus(percent+'% tempo ready.','good');badge.textContent=playing?'Playing · '+percent+'%':'Audio ready · '+percent+'%';
   }catch(err){
+    if(myGen!==loadGeneration)return; // superseded — the newer load's own catch/finally owns recovery now
     playing=false;stopStems();playBtn.textContent='Play';
     // Reset/switchMosaic() cancelling this on purpose is not a real failure —
     // don't log it as an error or alarm the user; whatever cancelled this is
     // about to do its own thing next.
     if(tracker.signal.aborted)setStatus('Tempo change cancelled.');
     else{console.error(err);setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');}
-  }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);playBtnLoadingDone();}
+  }finally{
+    if(myGen===loadGeneration){bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);playBtnLoadingDone();}
+  }
 }
 function prefetchTempoBanks(){
   setTimeout(()=>{
@@ -1198,8 +1287,10 @@ async function switchMosaic(id){
   // OLD piece must not go on holding bankBusy/preparing (and the disabled
   // buttons that go with them) once we've moved to a different piece — that
   // was exactly the reported symptom, switching away "worked" but left the
-  // new piece's Play button permanently greyed out.
-  if(currentLoad){currentLoad.cancel(new Error('Switched piece'));await currentLoadPromise.catch(()=>{});}
+  // new piece's Play button permanently greyed out. abandonCurrentLoad()
+  // additionally guarantees this doesn't wait forever even if the old load
+  // is stuck somewhere cancellation can't reach (see its own comment).
+  await abandonCurrentLoad('Switched piece');
   window.scrollTo(0,0); // instant, not smooth: an animated scroll here was getting cut short by the layout shifting under it (new poster/notation/tile grid all resizing mid-animation)
   try{
     playing=false;cancelAnimationFrame(raf);raf=0;
@@ -1293,11 +1384,14 @@ async function reset(){
   // never get a response, and then NOTHING could break out of it: not
   // another tempo tap, not switching piece, not Reset. Every load now carries
   // a cancel()-able tracker specifically so Reset can always interrupt
-  // whatever's stuck and force things back to a clean 100% state — the
-  // cancelled operation's own catch/finally already knows how to put
-  // bankBusy/preparing and the buttons back, so just wait for that to settle
-  // before touching any of that shared state ourselves below.
-  if(currentLoad){currentLoad.cancel(new Error('Reset'));await currentLoadPromise.catch(()=>{});}
+  // whatever's stuck and force things back to a clean 100% state.
+  // abandonCurrentLoad() cancels it, then gives it a bounded window to wind
+  // down on its own (its own catch/finally puts bankBusy/preparing and the
+  // buttons back) before forcing that cleanup itself — needed because
+  // decodeAudioData()/engine.loadTempo() aren't cancellable and could
+  // otherwise leave Reset waiting forever on a load that's genuinely stuck
+  // there rather than in the (cancellable) network fetch.
+  await abandonCurrentLoad('Reset');
   playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};pausedPos=0;
   // refreshSoloMuteState() handles all of it in one call: tile/button visuals,
   // engine.muted/soloDim, and the actual per-track gains (a no-op safely if no
