@@ -107,12 +107,26 @@
 .tempo-buttons button:disabled{opacity:.4}
 .tempo-buttons button#play{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750}
 .tempo-buttons button#play.active{background:var(--accent-purple-dim);color:#fff}
-/* Small loading ring on the Play/Pause button itself while a tempo switch is
-   in flight (changeTempo()) — the old audio/tempo keeps playing normally
-   during that wait, so without this the button just silently sat on "Pause"
-   with nothing to show a switch was even happening. */
-.tempo-buttons button#play.is-switching{position:relative}
-.tempo-buttons button#play.is-switching::after{content:'';position:absolute;top:3px;right:3px;width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:mosaic-spin .8s linear infinite}
+/* Play/Pause doubles as a loading indicator whenever audio/video is being
+   fetched or decoded (first-ever prepare in ensurePrepared(), or a live
+   tempo switch in changeTempo()): its own label always reads "Loading…" for
+   that whole window (see playBtnLoadingStart()/playBtnLoadingDone()), and a
+   ::before layer fills the button left-to-right like a bucket, in the
+   brighter purple, over the dimmed idle background — a pseudo-element
+   rather than a real child node, so it survives the many call sites that
+   just do playBtn.textContent='Loading…' etc. without wiping it out.
+   is-loading eases the fill toward ~88% (real load time is unknown, so it
+   never promises 100% on its own); is-done snaps it the rest of the way the
+   instant the real load actually finishes; reset-instant briefly kills the
+   transition/animation so the fill can jump back to empty for next time
+   without visibly draining back out. */
+.tempo-buttons button#play{position:relative;overflow:hidden}
+.tempo-buttons button#play::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(0);transition:transform .25s ease-out}
+.tempo-buttons button#play.is-loading{background:var(--accent-purple-dim)}
+.tempo-buttons button#play.is-loading::before{animation:mosaic-play-fill 1.6s cubic-bezier(.22,.61,.36,1) forwards}
+.tempo-buttons button#play.is-loading.is-done::before{animation:none;transform:scaleX(1)}
+.tempo-buttons button#play.reset-instant::before{transition:none!important;animation:none!important}
+@keyframes mosaic-play-fill{0%{transform:scaleX(0)}100%{transform:scaleX(.88)}}
 .status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
 .note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
@@ -833,8 +847,32 @@ function ensureGains(force){
   const anySolo=soloed.some(Boolean);
   gains=Array.from({length:TILE_COUNT},(_,idx)=>{const g=ctx.createGain();g.gain.value=(anySolo?!soloed[idx]:muted[idx])?0:1;g.connect(ctx.destination);return g;});
 }
+// Play/Pause visually fills left-to-right (see the #play CSS above) for as
+// long as it's the one saying "Loading…" — shared by the first-ever prepare
+// (ensurePrepared()) and a live tempo switch (changeTempo()), so the visual
+// language for "something's loading" is the same everywhere the button owns
+// that job. is-loading eases toward ~88% on its own; is-done snaps the rest
+// of the way the instant the real load actually finishes; reset-instant
+// briefly kills the transition so the fill can jump back to empty afterwards
+// without visibly draining back out.
+function playBtnLoadingStart(){
+  playBtn.classList.remove('is-done');
+  playBtn.classList.add('reset-instant');
+  playBtn.classList.add('is-loading');
+  void playBtn.offsetWidth; // force layout so the instant reset above actually commits before the transition/animation below re-engages
+  playBtn.classList.remove('reset-instant');
+}
+function playBtnLoadingDone(){
+  playBtn.classList.add('is-done');
+  setTimeout(()=>{
+    playBtn.classList.add('reset-instant');
+    playBtn.classList.remove('is-loading','is-done');
+    void playBtn.offsetWidth;
+    playBtn.classList.remove('reset-instant');
+  },260); // roughly matches the is-done snap-to-full transition (.25s) before resetting for next time
+}
 async function ensurePrepared(){
-  if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
+  if(prepared)return true;if(preparing)return false;preparing=true;playBtn.disabled=true;playBtn.textContent='Loading…';playBtnLoadingStart();badge.textContent='Preparing '+tempoPercent+'%…';
   try{
     await unlockContext();ensureGains();
     const [bank]=await Promise.all([loadBank(tempoPercent),ensureMetroBuffers()]);
@@ -866,7 +904,7 @@ async function ensurePrepared(){
     }catch(err2){
       console.error(err2);badge.textContent='Audio error';setStatus('Audio setup failed: '+(err?.message||err),'error');return false;
     }
-  }finally{preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';}
+  }finally{preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';playBtnLoadingDone();}
 }
 function buildTempoButtons(){
   tempoButtons.innerHTML='';
@@ -878,8 +916,12 @@ async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
   bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
-  playBtn.classList.add('is-switching'); // little loading ring on Play/Pause — the old tempo keeps audibly playing during this wait, so the button needs its own sign that a switch is in flight
   const wasPlaying=playing;
+  // The old tempo keeps audibly playing normally for however long this load
+  // takes — the button is the only visible sign a switch is even happening,
+  // so it always says "Loading…" (not "Pause") and fills like a bucket for
+  // the whole wait, exactly like the first-ever prepare above.
+  playBtn.textContent='Loading…';playBtnLoadingStart();
   try{
     // Prepare the audio bank AND the video buffer in parallel while the existing
     // transport remains untouched — this intentionally mirrors the reliable Reset path.
@@ -922,7 +964,7 @@ async function changeTempo(percent){
     console.error(err);
     playing=false;stopStems();playBtn.textContent='Play';
     setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');
-  }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);playBtn.classList.remove('is-switching');}
+  }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);playBtnLoadingDone();}
 }
 function prefetchTempoBanks(){
   setTimeout(()=>{
