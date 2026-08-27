@@ -107,6 +107,12 @@
 .tempo-buttons button:disabled{opacity:.4}
 .tempo-buttons button#play{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750}
 .tempo-buttons button#play.active{background:var(--accent-purple-dim);color:#fff}
+/* Small loading ring on the Play/Pause button itself while a tempo switch is
+   in flight (changeTempo()) — the old audio/tempo keeps playing normally
+   during that wait, so without this the button just silently sat on "Pause"
+   with nothing to show a switch was even happening. */
+.tempo-buttons button#play.is-switching{position:relative}
+.tempo-buttons button#play.is-switching::after{content:'';position:absolute;top:3px;right:3px;width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:mosaic-spin .8s linear infinite}
 .status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
 .note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
@@ -169,7 +175,7 @@
         <span id="metroNum" class="metro-num"></span>
       </button>
       <div id="focusLabel" class="focus-label">Clave</div>
-      <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Buffering…</span></div>
+      <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
     </div>
     <div class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
   </div>
@@ -832,7 +838,25 @@ async function ensurePrepared(){
   try{
     await unlockContext();ensureGains();
     const [bank]=await Promise.all([loadBank(tempoPercent),ensureMetroBuffers()]);
-    buffers=bank;prepared=true;fallbackMode=false;badge.textContent='Audio ready';setStatus(tempoPercent+'% ready.','good');return true;
+    buffers=bank;
+    // A non-100% tempo can be picked before Play is ever pressed (changeTempo()'s
+    // !prepared branch just remembers the choice, since there's no transport
+    // running yet to swap live) — but the video loaded so far is always the
+    // 100% variant (switchMosaic()/initial load hardcode it). Bring the video
+    // in line with the chosen tempo now, converting any already-set paused
+    // position (e.g. from a pre-play scrub) the same proportional way
+    // changeTempo() does for a live switch. Without this, Play would start
+    // audio at the picked tempo while the video kept playing the unmodified
+    // 100% footage — audio and picture visibly drifting apart from the first
+    // frame, only fixable by hitting Reset (which forces both back to 100%).
+    if(tempoPercent!==100){
+      const oldCycle=videoCycle||LOOP_END;
+      const proportion=clamp(pausedPos/oldCycle,0,1);
+      await loadVideoForTempo(tempoPercent,false);
+      pausedPos=proportion*videoCycle;
+      engine.seekTo(pausedPos);
+    }
+    prepared=true;fallbackMode=false;badge.textContent='Audio ready';setStatus(tempoPercent+'% ready.','good');return true;
   }catch(err){
     console.error(err);
     try{
@@ -854,6 +878,7 @@ async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
   bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+  playBtn.classList.add('is-switching'); // little loading ring on Play/Pause — the old tempo keeps audibly playing during this wait, so the button needs its own sign that a switch is in flight
   const wasPlaying=playing;
   try{
     // Prepare the audio bank AND the video buffer in parallel while the existing
@@ -897,7 +922,7 @@ async function changeTempo(percent){
     console.error(err);
     playing=false;stopStems();playBtn.textContent='Play';
     setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');
-  }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);}
+  }finally{bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);playBtn.classList.remove('is-switching');}
 }
 function prefetchTempoBanks(){
   setTimeout(()=>{
