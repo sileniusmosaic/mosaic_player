@@ -557,33 +557,45 @@ async function loadVideoForTempo(percent,keepPos){
 // we're NOT in the middle of the regular playing tick() loop (paused reset,
 // paused scrub-release, paused tempo switch, initial page load) since a single
 // render() call right after a seek will usually find the queue still empty
-// (decode is asynchronous). Falls back to the poster if nothing arrives in time.
+// (decode is asynchronous). The focus square shows the buffering spinner
+// (rather than any poster fallback) until that first real frame lands —
+// see drawPoster() below for why the poster no longer paints there at all.
 let paintToken=0;
 function paintAt(pos){
   const myToken=++paintToken; // invalidates any earlier still-running paintAt loop
   drawPoster();
   if(!engine.info)return;
-  // Used to skip live-rendering position 0 here, on the theory that the poster
-  // JPG already depicts that exact moment — but the poster is lower resolution
-  // than a decoded video frame, so a freshly-selected piece sat visibly soft/
-  // blurry until Play was pressed. Now always live-renders, position 0 included;
-  // the tradeoff is a brief poster->live-frame swap as decode catches up, which
-  // reads as far less of a problem than the poster's blurriness did.
+  bufferingSpinner.hidden=false;
   let attempts=0;
   const tryPaint=()=>{
     // Bail if superseded by a newer paintAt() call, OR if playback has started
     // in the meantime — tick() owns rendering once playing, and two loops
     // calling engine.render() with different targets at once will fight over
     // its internal lap-tracking state and produce exactly the kind of rapid
-    // flicker-through-frames this guards against.
+    // flicker-through-frames this guards against. Either way, leave the
+    // spinner alone here: a newer paintAt() call already re-armed it, and
+    // resetStallWatchdog() (called by every play path) already force-hides
+    // it the instant playback actually starts.
     if(myToken!==paintToken||playing)return;
     attempts++;
     engine.render(pos);
-    if(engine.frameQueue.length===0&&attempts<40)requestAnimationFrame(tryPaint);
+    if(engine.frameQueue.length===0&&attempts<40){requestAnimationFrame(tryPaint);return;}
+    // Only claim success (and hide the spinner) once a frame genuinely
+    // reached the queue — if we simply ran out of attempts with nothing
+    // ever arriving, leave the spinner up rather than exposing the bare
+    // wiped-black canvas underneath it.
+    if(engine.frameQueue.length>0)bufferingSpinner.hidden=true;
   };
   requestAnimationFrame(tryPaint);
 }
 function tileSource(i,w,h){const tw=w/TILE_COLS,th=h/TILE_ROWS;return [(i%TILE_COLS)*tw,Math.floor(i/TILE_COLS)*th,tw,th]}
+// Poster now only ever fills the small grid tiles (instant feedback for mute/
+// solo/selection state while a piece loads) — it no longer paints into the
+// big focus square. The focus square used to show a poster crop blown up to
+// fill it, which is markedly lower-res than a decoded video frame; now it
+// just shows the buffering spinner (see paintAt()) until the real frame is
+// ready, so it only ever displays one, full-resolution picture instead of a
+// blurry placeholder that then visibly upgrades itself.
 function drawPoster(){
   if(!poster.complete||!poster.naturalWidth)return;
   const w=poster.naturalWidth,h=poster.naturalHeight;
@@ -596,8 +608,6 @@ function drawPoster(){
     else if(anySolo&&!soloed[i]){gctx.fillStyle='rgba(130,130,130,.55)';gctx.fillRect(dx,dy,S,Sh)}
     gctx.strokeStyle=i===selected?'#63d7ff':'#050607';gctx.lineWidth=i===selected?4:2;gctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
   }
-  const [fsx,fsy,fsw,fsh]=tileSource(selected,w,h);
-  focusCtx.drawImage(poster,fsx,fsy,fsw,fsh,0,0,focusCanvas.width,focusCanvas.height);
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
@@ -959,6 +969,7 @@ async function switchMosaic(id){
     focusWrap.classList.toggle('is-muted',muted[selected]);
     engine.selected=selected;
     drawPoster();
+    bufferingSpinner.hidden=false; // the video fetch below can take a moment (especially the R2-hosted pieces) — show the spinner from the start of the wait, not just once paintAt() takes over after it resolves
     updateUI();
     badge.textContent='Ready to start';playBtn.textContent='Play';
     setStatus('Loading '+cfg.label+'…');
@@ -1226,6 +1237,7 @@ metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
 buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();updateFocusUI();updateUI();
+bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
 })();
