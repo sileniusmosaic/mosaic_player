@@ -952,18 +952,50 @@ async function playFromGesture(){
 }
 function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
-function reset(){
+// Reset is a full "start over": clears every Mute and Solo, drops back to
+// 100% tempo (re-preparing that bank/video first if a different tempo was
+// active), and immediately starts playing again from position 0 — not just
+// clearing state and sitting paused on the poster frame like it used to.
+async function reset(){
+  if(bankBusy)return; // a tempo switch is already in flight — ignore this tap rather than race it
+  resetBtn.disabled=true;
   playing=false;stopStems();fallbackAudio.pause();try{fallbackAudio.currentTime=0}catch{};pausedPos=0;
-  // Reset clears every Mute and Solo too, not just the transport position —
-  // back to a completely clean slate. refreshSoloMuteState() handles all of
-  // it in one call: tile/button visuals, engine.muted/soloDim, and the actual
-  // per-track gains (a no-op safely if no AudioContext exists yet).
+  // refreshSoloMuteState() handles all of it in one call: tile/button visuals,
+  // engine.muted/soloDim, and the actual per-track gains (a no-op safely if no
+  // AudioContext exists yet).
   muted=Array(TILE_COUNT).fill(false);
   soloed=Array(TILE_COUNT).fill(false);
   refreshSoloMuteState();
-  playBtn.textContent='Play';badge.textContent=prepared?'Audio ready · '+tempoPercent+'%':'Ready to start';
   cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
-  if(engine.info){engine.seekTo(0);paintAt(0);}else drawPoster();
+  try{
+    if(!prepared){
+      // Never pressed Play yet this visit — prepare fresh, but at 100% no
+      // matter which tempo button happened to be selected beforehand.
+      tempoPercent=100;updateTempoUI();
+      const ok=await ensurePrepared();
+      if(!ok)throw new Error('Audio setup failed');
+      prefetchTempoBanks();
+    }else if(tempoPercent!==100){
+      bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+      const [bank]=await Promise.all([loadBank(100),loadVideoForTempo(100,false)]);
+      buffers=bank;tempoPercent=100;updateTempoUI();
+      bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
+    }else if(engine.info){
+      engine.seekTo(0);
+    }
+    if(fallbackMode){fallbackAudio.currentTime=0;await fallbackAudio.play();}
+    else{await unlockContext();startStems(0);}
+    playing=true;playBtn.textContent='Pause';badge.textContent='Playing · 100%';setStatus('Reset — mute/solo cleared, back to 100%, playing from the start.','good');
+    resetStallWatchdog();if(!raf)tick();
+  }catch(err){
+    console.error(err);
+    playing=false;
+    playBtn.textContent='Play';
+    setStatus('Reset failed: '+(err?.message||err),'error');
+    bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
+  }finally{
+    resetBtn.disabled=false;
+  }
   updateUI();
 }
 // Where the audio genuinely is right now — the one and only clock in this app.
