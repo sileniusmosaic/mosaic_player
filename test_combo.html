@@ -1,0 +1,145 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Congo Clave + metronome combo test</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;background:#111;color:#eee;padding:20px;max-width:600px;margin:0 auto;}
+  h1{font-size:18px;}
+  button{display:block;width:100%;padding:16px;margin:10px 0;font-size:16px;border-radius:10px;border:none;background:#2a5;color:#fff;}
+  button:disabled{background:#555;}
+  #stop{background:#a33;}
+  #log{white-space:pre-wrap;font-family:monospace;font-size:12px;background:#222;padding:10px;border-radius:8px;margin-top:16px;max-height:340px;overflow:auto;}
+</style>
+</head>
+<body>
+<h1>Congo Yambumba — Clave + metronome together</h1>
+<p>Clave alone was clean. Metronome alone was clean. This plays BOTH together, looped, exactly like the real app's startup sequence (scheduling the metronome once immediately, then again every animation frame) — nothing else running. Still starts 2 seconds before the seam.</p>
+<button id="btnNew">Play with cyc = 24.000s (current config)</button>
+<button id="btnOld">Play with cyc = 24.050s (old config)</button>
+<button id="stop">Stop</button>
+<div id="log">Loading…</div>
+<script>
+const AAC_URL = 'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_clave_congoyambumba.aac';
+const logEl = document.getElementById('log');
+function log(msg){ logEl.textContent += '\n'+msg; logEl.scrollTop = logEl.scrollHeight; }
+
+let ctx, decodedClave, metroBuffers={normal:null,accent:null}, ready=false;
+let claveSource=null, scheduledNodes=[], scheduledUntil=0, rafId=null, stemStartCtx=0, stemStartPos=0;
+const METRO_LOOKAHEAD=0.6;
+const cfg={beatsPerBar:4, bpm:80};
+const tempoPercent=100;
+
+async function fetchWithRetry(u,attempts=3){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{ const r=await fetch(u,{cache:'no-cache'}); if(!r.ok)throw new Error('HTTP '+r.status); return await r.arrayBuffer(); }
+    catch(e){ lastErr=e; if(i<attempts-1) await new Promise(res=>setTimeout(res,250)); }
+  }
+  throw lastErr;
+}
+
+async function init(){
+  try{
+    ctx = new (window.AudioContext||window.webkitAudioContext)();
+    log('AudioContext sampleRate: '+ctx.sampleRate);
+    const [claveBuf, n, a] = await Promise.all([
+      fetchWithRetry(AAC_URL), fetchWithRetry('metro_click.wav'), fetchWithRetry('metro_click_accent.wav')
+    ]);
+    decodedClave = await ctx.decodeAudioData(claveBuf.slice(0));
+    metroBuffers.normal = await ctx.decodeAudioData(n.slice(0));
+    metroBuffers.accent = await ctx.decodeAudioData(a.slice(0));
+    log('Clave decoded duration: '+decodedClave.duration.toFixed(6)+'s. Click samples loaded OK.');
+    ready = true;
+    document.querySelectorAll('button:not(#stop)').forEach(b=>b.disabled=false);
+  }catch(e){
+    log('ERROR: '+e.message);
+  }
+}
+
+function makeTrimmedClave(loopEndSeconds){
+  const targetFrames = Math.round(loopEndSeconds*ctx.sampleRate);
+  const exact = ctx.createBuffer(1, targetFrames, ctx.sampleRate);
+  const dst = exact.getChannelData(0), src = decodedClave.getChannelData(0);
+  dst.set(src.subarray(0, Math.min(src.length, dst.length)));
+  return exact;
+}
+
+function computeMetroBeatTimes(cyc){
+  const beats=[];
+  const nominalSecondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
+  const totalBeats=Math.max(1,Math.round(cyc/nominalSecondsPerBeat));
+  for(let i=0;i<totalBeats;i++)beats.push({t:(i/totalBeats)*cyc,accent:i%cfg.beatsPerBar===0});
+  return beats;
+}
+let beats=[], cycGlobal=0;
+function scheduleMetroClicks(){
+  const cyc=cycGlobal;
+  if(!beats.length||!cyc)return;
+  const now=ctx.currentTime, horizon=now+METRO_LOOKAHEAD;
+  const from=Math.max(scheduledUntil,now);
+  const base=stemStartCtx-stemStartPos;
+  let k=Math.floor((from-base)/cyc)-1; if(k<0)k=0;
+  let guard=0;
+  outer:
+  while(guard++<500){
+    for(let i=0;i<beats.length;i++){
+      const when=base+beats[i].t+k*cyc;
+      if(when<=from)continue;
+      if(when>horizon)break outer;
+      const buf=beats[i].accent?metroBuffers.accent:metroBuffers.normal;
+      if(!buf)continue;
+      const src=ctx.createBufferSource();src.buffer=buf;src.connect(ctx.destination);
+      src.onended=()=>{const idx=scheduledNodes.indexOf(src);if(idx>=0)scheduledNodes.splice(idx,1);};
+      src.start(when);
+      scheduledNodes.push(src);
+      scheduledUntil=when;
+      log('metro beat i='+i+' accent='+beats[i].accent+' at t+'+(when-base).toFixed(4)+'s (lap k='+k+')');
+    }
+    k++;
+  }
+}
+function stopAll(){
+  if(claveSource){try{claveSource.stop()}catch{}try{claveSource.disconnect()}catch{}claveSource=null;}
+  for(const n of scheduledNodes){try{n.stop()}catch{}try{n.disconnect()}catch{}}
+  scheduledNodes=[]; scheduledUntil=0;
+  if(rafId)cancelAnimationFrame(rafId); rafId=null;
+}
+function tickLoop(){
+  scheduleMetroClicks();
+  rafId=requestAnimationFrame(tickLoop);
+}
+function start(cyc){
+  stopAll();
+  logEl.textContent='';
+  cycGlobal=cyc;
+  beats=computeMetroBeatTimes(cyc);
+  const claveBuffer=makeTrimmedClave(cyc);
+  const when=ctx.currentTime+0.05;
+  stemStartPos = Math.max(0, cyc-2.0);
+  stemStartCtx = when;
+  scheduledUntil=0;
+
+  // Start the Clave stem exactly like the app's startStems(): native looping buffer source.
+  const s=ctx.createBufferSource();
+  s.buffer=claveBuffer; s.loop=true; s.loopStart=0; s.loopEnd=claveBuffer.duration;
+  s.connect(ctx.destination);
+  s.start(when, Math.min(stemStartPos, claveBuffer.duration-0.001));
+  claveSource=s;
+
+  // Matches the app: scheduleMetroClicks() is called once immediately after starting
+  // stems, then again every animation frame from here on.
+  scheduleMetroClicks();
+  log('Starting: cyc='+cyc+'s, beginning '+stemStartPos.toFixed(3)+'s in — Clave + metronome together. Seam arrives in ~2s, then every '+cyc.toFixed(3)+'s after.');
+  if(ctx.state!=='running')ctx.resume();
+  tickLoop();
+}
+document.getElementById('btnNew').onclick=()=>start(24.000);
+document.getElementById('btnOld').onclick=()=>start(24.050);
+document.getElementById('stop').onclick=stopAll;
+document.querySelectorAll('button:not(#stop)').forEach(b=>b.disabled=true);
+init();
+</script>
+</body>
+</html>
