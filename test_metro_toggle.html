@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Congo Clave + mid-playback metronome toggle test</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;background:#111;color:#eee;padding:20px;max-width:600px;margin:0 auto;}
+  h1{font-size:18px;}
+  button{display:block;width:100%;padding:16px;margin:10px 0;font-size:16px;border-radius:10px;border:none;background:#2a5;color:#fff;}
+  button:disabled{background:#555;}
+  #stop{background:#a33;}
+  #toggleMetro{background:#c90;}
+  #log{white-space:pre-wrap;font-family:monospace;font-size:12px;background:#222;padding:10px;border-radius:8px;margin-top:16px;max-height:340px;overflow:auto;}
+</style>
+</head>
+<body>
+<h1>Congo Yambumba — Clave alone, metronome tapped ON mid-playback</h1>
+<p>Every earlier test started the metronome running from the first frame. But your original repro was: let the Clave loop, <b>then tap the metronome on</b> — a completely different code path (the actual <code>metroBtn</code> click handler, copied verbatim below, which fires <code>scheduleMetroClicks()</code> twice for one tap). This starts Clave alone with the metronome off, and gives you a button to tap it on whenever you want — try it right as the loop wraps, a few times.</p>
+<button id="start">1. Start Clave (metronome OFF, cyc=24.000)</button>
+<button id="toggleMetro" disabled>2. Tap metronome ON now</button>
+<button id="stop">Stop</button>
+<div id="log">Loading…</div>
+<script>
+const AAC_URL = 'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_clave_congoyambumba.aac';
+const logEl = document.getElementById('log');
+function log(msg){ logEl.textContent += '\n'+msg; logEl.scrollTop = logEl.scrollHeight; }
+
+let ctx, decodedClave, metroBuffers={normal:null,accent:null}, metroBuffersLoaded=false, metroBuffersLoading=null;
+let claveSource=null, scheduledNodes=[], scheduledUntil=0, rafId=null, stemStartCtx=0, stemStartPos=0;
+let playing=false, metroActive=false;
+const METRO_LOOKAHEAD=0.6;
+const cfg={beatsPerBar:4, bpm:80};
+const tempoPercent=100;
+const CYC=24.000;
+
+async function fetchWithRetry(u,attempts=3){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{ const r=await fetch(u,{cache:'no-cache'}); if(!r.ok)throw new Error('HTTP '+r.status); return await r.arrayBuffer(); }
+    catch(e){ lastErr=e; if(i<attempts-1) await new Promise(res=>setTimeout(res,250)); }
+  }
+  throw lastErr;
+}
+
+async function init(){
+  try{
+    ctx = new (window.AudioContext||window.webkitAudioContext)();
+    log('AudioContext sampleRate: '+ctx.sampleRate);
+    const claveBuf = await fetchWithRetry(AAC_URL);
+    decodedClave = await ctx.decodeAudioData(claveBuf.slice(0));
+    log('Clave decoded duration: '+decodedClave.duration.toFixed(6)+'s.');
+    document.getElementById('start').disabled=false;
+  }catch(e){
+    log('ERROR: '+e.message);
+  }
+}
+
+function makeTrimmedClave(loopEndSeconds){
+  const targetFrames = Math.round(loopEndSeconds*ctx.sampleRate);
+  const exact = ctx.createBuffer(1, targetFrames, ctx.sampleRate);
+  const dst = exact.getChannelData(0), src = decodedClave.getChannelData(0);
+  dst.set(src.subarray(0, Math.min(src.length, dst.length)));
+  return exact;
+}
+
+// --- verbatim from the app: ensureMetroBuffers / computeMetroBeatTimes / scheduleMetroClicks / metroBtn handler ---
+async function ensureMetroBuffers(){
+  if(metroBuffersLoaded)return;
+  if(metroBuffersLoading)return metroBuffersLoading;
+  metroBuffersLoading=(async()=>{
+    try{
+      const [n,a]=await Promise.all([fetchWithRetry('metro_click.wav',2),fetchWithRetry('metro_click_accent.wav',2)]);
+      metroBuffers.normal=await ctx.decodeAudioData(n.slice(0));
+      metroBuffers.accent=await ctx.decodeAudioData(a.slice(0));
+      metroBuffersLoaded=true;
+      log('metro buffers loaded (async chain resolved)');
+    }catch(e){
+      log('metro buffer load failed: '+e.message);
+    }finally{metroBuffersLoading=null;}
+  })();
+  return metroBuffersLoading;
+}
+function computeMetroBeatTimes(cyc){
+  const beats=[];
+  const nominalSecondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
+  const totalBeats=Math.max(1,Math.round(cyc/nominalSecondsPerBeat));
+  for(let i=0;i<totalBeats;i++)beats.push({t:(i/totalBeats)*cyc,accent:i%cfg.beatsPerBar===0});
+  return beats;
+}
+let beats=[];
+function scheduleMetroClicks(){
+  if(!metroActive||!metroBuffersLoaded)return;
+  const cyc=CYC;
+  if(!beats.length)beats=computeMetroBeatTimes(cyc);
+  const now=ctx.currentTime, horizon=now+METRO_LOOKAHEAD;
+  const from=Math.max(scheduledUntil,now);
+  const base=stemStartCtx-stemStartPos;
+  let k=Math.floor((from-base)/cyc)-1; if(k<0)k=0;
+  let guard=0;
+  outer:
+  while(guard++<500){
+    for(let i=0;i<beats.length;i++){
+      const when=base+beats[i].t+k*cyc;
+      if(when<=from)continue;
+      if(when>horizon)break outer;
+      const buf=beats[i].accent?metroBuffers.accent:metroBuffers.normal;
+      if(!buf)continue;
+      const src=ctx.createBufferSource();src.buffer=buf;src.connect(ctx.destination);
+      src.onended=()=>{const idx=scheduledNodes.indexOf(src);if(idx>=0)scheduledNodes.splice(idx,1);};
+      src.start(when);
+      scheduledNodes.push(src);
+      scheduledUntil=when;
+      log('scheduled click i='+i+' accent='+beats[i].accent+' at t+'+(when-base).toFixed(4)+'s (lap k='+k+', called from scheduleMetroClicks at ctx.currentTime='+now.toFixed(4)+')');
+    }
+    k++;
+  }
+}
+function cancelScheduledMetroClicks(){
+  for(const n of scheduledNodes){try{n.stop()}catch{}try{n.disconnect()}catch{}}
+  scheduledNodes=[]; scheduledUntil=0;
+}
+// This is the ACTUAL metroBtn click handler from the app, verbatim (minus DOM class/label lines).
+function metroBtnClickHandler(){
+  metroActive=!metroActive;
+  log('--- metro button tapped: metroActive='+metroActive+' at ctx.currentTime='+ctx.currentTime.toFixed(4)+' ---');
+  if(metroActive){
+    if(ctx)ensureMetroBuffers().then(()=>{ log('(microtask) ensureMetroBuffers resolved at ctx.currentTime='+ctx.currentTime.toFixed(4)); if(metroActive&&playing)scheduleMetroClicks();});
+    if(playing)scheduleMetroClicks();
+  }else{
+    cancelScheduledMetroClicks();
+  }
+}
+// --- end verbatim section ---
+
+function stopAll(){
+  playing=false;
+  if(claveSource){try{claveSource.stop()}catch{}try{claveSource.disconnect()}catch{}claveSource=null;}
+  cancelScheduledMetroClicks();
+  if(rafId)cancelAnimationFrame(rafId); rafId=null;
+}
+function tickLoop(){
+  scheduleMetroClicks();
+  rafId=requestAnimationFrame(tickLoop);
+}
+function start(){
+  stopAll();
+  logEl.textContent='';
+  metroActive=false; beats=[];
+  const claveBuffer=makeTrimmedClave(CYC);
+  const when=ctx.currentTime+0.05;
+  stemStartPos = Math.max(0, CYC-2.0);
+  stemStartCtx = when;
+  scheduledUntil=0;
+
+  const s=ctx.createBufferSource();
+  s.buffer=claveBuffer; s.loop=true; s.loopStart=0; s.loopEnd=claveBuffer.duration;
+  s.connect(ctx.destination);
+  s.start(when, Math.min(stemStartPos, claveBuffer.duration-0.001));
+  claveSource=s;
+  playing=true;
+
+  log('Starting: cyc='+CYC+'s, beginning '+stemStartPos.toFixed(3)+'s in — Clave ONLY, metronome OFF. Seam arrives in ~2s, then every '+CYC.toFixed(3)+'s after. Tap "metronome ON" whenever you like — try right at a seam.');
+  if(ctx.state!=='running')ctx.resume();
+  tickLoop();
+  document.getElementById('toggleMetro').disabled=false;
+}
+document.getElementById('start').onclick=start;
+document.getElementById('toggleMetro').onclick=metroBtnClickHandler;
+document.getElementById('stop').onclick=stopAll;
+document.getElementById('start').disabled=true;
+init();
+</script>
+</body>
+</html>
