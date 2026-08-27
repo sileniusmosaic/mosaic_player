@@ -36,6 +36,11 @@
 .piece-thumb-name{font-size:12px;font-weight:700;line-height:1.15;white-space:nowrap;color:var(--text)}
 .burger{width:34px;height:34px;flex:0 0 auto;border:2px solid var(--window-border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;background:var(--panel)}
 .burger span{width:16px;height:2px;background:var(--accent);display:block;border-radius:2px}
+/* Mobile no longer needs the hamburger in the top bar — the Settings button
+   in the transport row already opens the same menu panel. Hiding it here
+   (touch only; kept on desktop) lets the piece-strip thumbnails use the
+   freed width via flexbox, so all of them sit flush at the top. */
+.is-touch .piece-strip-bar .burger{display:none}
 #menuToggle{display:none}
 .menu-panel{position:fixed;inset:0;background:rgba(15,11,7,.97);z-index:50;padding:18px 16px;transform:translateY(-100%);transition:transform .25s ease}
 #menuToggle:checked ~ .menu-panel{transform:translateY(0)}
@@ -558,12 +563,12 @@ function paintAt(pos){
   const myToken=++paintToken; // invalidates any earlier still-running paintAt loop
   drawPoster();
   if(!engine.info)return;
-  // Position 0 is exactly what the poster image already depicts — decoding and
-  // swapping in a "live" frame here just to show the same moment risks a visible
-  // one-frame jump the instant it arrives (the poster and a freshly-decoded frame
-  // 0 are never pixel-identical). Only bother live-rendering a genuinely different
-  // position (after a tempo change or a scrub), where the poster can't help.
-  if(!pos)return;
+  // Used to skip live-rendering position 0 here, on the theory that the poster
+  // JPG already depicts that exact moment — but the poster is lower resolution
+  // than a decoded video frame, so a freshly-selected piece sat visibly soft/
+  // blurry until Play was pressed. Now always live-renders, position 0 included;
+  // the tradeoff is a brief poster->live-frame swap as decode catches up, which
+  // reads as far less of a problem than the poster's blurriness did.
   let attempts=0;
   const tryPaint=()=>{
     // Bail if superseded by a newer paintAt() call, OR if playback has started
