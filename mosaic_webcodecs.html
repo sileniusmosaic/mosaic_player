@@ -210,6 +210,7 @@
        are unused now but left defined in case this needs to come back. -->
   <section class="panel footer-panel">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
+    <div id="loadBytesReadout" class="note" hidden></div>
     <p class="note" id="noteText">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
     <div id="fpsReadout" class="note" hidden></div>
     <div id="badge" class="badge" hidden>Ready to start</div>
@@ -332,7 +333,14 @@ const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#foc
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout'), loadBytesReadout=$('#loadBytesReadout');
+// Numeric "X.XMB of Y.YMB" readout next to the status line — separate from
+// the Play button's 0-1 visual fill (setPlayFill) so a real byte count is
+// always visible alongside it, including the specific case that visual fill
+// alone can't distinguish: bytes fully downloaded but still waiting on the
+// (unmeasurable, no-progress-signal) local decode step afterward.
+function formatMB(bytes){return (bytes/1048576).toFixed(1)+'MB';}
+function setLoadBytesReadout(text){loadBytesReadout.hidden=!text;loadBytesReadout.textContent=text||'';}
 // Visual beat counter, off by default, only enabled for pieces with
 // beatsPerBar+bars set in their config (Flip Swing for now). Deliberately
 // NOT tied to tempoPercent or any per-tempo number — it derives
@@ -1056,6 +1064,20 @@ function makeLoadProgress(){
     for(const t of tasks.values()){received+=t.received;total+=t.total||0;}
     return total>0?received/total:null;
   }
+  // Same sums as recompute(), but exposed as raw bytes (not a 0-1 fraction)
+  // for the numeric readout — and separately reports whether every task has
+  // reported a real content-length yet, since "received/total" can look
+  // deceptively complete while one sibling fetch's total is still unknown.
+  function recomputeBytes(){
+    let received=0,total=0,totalKnown=tasks.size>0;
+    for(const t of tasks.values()){received+=t.received;if(t.total){total+=t.total;}else{totalKnown=false;}}
+    return{received,total,totalKnown};
+  }
+  function refreshBytesReadout(suffix){
+    const{received,total,totalKnown}=recomputeBytes();
+    if(totalKnown&&total>0)setLoadBytesReadout(formatMB(received)+' of '+formatMB(total)+(suffix||''));
+    else setLoadBytesReadout(formatMB(received)+' downloaded'+(suffix||''));
+  }
   // The fill only ever moves forward. Real bytes for a fetch that only just
   // started (e.g. video, registering its first small chunk right as the
   // audio bank's decode-pulse has already crept the shared fraction up)
@@ -1071,6 +1093,7 @@ function makeLoadProgress(){
       tasks.set(id,{received,total});
       const f=recompute();
       if(f!==null)advance(Math.min(f,0.96));
+      refreshBytesReadout();
     },
     allDownloaded(){
       if(tasks.size===0)return false; // nothing registered yet — don't claim "done"
@@ -1081,11 +1104,16 @@ function makeLoadProgress(){
       if(!api.allDownloaded())return; // a sibling fetch is still transferring — let its real progress keep driving the bar instead
       stopPulse();
       pulseVal=Math.max(pulseVal,highWater,0.55); // downloads that never reported a usable total (no content-length) start the pulse from a reasonable midpoint instead of 0
+      // Every byte is in hand at this point — the fill's own pulse keeps
+      // creeping forward with no real signal behind it, but the numeric
+      // readout can at least say plainly that the download itself is done
+      // and name the step that's actually still running.
+      refreshBytesReadout(' — download complete, finishing setup…');
       const step=()=>{pulseVal+=(0.985-pulseVal)*0.06;advance(pulseVal);pulseTimer=setTimeout(step,180);};
       step();
     },
     cancel(reason){controller.abort(reason||new Error('Cancelled'));stopPulse();},
-    stop(){stopPulse();}
+    stop(){stopPulse();setLoadBytesReadout('');}
   };
   return api;
 }
@@ -1202,6 +1230,10 @@ async function changeTempo(percent){
 }
 async function changeTempoImpl(percent,tracker,myGen){
   const wasPlaying=playing;
+  // Tracks whether we've actually stopped the OLD tempo's audio yet. Nothing
+  // below is allowed to touch stems/buffers/tempoPercent until this becomes
+  // true — see the "committed=true" point below for why.
+  let committed=false;
   // The old tempo keeps audibly playing normally for however long this load
   // takes — the button is the only visible sign a switch is even happening,
   // so it always says "Loading…" (not "Pause") and fills like a bucket for
@@ -1223,18 +1255,31 @@ async function changeTempoImpl(percent,tracker,myGen){
     // have already given up waiting on this load and started a fresh one.
     if(myGen!==loadGeneration)return;
 
-    playing=false;
+    // Stop painting the OLD video now — a frozen last frame while the decoder
+    // reconfigures below is the same brief hitch a tempo switch always caused
+    // — but deliberately leave the currently-playing AUDIO alone. Only the
+    // downloads have finished so far; engine.loadTempo() below (the decoder
+    // configure) can still fail or time out just like the download can, and
+    // on a bad connection this is exactly the step most likely to be why a
+    // switch never completes. A failed switch should never have stopped
+    // anything in the first place — previously this stopped the OLD tempo's
+    // audio unconditionally right here, so any failure past this point (in
+    // download OR decode) left the user with silence and a "Play" button
+    // instead of the music they already had playing.
     cancelAnimationFrame(raf);raf=0;
-    stopStems();
-    fallbackAudio.pause();
-
-    buffers=bank;tempoPercent=percent;
-    // Both downloads (and the audio bank's own decode) are done by this
-    // point — only engine.loadTempo()'s decoder configure is left, which has
-    // no progress signal of its own.
     tracker.startDecodePulse();
     await withTimeout(engine.loadTempo(videoBufferCache.get(cacheKey(percent))),DECODE_STEP_TIMEOUT_MS,'Video decoder setup');
     if(myGen!==loadGeneration)return;
+
+    // Everything the new tempo needs — audio bank AND video decoder — is
+    // fully ready. Only now is it safe to stop the OLD tempo's audio and cut
+    // the transport over; nothing above this line can trigger the catch
+    // block below with committed still false.
+    committed=true;
+    playing=false;
+    stopStems();
+    fallbackAudio.pause();
+    buffers=bank;tempoPercent=percent;
     videoCycle=engine.cycleSeconds||LOOP_END;
     const newPos=proportion*videoCycle;
     pausedPos=newPos;
@@ -1255,12 +1300,22 @@ async function changeTempoImpl(percent,tracker,myGen){
     setStatus(percent+'% tempo ready.','good');badge.textContent=playing?'Playing · '+percent+'%':'Audio ready · '+percent+'%';
   }catch(err){
     if(myGen!==loadGeneration)return; // superseded — the newer load's own catch/finally owns recovery now
-    playing=false;stopStems();playBtn.textContent='Play';
-    // Reset/switchMosaic() cancelling this on purpose is not a real failure —
-    // don't log it as an error or alarm the user; whatever cancelled this is
-    // about to do its own thing next.
-    if(tracker.signal.aborted)setStatus('Tempo change cancelled.');
-    else{console.error(err);setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');}
+    if(committed){
+      // Failed after we'd already stopped the OLD tempo and committed to the
+      // new one (e.g. unlockContext()/startStems() below the cutover point) —
+      // there's no clean state left to fall back to, so stop like before.
+      playing=false;stopStems();playBtn.textContent='Play';
+      if(tracker.signal.aborted)setStatus('Tempo change cancelled.');
+      else{console.error(err);setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');}
+    }else{
+      // Failed before touching playback at all (download OR decoder setup) —
+      // the OLD tempo's audio was never stopped and is still playing (or
+      // still paused) exactly as it was before this tempo was tapped. The
+      // picture stays frozen on its last frame either way, same as before.
+      playBtn.textContent=wasPlaying?'Pause':'Play';
+      if(tracker.signal.aborted)setStatus('Tempo change cancelled.');
+      else{console.error(err);setStatus(percent+'% failed to load — still playing at '+tempoPercent+'%. '+(err?.message||err),'error');}
+    }
   }finally{
     if(myGen===loadGeneration){bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);playBtnLoadingDone();}
   }
