@@ -403,7 +403,7 @@ let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 // (which already knows how to put bankBusy/preparing/the buttons back)
 // finishes before anything else touches shared state like buffers/tempoPercent.
 let currentLoad=null, currentLoadPromise=null;
-const FETCH_TIMEOUT_MS=20000; // per-attempt ceiling — a stalled request (sent, but no response ever arrives) otherwise hangs indefinitely; this bounds every fetch, tracker or no
+const FETCH_TIMEOUT_MS=20000; // STALL ceiling (see fetchWithRetry) — resets on every chunk received, so it only fires on real silence, never on a big file that's just slow; bounds every fetch, tracker or no
 let scrubbing=false, scrubWasPlaying=false, scrubPos=0, scrubPointerId=null;
 let startingPlayback=false; // guards a fast double-tap on Play from starting two overlapping playback attempts
 let videoCycle=LOOP_END;
@@ -823,20 +823,22 @@ function tempoUrls(percent){
 // Reading the stream ourselves via getReader() costs no extra network
 // traffic (it's the exact same bytes .arrayBuffer() would already have
 // pulled in and reassembled internally) and only a negligible amount of
-// extra JS bookkeeping — a Uint8Array.set() per chunk — so this is added
-// unconditionally rather than gated behind a flag. Callers that don't pass
-// onChunk (or when a browser doesn't expose a readable stream body) fall
-// straight back to the plain .arrayBuffer() path, unchanged from before.
+// extra JS bookkeeping — a Uint8Array.set() per chunk — so streaming through
+// the reader now always happens when a body is available, whether or not a
+// caller passed onChunk (see armIdle() below for why). Only when a browser
+// doesn't expose a readable stream body at all does this fall straight back
+// to the plain .arrayBuffer() path.
 //
 // signal (a tracker's AbortSignal — see makeLoadProgress()), when passed,
 // lets Reset/switchMosaic() cancel this fetch outright rather than waiting
 // it out — see currentLoad. Every attempt, signal or no signal, is ALSO
-// bounded by FETCH_TIMEOUT_MS on its own internal controller: a request that
-// was sent but never gets a response (observed on a flaky mobile connection)
-// otherwise hangs forever, since plain fetch() has no timeout of its own —
-// that left Reset unable to do anything (it bailed out immediately whenever
-// a tempo switch was in flight) because the switch it was waiting on could
-// never finish, fail, or be interrupted.
+// bounded by FETCH_TIMEOUT_MS on its own internal controller — see armIdle()
+// below for why that's a stall timeout, not a flat ceiling: a request that's
+// sent but never gets so much as one byte back (observed on a flaky mobile
+// connection) otherwise hangs forever, since plain fetch() has no timeout of
+// its own — that left Reset unable to do anything (it bailed out immediately
+// whenever a tempo switch was in flight) because the switch it was waiting
+// on could never finish, fail, or be interrupted.
 async function fetchWithRetry(u,attempts=3,onChunk,signal){
   let lastErr;
   for(let i=0;i<attempts;i++){
@@ -844,7 +846,19 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal){
     const controller=new AbortController();
     const onExternalAbort=()=>controller.abort(signal.reason);
     if(signal)signal.addEventListener('abort',onExternalAbort);
-    const timeoutId=setTimeout(()=>controller.abort(new Error('Timed out waiting for '+u)),FETCH_TIMEOUT_MS);
+    // FETCH_TIMEOUT_MS is a STALL timeout, not a total-transfer-time cap: armIdle
+    // (re)starts the clock, and every real chunk of data that arrives below
+    // pushes the deadline back out again. That distinction matters a lot for a
+    // large file (Abakuá's 50% video can be 60-70MB) on a real but slow mobile
+    // connection — it can legitimately take well past 20s to finish while still
+    // very much alive, and a flat "abort after 20s no matter what" timeout (the
+    // first version of this) would kill that download outright even though
+    // nothing was actually stuck — exactly the tempo-switch-stops bug this
+    // replaced. Only a connection that goes fully silent for FETCH_TIMEOUT_MS —
+    // no bytes at all, not even one small chunk — now counts as hung.
+    let idleTimer=null;
+    const armIdle=()=>{if(idleTimer)clearTimeout(idleTimer);idleTimer=setTimeout(()=>controller.abort(new Error('Timed out waiting for '+u)),FETCH_TIMEOUT_MS);};
+    armIdle();
     try{
       // 'no-cache' (misleadingly named — it still uses the cache) always makes
       // the browser check with the server first: a tiny, near-instant request
@@ -856,15 +870,21 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal){
       // could go on being served stale to returning visitors indefinitely.
       const r=await fetch(u,{cache:'no-cache',signal:controller.signal});
       if(!r.ok)throw new Error('HTTP '+r.status+' for '+u);
-      if(!onChunk||!r.body)return await r.arrayBuffer();
+      // Always stream through the reader when a body is available — even for
+      // callers that didn't pass onChunk — rather than only doing this when
+      // progress tracking was requested. That's what lets armIdle() reset on
+      // every real chunk regardless of caller; a plain .arrayBuffer() call has
+      // no per-chunk visibility to reset a stall timer against.
+      if(!r.body)return await r.arrayBuffer();
       const total=(()=>{const h=+r.headers.get('content-length');return h>0?h:null})();
       const reader=r.body.getReader();
       const chunks=[];let received=0;
       for(;;){
         const {done,value}=await reader.read();
         if(done)break;
+        armIdle(); // real bytes just arrived — push the stall deadline back out
         chunks.push(value);received+=value.byteLength;
-        onChunk(received,total);
+        onChunk?.(received,total);
       }
       const out=new Uint8Array(received);let off=0;
       for(const c of chunks){out.set(c,off);off+=c.byteLength;}
@@ -877,7 +897,7 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal){
       if(signal&&signal.aborted)throw lastErr;
       if(i<attempts-1)await new Promise(res=>setTimeout(res,250*Math.pow(2,i)));
     }finally{
-      clearTimeout(timeoutId);
+      clearTimeout(idleTimer);
       if(signal)signal.removeEventListener('abort',onExternalAbort);
     }
   }
