@@ -17,7 +17,7 @@
    else (Mute blue, Solo yellow, the warm background palette) is untouched. */
 --accent-purple:#8b5cf6;--accent-purple-dim:#5b3ea8;--window-border:#000}
 *{box-sizing:border-box;font-family:'Roboto Condensed',Arial,Helvetica,sans-serif!important}html,body{margin:0;background:var(--bg);color:var(--text)}body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
-.app{max-width:480px;margin:0 auto;padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
+.app{max-width:480px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))}
 /* Piece strip (Aug 2026 redesign): replaces the old separate mobile focus-topbar
    overlay and desktop page-header — one unified bar, identical on mobile and
    desktop, with the hamburger plus a horizontally-scrollable row of pieces.
