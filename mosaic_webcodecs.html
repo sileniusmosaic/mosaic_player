@@ -722,7 +722,7 @@ async function loadVideoBuffer(percent,tracker){
   tracker?.track('video:'+key,0,null);
   const promise=(async()=>{
     setStatus('Downloading '+percent+'% video…');
-    const ab=await fetchWithRetry(VIDEO_SOURCES[percent],3,tracker&&((r,t)=>tracker.track('video:'+key,r,t)),tracker?.signal);
+    const ab=await fetchWithRetry(VIDEO_SOURCES[percent],3,tracker&&((r,t)=>tracker.track('video:'+key,r,t)),tracker?.signal,tracker&&(n=>tracker.retry('video:'+key,n)));
     videoBufferCache.set(key,ab);videoLoads.delete(key);return ab;
   })().catch(e=>{videoLoads.delete(key);throw e});
   videoLoads.set(key,promise);return promise;
@@ -1020,7 +1020,13 @@ function tempoUrls(percent){
 // its own — that left Reset unable to do anything (it bailed out immediately
 // whenever a tempo switch was in flight) because the switch it was waiting
 // on could never finish, fail, or be interrupted.
-async function fetchWithRetry(u,attempts=3,onChunk,signal){
+// onRetry (Aug 2026): fired right before a failed attempt's backoff wait, so
+// the load log can show a slow-looking row was actually N failed attempts
+// stitched together — not one continuously-slow transfer. Never fired on the
+// very last attempt (there's no retry left to announce) or on a caller-
+// initiated cancel (that path throws immediately, see below, without ever
+// reaching this).
+async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry){
   let lastErr;
   for(let i=0;i<attempts;i++){
     if(signal&&signal.aborted)throw signal.reason||new Error('Cancelled');
@@ -1076,7 +1082,7 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal){
       // stop right away, not spend more time retrying — that's the whole
       // point of it. A plain timeout or network blip still retries as before.
       if(signal&&signal.aborted)throw lastErr;
-      if(i<attempts-1)await new Promise(res=>setTimeout(res,250*Math.pow(2,i)));
+      if(i<attempts-1){onRetry?.(i+2,attempts);await new Promise(res=>setTimeout(res,250*Math.pow(2,i)));}
     }finally{
       clearTimeout(idleTimer);
       if(signal)signal.removeEventListener('abort',onExternalAbort);
@@ -1097,7 +1103,7 @@ async function loadBank(percent,tracker){
     // invisible to allDownloaded(), and this bank's own decode-pulse (below)
     // could start climbing the shared fill before the video has even begun.
     urls.forEach((u,i)=>tracker?.track('bank:'+key+':'+i,0,null));
-    const arrays=await Promise.all(urls.map((u,i)=>fetchWithRetry(u,3,tracker&&((r,t)=>tracker.track('bank:'+key+':'+i,r,t)),tracker?.signal)));
+    const arrays=await Promise.all(urls.map((u,i)=>fetchWithRetry(u,3,tracker&&((r,t)=>tracker.track('bank:'+key+':'+i,r,t)),tracker?.signal,tracker&&(n=>tracker.retry('bank:'+key+':'+i,n)))));
     // decodeAudioData below has no progress signal of its own, same as the
     // video decoder — see loadVideoForTempo(). Native AAC decode is normally
     // fast even for a piece's longest (50%) variant, so this is expected to
@@ -1175,6 +1181,12 @@ function makeLoadProgress(label){
   // fetchWithRetry()) — cancel() is how Reset/switchMosaic() break a load
   // that's stuck rather than just disabling controls and hoping.
   const controller=new AbortController();
+  // Retry counters (Aug 2026), split by category same as bytes — a slow-
+  // looking row with a retry count attached tells you it was actually several
+  // failed attempts stitched together (fetchWithRetry() restarts from byte 0
+  // each time), not one continuously-slow transfer. Counts every retry event
+  // across every stem/video fetch in this load, not just the first.
+  const retries={video:0,audio:0};
   function recompute(){
     let received=0,total=0;
     for(const t of tasks.values()){received+=t.received;total+=t.total||0;}
@@ -1208,8 +1220,8 @@ function makeLoadProgress(label){
   function renderLogRow(){
     const cats=recomputeByCategory();
     const bits=[label+' — '+elapsed()];
-    if(cats.video.seen)bits.push('video '+formatMB(cats.video.received)+(cats.video.totalKnown&&cats.video.total>0?' of '+formatMB(cats.video.total):''));
-    if(cats.audio.seen)bits.push('audio '+formatMB(cats.audio.received)+(cats.audio.totalKnown&&cats.audio.total>0?' of '+formatMB(cats.audio.total):''));
+    if(cats.video.seen)bits.push('video '+formatMB(cats.video.received)+(cats.video.totalKnown&&cats.video.total>0?' of '+formatMB(cats.video.total):'')+(retries.video?' ('+retries.video+(retries.video===1?' retry':' retries')+')':''));
+    if(cats.audio.seen)bits.push('audio '+formatMB(cats.audio.received)+(cats.audio.totalKnown&&cats.audio.total>0?' of '+formatMB(cats.audio.total):'')+(retries.audio?' ('+retries.audio+(retries.audio===1?' retry':' retries')+')':''));
     row.textContent=bits.join(' · ')+phase;
   }
   function startRowTimer(){if(rowTimer)return;rowTimer=setInterval(renderLogRow,200);}
@@ -1236,6 +1248,14 @@ function makeLoadProgress(label){
       if(tasks.size===0)return false; // nothing registered yet — don't claim "done"
       for(const t of tasks.values())if(t.total==null||t.received<t.total)return false;
       return true;
+    },
+    // Called by fetchWithRetry()'s onRetry right before it backs off and
+    // tries again — attemptNumber is the attempt about to start (2, 3, ...),
+    // never fired for the attempt that succeeds outright or the one that
+    // finally exhausts all retries and throws.
+    retry(id,attemptNumber){
+      retries[categoryFor(id)]++;
+      renderLogRow();
     },
     startDecodePulse(){
       if(!api.allDownloaded())return; // a sibling fetch is still transferring — let its real progress keep driving the bar instead
