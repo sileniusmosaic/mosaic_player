@@ -139,14 +139,30 @@
 .browse-tile{flex:0 0 auto;width:50px;aspect-ratio:1/1;border-radius:4px;background-color:#030405;background-repeat:no-repeat;border:1px solid var(--border)}
 @media(min-width:620px){.grid-stage{margin-top:8px}}
 /* Desktop (pointer:fine, gated by the .is-desktop class the app sets on
-   <html> at load — see IS_DESKTOP in the script): focus square and tile
-   grid sit side by side instead of stacked, using the extra horizontal
-   room a desktop window has. Everything below the viewer (tempo row,
-   transport, browse list) stays exactly as on mobile, just wider. */
+   <html> at load — see IS_DESKTOP in the script): the 8 tiles split into two
+   4-tile vertical columns flanking the focus square (left column = first
+   half of the tile order, right column = the rest), instead of sitting
+   together as one 4x2 grid to the right the way mobile keeps them. Centering
+   the row (rather than just letting flex pack everything to the left) is
+   what actually puts the focus square in the middle of the screen — with
+   both side columns the same width, the center flex item lands dead center
+   automatically. Everything below the viewer (tempo row, transport, browse
+   list) stays exactly as on mobile, just wider. */
 .is-desktop .app{max-width:1120px}
-.is-desktop .viewer{display:flex;gap:16px;align-items:center}
-.is-desktop .focus-wrap{flex:0 1 520px}
-.is-desktop .grid-stage{flex:1;margin-top:0;align-self:center}
+.is-desktop .viewer{display:flex;gap:16px;align-items:center;justify-content:center}
+/* .focus-column wraps the focus square + notation strip (+ the mobile-only
+   single grid below them) so they size and center as one unit; on mobile
+   .viewer isn't flex at all, so this is just a plain block wrapper there —
+   same visual stacking as before this existed. */
+.focus-column{display:flex;flex-direction:column;gap:8px}
+.is-desktop .focus-column{flex:0 1 520px}
+/* The old single 4x2 grid stays for mobile only; desktop uses the two side
+   columns below instead. */
+.is-desktop #gridStageMobile{display:none}
+.grid-stage-side{display:none}
+.is-desktop .grid-stage-side{position:relative;display:block;aspect-ratio:1/4;width:140px;flex:0 0 auto;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
+.grid-stage-side canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.grid-controls-vert{position:absolute;inset:0;display:grid;grid-template-columns:1fr;grid-template-rows:repeat(4,1fr)}
 /* The old separate mobile focus-topbar overlay + desktop page-header (each
    showing a wordmark/piece-name/burger) are gone — .piece-strip-bar above
    replaces both with one bar identical on mobile and desktop. */
@@ -163,6 +179,21 @@
    piece with no `notation` array in its config — see renderNotation(). */
 .notation-pages img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--border);background:#fff}
 .notation-pages img+img{margin-top:10px}
+/* Notation strip (Aug 2026): a single always-visible line of notation sitting
+   directly under the focus square, matching its width exactly — distinct
+   from .notation-pages above (the full multi-page sheet-music panel that
+   already sits further down the page, between the transport row and the
+   footer). This is deliberately just an <img>, no per-instrument swapping
+   yet (see cfg.notationStrip) — same "static PNG for now" scope as when this
+   was originally planned. Hidden entirely for any piece with no
+   notationStrip set — see renderNotationStrip(). The :not([hidden]) here
+   matters, not just style: .buffering-spinner below has the same guard for
+   the same reason — an unconditional `display:block` on the class has equal
+   specificity to the browser's own `[hidden]{display:none}` UA rule, and an
+   author rule wins ties over a UA rule regardless of source order, so
+   without the guard the element stays visibly on screen even while hidden. */
+.notation-strip:not([hidden]){display:block}
+.notation-strip{width:100%;height:auto;border-radius:6px;border:2px solid var(--window-border);background:#fff}
 </style>
 </head>
 <body>
@@ -173,22 +204,33 @@
     <div id="pieceStrip" class="piece-strip-scroll" role="tablist" aria-label="Choose a piece"></div>
   </div>
   <div class="viewer">
-    <div id="focusWrap" class="focus-wrap">
-      <canvas id="mosaicFocus" class="focus-video"></canvas>
-      <div class="focus-dim"></div>
-      <div class="focus-solo-dim"></div>
-      <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
-        <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
-          <line x1="12" y1="5.3" x2="15.4" y2="16.6"></line>
-          <circle cx="13.95" cy="11" r="1.15"></circle>
-        </svg>
-        <span id="metroNum" class="metro-num"></span>
-      </button>
-      <div id="focusLabel" class="focus-label">Clave</div>
-      <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
+    <!-- Desktop-only: left half of the tile order, stacked vertically. Hidden
+         on mobile (.grid-stage-side is display:none by default); engine only
+         draws into these canvases when IS_DESKTOP — see the script. -->
+    <div class="grid-stage-side grid-stage-left"><canvas id="gridLeft" width="480" height="1920"></canvas><div id="gridControlsLeft" class="grid-controls-vert"></div></div>
+    <div class="focus-column">
+      <div id="focusWrap" class="focus-wrap">
+        <canvas id="mosaicFocus" class="focus-video"></canvas>
+        <div class="focus-dim"></div>
+        <div class="focus-solo-dim"></div>
+        <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
+          <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
+            <line x1="12" y1="5.3" x2="15.4" y2="16.6"></line>
+            <circle cx="13.95" cy="11" r="1.15"></circle>
+          </svg>
+          <span id="metroNum" class="metro-num"></span>
+        </button>
+        <div id="focusLabel" class="focus-label">Clave</div>
+        <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
+      </div>
+      <img id="notationStrip" class="notation-strip" alt="" hidden>
+      <!-- Mobile-only: all 8 tiles as one 4x2 grid, exactly as before. Hidden
+           on desktop (the two grid-stage-side columns above/below replace it
+           there) — see .is-desktop #gridStageMobile in the CSS. -->
+      <div id="gridStageMobile" class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
     </div>
-    <div class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
+    <div class="grid-stage-side grid-stage-right"><canvas id="gridRight" width="480" height="1920"></canvas><div id="gridControlsRight" class="grid-controls-vert"></div></div>
   </div>
   <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary" type="button">Play</button></div></div>
   <section class="panel">
@@ -272,6 +314,11 @@ const MOSAICS={
     // repo, served from the app's own origin. Only Abakuá has this for now;
     // the section stays hidden for any piece with no `notation` array set.
     notation:['abakua_notation_1.png'],
+    // Single-line notation strip shown directly under the focus square at all
+    // times (see renderNotationStrip()) — distinct from the `notation` array
+    // above, which is the full sheet-music page(s) shown further down the
+    // page. Only Abakuá has one for now; hidden entirely for any piece without.
+    notationStrip:'abakua_notation_strip_1.png',
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_',
     stemFiles:['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac']
@@ -327,9 +374,14 @@ let LOOP_END=cfg.loopEnd, NAMES=cfg.names, TILE_COLS=cfg.cols, TILE_ROWS=cfg.row
 let VIDEO_SOURCES=videoSourcesFor(cfg), STEM_URLS=cfg.stemFiles;
 const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
+// Desktop-only split-grid canvases (see the CSS/markup for .grid-stage-side)
+// — each holds half the tiles stacked in one vertical column. Only actually
+// drawn into when IS_DESKTOP (see the engine constructor below); harmless to
+// look up unconditionally since the elements always exist in the DOM.
+const gridLeft=$('#gridLeft'), gctxLeft=gridLeft.getContext('2d',{alpha:false}), gridRight=$('#gridRight'), gctxRight=gridRight.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), settingsBtn=$('#settingsBtn');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -609,8 +661,14 @@ function setStatus(msg,cls=''){status.textContent=msg;status.className='status'+
 // they were never two separately-timed things to begin with. Every tick, video
 // is simply redrawn to match wherever the audio (the real clock) currently is.
 let lastRecoverAt=0;
+// Desktop draws the two split side columns instead of the single mobile grid
+// — pass only the pair that matches the DOM layout actually visible (see
+// .is-desktop #gridStageMobile / .grid-stage-side in the CSS); IS_DESKTOP is
+// read once at load, same as everywhere else it gates layout.
 const engine=new WebCodecsVideoEngine({
-  gridCanvas:grid, focusCanvas:focusCanvas,
+  gridCanvas:IS_DESKTOP?undefined:grid,
+  gridCanvasLeft:IS_DESKTOP?gridLeft:undefined, gridCanvasRight:IS_DESKTOP?gridRight:undefined,
+  focusCanvas:focusCanvas,
   cols:TILE_COLS, rows:TILE_ROWS, tileCount:TILE_COUNT,
   onStatus:(msg,cls)=>setStatus(msg,cls),
   onError:(err)=>{
@@ -712,17 +770,34 @@ function tileSource(i,w,h){const tw=w/TILE_COLS,th=h/TILE_ROWS;return [(i%TILE_C
 // just shows the buffering spinner (see paintAt()) until the real frame is
 // ready, so it only ever displays one, full-resolution picture instead of a
 // blurry placeholder that then visibly upgrades itself.
+// drawOneTile() is the shared per-tile poster paint step (crop + mute/solo
+// wash + selection outline) — factored out so both the mobile single-grid
+// layout and the desktop split-column layout can each place it wherever
+// their own geometry calls for, without duplicating the visual logic.
+function drawOneTile(ctx,i,w,h,dx,dy,S,Sh,anySolo){
+  const [sx,sy,sw,sh]=tileSource(i,w,h);
+  ctx.drawImage(poster,sx,sy,sw,sh,dx,dy,S,Sh);
+  if(muted[i]){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(dx,dy,S,Sh)}
+  else if(anySolo&&!soloed[i]){ctx.fillStyle='rgba(130,130,130,.55)';ctx.fillRect(dx,dy,S,Sh)}
+  ctx.strokeStyle=i===selected?'#63d7ff':'#050607';ctx.lineWidth=i===selected?4:2;ctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
+}
 function drawPoster(){
   if(!poster.complete||!poster.naturalWidth)return;
   const w=poster.naturalWidth,h=poster.naturalHeight;
-  const S=grid.width/TILE_COLS,Sh=grid.height/TILE_ROWS;
   const anySolo=soloed.some(Boolean);
-  for(let i=0;i<TILE_COUNT;i++){
-    const [sx,sy,sw,sh]=tileSource(i,w,h),dx=(i%TILE_COLS)*S,dy=Math.floor(i/TILE_COLS)*Sh;
-    gctx.drawImage(poster,sx,sy,sw,sh,dx,dy,S,Sh);
-    if(muted[i]){gctx.fillStyle='rgba(0,0,0,.55)';gctx.fillRect(dx,dy,S,Sh)}
-    else if(anySolo&&!soloed[i]){gctx.fillStyle='rgba(130,130,130,.55)';gctx.fillRect(dx,dy,S,Sh)}
-    gctx.strokeStyle=i===selected?'#63d7ff':'#050607';gctx.lineWidth=i===selected?4:2;gctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
+  if(IS_DESKTOP){
+    const half=Math.ceil(TILE_COLS*TILE_ROWS/2);
+    const drawColumn=(ctx,startIdx)=>{
+      const S=ctx.canvas.width,Sh=ctx.canvas.height/half;
+      for(let n=0;n<half;n++){
+        const i=startIdx+n;if(i>=TILE_COUNT)break;
+        drawOneTile(ctx,i,w,h,0,n*Sh,S,Sh,anySolo);
+      }
+    };
+    drawColumn(gctxLeft,0);drawColumn(gctxRight,half);
+  }else{
+    const S=grid.width/TILE_COLS,Sh=grid.height/TILE_ROWS;
+    for(let i=0;i<TILE_COUNT;i++)drawOneTile(gctx,i,w,h,(i%TILE_COLS)*S,Math.floor(i/TILE_COLS)*Sh,S,Sh,anySolo);
   }
 }
 function updateFocusUI(){
@@ -754,9 +829,18 @@ function refreshSoloMuteState(){
   engine.soloDim=soloed.map(s=>anySolo&&!s);
   updateFocusUI();
 }
+// On desktop, tiles split across two containers (#gridControlsLeft for the
+// first half of the tile order, #gridControlsRight for the rest) instead of
+// all living in the single #gridControls grid mobile uses — see the
+// grid-stage-side markup/CSS and the split-canvas engine setup above.
+// Appending left's tiles before right's (both containers coming before
+// #gridControls in this desktop branch doesn't matter since it stays empty)
+// keeps document order 0..7 matching NAMES/tileEls order either way, which
+// the click handler below relies on via querySelectorAll('.tile').
 function buildControls(){
-  controls.innerHTML=''; // clear any tiles from a previously-loaded mosaic
+  controls.innerHTML='';controlsLeft.innerHTML='';controlsRight.innerHTML=''; // clear any tiles from a previously-loaded mosaic
   tileEls=[];muteBtns=[];soloBtns=[];
+  const half=Math.ceil(TILE_COLS*TILE_ROWS/2);
   NAMES.forEach((name,i)=>{
     const t=document.createElement('div');t.className='tile';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
@@ -768,13 +852,15 @@ function buildControls(){
     if(IS_DESKTOP){solo=document.createElement('button');solo.type='button';solo.className='dawBtn soloBtn';solo.textContent='S';solo.setAttribute('aria-label','Solo '+name);}
     const mute=document.createElement('button');mute.type='button';mute.className='dawBtn muteBtn';mute.textContent='M';mute.setAttribute('aria-label','Mute '+name);
     const label=document.createElement('span');label.className='tile-name';label.textContent=name;
-    t.appendChild(label);t.appendChild(tap);if(solo)t.appendChild(solo);t.appendChild(mute);controls.appendChild(t);
+    t.appendChild(label);t.appendChild(tap);if(solo)t.appendChild(solo);t.appendChild(mute);
+    const target=IS_DESKTOP?(i<half?controlsLeft:controlsRight):controls;
+    target.appendChild(t);
     tileEls.push(t);muteBtns.push(mute);soloBtns.push(solo);
     tap.addEventListener('click',()=>{selected=i;document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));updateFocusUI();});
     if(solo)solo.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();soloed[i]=!soloed[i];solo.setAttribute('aria-label',(soloed[i]?'Unsolo ':'Solo ')+name);refreshSoloMuteState();});
     mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);refreshSoloMuteState();});
   });
-  if(controls.children[0])controls.children[0].classList.add('is-selected');
+  if(tileEls[0])tileEls[0].classList.add('is-selected');
 }
 function buildMosaicRail(){
   mosaicRail.innerHTML='';
@@ -856,6 +942,13 @@ function renderNotation(){
     notationPages.appendChild(img);
   });
   notationPanel.hidden=false;
+}
+// The always-visible single-line strip under the focus square (cfg.notationStrip)
+// — separate from the full sheet-music panel above. Hidden entirely for any
+// piece without one set, same pattern as renderNotation().
+function renderNotationStrip(){
+  if(cfg.notationStrip){notationStrip.src=cfg.notationStrip;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;}
+  else{notationStrip.hidden=true;notationStrip.removeAttribute('src');}
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
 function currentPos(){
@@ -1378,15 +1471,22 @@ async function switchMosaic(id){
     document.title='Mosaic — '+cfg.label;
     setPieceNameText(cfg.label);
     poster.src=cfg.poster;
-    renderNotation();
+    renderNotation();renderNotationStrip();
     timeline.max=String(LOOP_END);timeline.value='0';
 
-    // Wipe the grid canvas before drawing anything for the new mosaic. Without
-    // this, a piece with fewer tiles than the previous one (e.g. Flip Swing's 7
-    // vs Congo/Abakuá's 8) never repaints the leftover cell(s) — nothing in
-    // drawGridFromSource() ever touches indices >= the new tileCount, so
-    // whatever was drawn there by the OLD mosaic just sits frozen on screen.
-    gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
+    // Wipe the grid canvas(es) before drawing anything for the new mosaic.
+    // Without this, a piece with fewer tiles than the previous one (e.g. Flip
+    // Swing's 7 vs Congo/Abakuá's 8) never repaints the leftover cell(s) —
+    // nothing in drawGridFromSource()/drawTileColumn() ever touches indices
+    // >= the new tileCount, so whatever was drawn there by the OLD mosaic
+    // just sits frozen on screen. Only the layout actually in use (mobile's
+    // single grid vs desktop's two side columns) needs wiping.
+    if(IS_DESKTOP){
+      gctxLeft.fillStyle='#030405';gctxLeft.fillRect(0,0,gridLeft.width,gridLeft.height);
+      gctxRight.fillStyle='#030405';gctxRight.fillRect(0,0,gridRight.width,gridRight.height);
+    }else{
+      gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
+    }
     focusCtx.fillStyle='#030405';focusCtx.fillRect(0,0,focusCanvas.width,focusCanvas.height);
 
     buildControls();buildMosaicRail();buildPieceStrip();
@@ -1701,7 +1801,7 @@ metroActive=metroReady();
 metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
-buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();updateFocusUI();updateUI();
+buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();updateFocusUI();updateUI();
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
 loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});

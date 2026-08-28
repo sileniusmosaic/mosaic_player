@@ -20,8 +20,16 @@ class WebCodecsVideoEngine {
   // source video and never draws/selects them). Per-mosaic layout is settable
   // after construction via setLayout(), since one player instance now switches
   // between multiple pieces rather than being built for a single fixed grid.
-  constructor({ gridCanvas, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8 }) {
-    this.gridCtx = gridCanvas.getContext('2d', { alpha: false });
+  // gridCanvas draws the whole tileCount grid as one cols x rows composite
+  // (mobile layout). gridCanvasLeft/gridCanvasRight are an alternative, mutually
+  // exclusive with gridCanvas: each draws one vertical single-column stack of
+  // half the tiles (desktop's "tiles flank the focus square" layout) — pass
+  // whichever pair matches the layout actually in the DOM; the other stays
+  // null and _draw() simply skips it.
+  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8 }) {
+    this.gridCtx = gridCanvas ? gridCanvas.getContext('2d', { alpha: false }) : null;
+    this.gridLeftCtx = gridCanvasLeft ? gridCanvasLeft.getContext('2d', { alpha: false }) : null;
+    this.gridRightCtx = gridCanvasRight ? gridCanvasRight.getContext('2d', { alpha: false }) : null;
     this.focusCtx = focusCanvas.getContext('2d', { alpha: false });
     this.onStatus = onStatus || (() => {});
     this.onError = onError || (() => {});
@@ -270,7 +278,20 @@ class WebCodecsVideoEngine {
       this._offscreenCtx = this._offscreen.getContext('2d', { alpha: false });
     }
     this._offscreenCtx.drawImage(frame, 0, 0, w, h); // full-frame blit — no cropping here, universally safe
-    drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim);
+    if (this.gridCtx) {
+      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim);
+    }
+    if (this.gridLeftCtx || this.gridRightCtx) {
+      // Split layout: first half of the flat tile index list (reading order —
+      // e.g. tiles 1-4 of 8) stacks in the left column, the rest in the right
+      // column. A piece with an odd/short tileCount (e.g. 7) just leaves the
+      // column's last cell blank, same as the single-grid layout already does.
+      const half = Math.ceil((this.cols * this.rows) / 2);
+      const leftIdx = [], rightIdx = [];
+      for (let i = 0; i < this.tileCount; i++) (i < half ? leftIdx : rightIdx).push(i);
+      if (this.gridLeftCtx) drawTileColumn(this.gridLeftCtx, this._offscreen, w, h, leftIdx, this.muted, this.selected, this.cols, this.rows, this.soloDim, half);
+      if (this.gridRightCtx) drawTileColumn(this.gridRightCtx, this._offscreen, w, h, rightIdx, this.muted, this.selected, this.cols, this.rows, this.soloDim, half);
+    }
     drawFocusFromSource(this.focusCtx, this._offscreen, w, h, this.selected, this.cols, this.rows);
   }
 }
@@ -298,6 +319,27 @@ function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows =
     ctx.lineWidth = i === selected ? 4 : 2;
     ctx.strokeRect(dx + 1, dy + 1, S - 2, Sh - 2);
   }
+}
+
+// Desktop split layout: draws `indices` (already the subset destined for this
+// particular column, in top-to-bottom order) as a single vertical stack of
+// `slots` cells — the canvas itself is expected to be sized for exactly that
+// many cells (see the CSS aspect-ratio on .grid-stage-side). Cropping still
+// reads each tile from its ORIGINAL position in the source composite via
+// tileRect(i, ...) — only the destination placement changes from "2D grid
+// cell" to "n-th cell in this column".
+function drawTileColumn(ctx, source, w, h, indices, muted, selected, cols, rows, soloDim, slots) {
+  const S = ctx.canvas.width, Sh = ctx.canvas.height / slots;
+  indices.forEach((i, n) => {
+    const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
+    const dx = 0, dy = n * Sh;
+    ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
+    if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S, Sh); }
+    else if (soloDim && soloDim[i]) { ctx.fillStyle = 'rgba(130,130,130,.55)'; ctx.fillRect(dx, dy, S, Sh); }
+    ctx.strokeStyle = i === selected ? '#cbe0e6' : 'rgba(203,224,230,0.35)';
+    ctx.lineWidth = i === selected ? 4 : 2;
+    ctx.strokeRect(dx + 1, dy + 1, S - 2, Sh - 2);
+  });
 }
 
 function drawFocusFromSource(ctx, source, w, h, selected, cols = 4, rows = 2) {
