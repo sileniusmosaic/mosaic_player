@@ -1557,11 +1557,13 @@ function resetFpsReadout(){fpsWindowStart=performance.now();fpsChangeCount=0;sho
 let lastDisplayedTs=null,lastDisplayedChangeAt=performance.now(),pictureStalled=false;
 let lastRecoveryAttemptAt=0,recoveryAttempts=0;
 let lastFrameCountCheckAt=performance.now(),lastFrameCountSeen=0,decoderConfirmedAlive=false;
+let decoderRebuildInFlight=false;
 const STALL_SHOW_SPINNER_MS=800,STALL_AUTO_RECOVER_MS=3500,STALL_MAX_AUTO_RECOVERIES=3,DECODER_ALIVE_CHECK_MS=1800;
 function resetStallWatchdog(){
   lastDisplayedTs=null;lastDisplayedChangeAt=performance.now();pictureStalled=false;
   recoveryAttempts=0;lastRecoveryAttemptAt=0;
   lastFrameCountCheckAt=performance.now();lastFrameCountSeen=engine.decodedFrameCount;decoderConfirmedAlive=false;
+  decoderRebuildInFlight=false;
   bufferingSpinner.hidden=true;
   resetFpsReadout();
 }
@@ -1619,8 +1621,29 @@ function tick(now=performance.now()){
     if(pictureStalled&&!decoderConfirmedAlive&&stalledFor>STALL_AUTO_RECOVER_MS&&now-lastRecoveryAttemptAt>STALL_AUTO_RECOVER_MS){
       if(recoveryAttempts<STALL_MAX_AUTO_RECOVERIES){
         recoveryAttempts++;lastRecoveryAttemptAt=now;
-        console.warn('Decoder produced zero frames for '+Math.round(stalledFor)+'ms — auto-recovering (attempt '+recoveryAttempts+' of '+STALL_MAX_AUTO_RECOVERIES+').');
-        engine.seekTo(wrappedAudioPos());
+        // A stalled-but-alive decoder just needs a reseek to nudge it. But if the
+        // decoder object itself has actually died (real-world hardware/Android
+        // decoder contention can do this — see wc-engine.js's own notes), it's no
+        // longer in the 'configured' state, and seekTo() is a documented complete
+        // no-op in that case (it only resets+reconfigures an already-configured
+        // decoder) — so all 3 "recovery" attempts would silently do nothing and
+        // we'd give up on a picture that could have been revived. Detect that
+        // case and rebuild a fresh decoder from the tempo's already-cached video
+        // buffer instead (the same call a manual tempo switch makes), then seek
+        // it to the current position to resume the decode-ahead pump.
+        const decoderDead=!engine.decoder||engine.decoder.state!=='configured';
+        console.warn('Decoder produced zero frames for '+Math.round(stalledFor)+'ms — auto-recovering (attempt '+recoveryAttempts+' of '+STALL_MAX_AUTO_RECOVERIES+')'+(decoderDead?' — decoder is dead, rebuilding it':' — reseeking')+'.');
+        if(decoderDead&&!decoderRebuildInFlight&&!bankBusy&&!preparing){
+          const cachedBuf=videoBufferCache.get(cacheKey(tempoPercent));
+          if(cachedBuf){
+            decoderRebuildInFlight=true;
+            engine.loadTempo(cachedBuf).then(()=>{engine.seekTo(wrappedAudioPos())}).catch(err=>{console.error('Decoder rebuild failed:',err)}).finally(()=>{decoderRebuildInFlight=false});
+          }else{
+            engine.seekTo(wrappedAudioPos()); // no cached buffer to rebuild from — fall back to the old (no-op-if-dead) behaviour
+          }
+        }else{
+          engine.seekTo(wrappedAudioPos());
+        }
       }else{
         setStatus('Picture is stuck on this device — audio is still perfectly in time.','error');
       }
