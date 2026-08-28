@@ -1504,8 +1504,22 @@ async function changeTempoImpl(percent,tracker,myGen){
   }
 }
 function prefetchTempoBanks(){
-  setTimeout(()=>{
+  setTimeout(async()=>{
     for(const p of TEMPO_PRESETS){
+      if(p===tempoPercent)continue;
+      // Never start a prefetch while a foreground load is in flight (Aug
+      // 2026) — currentLoadPromise is set by ensurePrepared()/changeTempo()
+      // for exactly as long as the user has something real to wait on. Two
+      // large video downloads sharing one connection split the bandwidth
+      // between them, which measurably slowed down whichever one the user
+      // was actually waiting for — this was visible in the load log as a
+      // manual switch taking noticeably longer whenever a prefetch happened
+      // to be running at the same moment. A `while` (not `if`) re-checks
+      // after waiting, since a fresh foreground load can start in the instant
+      // after the previous one settles.
+      while(currentLoadPromise){await currentLoadPromise.catch(()=>{});}
+      // The selected tempo may have changed while we were waiting — re-check
+      // rather than prefetching one the user has since switched away from.
       if(p===tempoPercent)continue;
       for(const u of tempoUrls(p)){const l=document.createElement('link');l.rel='prefetch';l.as='fetch';l.href=u;l.crossOrigin='anonymous';document.head.appendChild(l)}
       // Logged (Aug 2026) via its own makeLoadProgress(), deliberately NOT
@@ -1517,7 +1531,16 @@ function prefetchTempoBanks(){
       // check meant no video fetch happened at that moment at all — it had
       // already happened here, invisibly. Now it gets its own row instead.
       const t=makeLoadProgress(cfg.label+' '+p+'% (prefetch)');
-      loadVideoBuffer(p,t).then(()=>t.stop('good')).catch(()=>t.stop('error'));
+      // Awaited now, not fire-and-forget (Aug 2026) — so if there's more than
+      // one other tempo to prefetch, they run one at a time instead of both
+      // racing each other for the same bandwidth. Known remaining edge case:
+      // if a manual switch starts WHILE this fetch is already mid-flight (not
+      // just before it), the two will still share bandwidth for whatever's
+      // left of this download — genuinely pausing/cancelling an in-progress
+      // prefetch to fully hand over bandwidth would need real work (aborting
+      // loses whatever's already downloaded), left for later if it turns out
+      // to matter in practice.
+      await loadVideoBuffer(p,t).then(()=>t.stop('good')).catch(()=>t.stop('error'));
     }
   },1200);
 }
