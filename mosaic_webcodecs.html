@@ -127,6 +127,17 @@
 .status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
 .note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
+/* Load log (Aug 2026): replaces the old single #loadBytesReadout line, which
+   cleared the instant a load finished — not useful for comparing several
+   loads against each other on a flaky connection. Newest entry on top (see
+   loadLog.prepend() in makeLoadProgress()), capped at MAX_LOAD_LOG_ENTRIES so
+   a long test session doesn't grow the DOM without bound. Monospace so the
+   byte/second columns stay visually aligned entry to entry. */
+.load-log{margin-top:8px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+.load-log-entry{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);line-height:1.4;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.load-log-entry:last-child{border-bottom:none;padding-bottom:0}
+.load-log-entry.good{color:var(--good)}
+.load-log-entry.error{color:var(--danger)}
 .browse-panel .rail-title{margin-bottom:8px}
 .browse-list{display:flex;flex-direction:column}
 .browse-item{display:flex;flex-direction:column;gap:7px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;text-align:left;font:inherit;color:inherit;width:100%}
@@ -252,7 +263,11 @@
        are unused now but left defined in case this needs to come back. -->
   <section class="panel footer-panel">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
-    <div id="loadBytesReadout" class="note" hidden></div>
+    <!-- Load log (Aug 2026): a running, session-only record of every load —
+         see makeLoadProgress()/renderLoadLogEntry(). Newest entry on top;
+         wiped only on a real page refresh, not between loads, so it can be
+         used to compare load times/sizes across a testing session. -->
+    <div id="loadLog" class="load-log"></div>
     <p class="note" id="noteText">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
     <div id="fpsReadout" class="note" hidden></div>
     <div id="badge" class="badge" hidden>Ready to start</div>
@@ -385,14 +400,14 @@ const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controls
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout'), loadBytesReadout=$('#loadBytesReadout');
-// Numeric "X.XMB of Y.YMB" readout next to the status line — separate from
-// the Play button's 0-1 visual fill (setPlayFill) so a real byte count is
-// always visible alongside it, including the specific case that visual fill
-// alone can't distinguish: bytes fully downloaded but still waiting on the
-// (unmeasurable, no-progress-signal) local decode step afterward.
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout'), loadLog=$('#loadLog');
+// Numeric byte/timing log — separate from the Play button's 0-1 visual fill
+// (setPlayFill) so a real byte count and elapsed time are always visible,
+// including the specific case that visual fill alone can't distinguish:
+// bytes fully downloaded but still waiting on the (unmeasurable, no-
+// progress-signal) local decode step afterward. See makeLoadProgress().
 function formatMB(bytes){return (bytes/1048576).toFixed(1)+'MB';}
-function setLoadBytesReadout(text){loadBytesReadout.hidden=!text;loadBytesReadout.textContent=text||'';}
+const MAX_LOAD_LOG_ENTRIES=25; // caps DOM growth across a long test session
 // Visual beat counter, off by default, only enabled for pieces with
 // beatsPerBar+bars set in their config (Flip Swing for now). Deliberately
 // NOT tied to tempoPercent or any per-tempo number — it derives
@@ -1145,7 +1160,15 @@ function setPlayFill(f){playBtn.style.setProperty('--play-progress',String(clamp
 // sibling fetch that's genuinely still transferring, reintroducing the same
 // "claims to be further along than it is" problem this whole feature exists
 // to fix.
-function makeLoadProgress(){
+// Each tracked fetch's id is prefixed 'video:' (loadVideoBuffer) or 'bank:'
+// (loadBank, one per stem) — bucketing by that prefix is what lets the log
+// show video and audio as two separate numbers instead of one combined
+// total. Requested Aug 28 2026: on a real connection, audio (small, often
+// same-origin/bundled) finishes almost instantly while video (much larger,
+// R2-hosted) is still the one actually taking the time — a single merged
+// number made it look like nothing but audio was ever being tracked.
+function categoryFor(id){return id.startsWith('video:')?'video':'audio';}
+function makeLoadProgress(label){
   const tasks=new Map();
   let pulseTimer=null,pulseVal=0,highWater=0;
   // Owns the AbortSignal every fetch in this one load is started with (see
@@ -1157,20 +1180,41 @@ function makeLoadProgress(){
     for(const t of tasks.values()){received+=t.received;total+=t.total||0;}
     return total>0?received/total:null;
   }
-  // Same sums as recompute(), but exposed as raw bytes (not a 0-1 fraction)
-  // for the numeric readout — and separately reports whether every task has
-  // reported a real content-length yet, since "received/total" can look
-  // deceptively complete while one sibling fetch's total is still unknown.
-  function recomputeBytes(){
-    let received=0,total=0,totalKnown=tasks.size>0;
-    for(const t of tasks.values()){received+=t.received;if(t.total){total+=t.total;}else{totalKnown=false;}}
-    return{received,total,totalKnown};
+  // Same sums as recompute(), but split by category and exposed as raw bytes
+  // (not a 0-1 fraction) for the log — and per category, whether every task
+  // in it has reported a real content-length yet, since "received/total" can
+  // look deceptively complete while one sibling fetch's total is still
+  // unknown.
+  function recomputeByCategory(){
+    const cats={video:{received:0,total:0,totalKnown:true,seen:false},audio:{received:0,total:0,totalKnown:true,seen:false}};
+    for(const[id,t] of tasks){
+      const c=cats[categoryFor(id)];c.seen=true;c.received+=t.received;
+      if(t.total)c.total+=t.total;else c.totalKnown=false;
+    }
+    return cats;
   }
-  function refreshBytesReadout(suffix){
-    const{received,total,totalKnown}=recomputeBytes();
-    if(totalKnown&&total>0)setLoadBytesReadout(formatMB(received)+' of '+formatMB(total)+(suffix||''));
-    else setLoadBytesReadout(formatMB(received)+' downloaded'+(suffix||''));
+  // --- session load log (Aug 2026) ------------------------------------
+  // One row per load, newest on top, kept on screen (not cleared) until the
+  // page actually refreshes — see loadLog markup/CSS. startedAt/elapsed()
+  // give each row its own timer, ticking while the load is in flight and
+  // frozen at whatever renderLogRow() last wrote once stop() fires.
+  const startedAt=performance.now();
+  const row=document.createElement('div');
+  row.className='load-log-entry';
+  loadLog.prepend(row);
+  while(loadLog.children.length>MAX_LOAD_LOG_ENTRIES)loadLog.removeChild(loadLog.lastChild);
+  let phase='',rowTimer=null;
+  function elapsed(){return((performance.now()-startedAt)/1000).toFixed(1)+'s';}
+  function renderLogRow(){
+    const cats=recomputeByCategory();
+    const bits=[label+' — '+elapsed()];
+    if(cats.video.seen)bits.push('video '+formatMB(cats.video.received)+(cats.video.totalKnown&&cats.video.total>0?' of '+formatMB(cats.video.total):''));
+    if(cats.audio.seen)bits.push('audio '+formatMB(cats.audio.received)+(cats.audio.totalKnown&&cats.audio.total>0?' of '+formatMB(cats.audio.total):''));
+    row.textContent=bits.join(' · ')+phase;
   }
+  function startRowTimer(){if(rowTimer)return;rowTimer=setInterval(renderLogRow,200);}
+  function stopRowTimer(){if(rowTimer){clearInterval(rowTimer);rowTimer=null;}}
+  startRowTimer();
   // The fill only ever moves forward. Real bytes for a fetch that only just
   // started (e.g. video, registering its first small chunk right as the
   // audio bank's decode-pulse has already crept the shared fraction up)
@@ -1186,7 +1230,7 @@ function makeLoadProgress(){
       tasks.set(id,{received,total});
       const f=recompute();
       if(f!==null)advance(Math.min(f,0.96));
-      refreshBytesReadout();
+      renderLogRow();
     },
     allDownloaded(){
       if(tasks.size===0)return false; // nothing registered yet — don't claim "done"
@@ -1198,27 +1242,43 @@ function makeLoadProgress(){
       stopPulse();
       pulseVal=Math.max(pulseVal,highWater,0.55); // downloads that never reported a usable total (no content-length) start the pulse from a reasonable midpoint instead of 0
       // Every byte is in hand at this point — the fill's own pulse keeps
-      // creeping forward with no real signal behind it, but the numeric
-      // readout can at least say plainly that the download itself is done
-      // and name the step that's actually still running.
-      refreshBytesReadout(' — download complete, finishing setup…');
+      // creeping forward with no real signal behind it, but the log can at
+      // least say plainly that the download itself is done and name the
+      // step that's actually still running.
+      phase=' — finishing setup…';renderLogRow();
       const step=()=>{pulseVal+=(0.985-pulseVal)*0.06;advance(pulseVal);pulseTimer=setTimeout(step,180);};
       step();
     },
     cancel(reason){controller.abort(reason||new Error('Cancelled'));stopPulse();},
-    stop(){stopPulse();setLoadBytesReadout('');}
+    // Freezes this load's row for good — called exactly once per load, from
+    // playBtnLoadingDone() (normal completion/failure) or pre-emptively by
+    // playBtnLoadingStart() if a newer load starts while this one was still
+    // abandoned/stuck. Colors the row to match whatever #status ended up
+    // saying (set by the caller's own try/catch just before this runs), so
+    // a failed or cancelled load is visually distinguishable at a glance
+    // without threading a separate success/fail flag through every call site.
+    // A silent background load (the initial page-load video fetch, or
+    // prefetchTempoBanks()) has no foreground #status message of its own to
+    // read — passing explicitClass lets those call sites say directly
+    // whether their own promise resolved or rejected instead.
+    stop(explicitClass){
+      stopPulse();stopRowTimer();
+      const cls=explicitClass||(status.classList.contains('good')?'good':status.classList.contains('error')?'error':'');
+      if(cls)row.classList.add(cls);
+      renderLogRow();
+    }
   };
   return api;
 }
 let currentLoadProgress=null;
-function playBtnLoadingStart(){
+function playBtnLoadingStart(label){
   if(currentLoadProgress)currentLoadProgress.stop();
   playBtn.classList.add('reset-instant');
   playBtn.classList.add('is-loading');
   setPlayFill(0);
   void playBtn.offsetWidth; // force layout so the instant reset above actually commits before the transition below re-engages
   playBtn.classList.remove('reset-instant');
-  currentLoadProgress=makeLoadProgress();
+  currentLoadProgress=makeLoadProgress(label);
   return currentLoadProgress;
 }
 function playBtnLoadingDone(){
@@ -1241,7 +1301,7 @@ function playBtnLoadingDone(){
 async function ensurePrepared(){
   if(prepared)return true;if(preparing)return false;preparing=true;
   const myGen=++loadGeneration;
-  const tracker=playBtnLoadingStart();
+  const tracker=playBtnLoadingStart(cfg.label+' '+tempoPercent+'% (prepare)');
   currentLoad=tracker;
   currentLoadPromise=ensurePreparedImpl(tracker,myGen);
   try{return await currentLoadPromise;}
@@ -1315,7 +1375,7 @@ async function changeTempo(percent){
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
   bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
   const myGen=++loadGeneration;
-  const tracker=playBtnLoadingStart();
+  const tracker=playBtnLoadingStart(cfg.label+' '+percent+'% (switch)');
   currentLoad=tracker;
   currentLoadPromise=changeTempoImpl(percent,tracker,myGen);
   try{await currentLoadPromise;}
@@ -1418,7 +1478,16 @@ function prefetchTempoBanks(){
     for(const p of TEMPO_PRESETS){
       if(p===tempoPercent)continue;
       for(const u of tempoUrls(p)){const l=document.createElement('link');l.rel='prefetch';l.as='fetch';l.href=u;l.crossOrigin='anonymous';document.head.appendChild(l)}
-      loadVideoBuffer(p).catch(()=>{});
+      // Logged (Aug 2026) via its own makeLoadProgress(), deliberately NOT
+      // routed through playBtnLoadingStart() — this stays a background load
+      // that never touches the Play button's fill/state, only the log. Before
+      // this, this prefetch silently downloading the OTHER tempo's video (the
+      // large asset) was exactly why a later manual tempo tap only ever
+      // logged audio: by the time you tapped it, loadVideoBuffer()'s cache
+      // check meant no video fetch happened at that moment at all — it had
+      // already happened here, invisibly. Now it gets its own row instead.
+      const t=makeLoadProgress(cfg.label+' '+p+'% (prefetch)');
+      loadVideoBuffer(p,t).then(()=>t.stop('good')).catch(()=>t.stop('error'));
     }
   },1200);
 }
@@ -1503,7 +1572,19 @@ async function switchMosaic(id){
     badge.textContent='Ready to start';playBtn.textContent='Play';
     setStatus('Loading '+cfg.label+'…');
 
-    await loadVideoForTempo(100,false);
+    // Logged (Aug 2026) the same way the initial page-load video fetch and
+    // prefetchTempoBanks() are — a piece switch's 100% video is a third
+    // previously-invisible video download.
+    {
+      const switchVideoTracker=makeLoadProgress(cfg.label+' 100% (piece switch)');
+      try{
+        await loadVideoForTempo(100,false,switchVideoTracker);
+        switchVideoTracker.stop('good');
+      }catch(err){
+        switchVideoTracker.stop('error');
+        throw err; // outer catch below still owns the failure status message
+      }
+    }
     paintAt(0);
     setStatus('Tap Play to start '+cfg.label+'.');
   }catch(err){
@@ -1565,8 +1646,27 @@ async function reset(){
       prefetchTempoBanks();
     }else if(tempoPercent!==100){
       bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
-      const [bank]=await Promise.all([loadBank(100),loadVideoForTempo(100,false)]);
-      buffers=bank;tempoPercent=100;updateTempoUI();
+      // Tracked (Aug 2026) the same way ensurePrepared()/changeTempo() are,
+      // purely so this reload shows up in the load log too — Reset is one of
+      // the main actions used while testing a flaky connection, and it was
+      // previously the one load path with no visibility into it at all.
+      // Deliberately NOT wired into currentLoad/loadGeneration like those two
+      // — this stays a smaller, additive change rather than making Reset's
+      // own fallback reload cancellable by a concurrent action, which is a
+      // bigger change than "for now" calls for.
+      const tracker=playBtnLoadingStart(cfg.label+' 100% (reset)');
+      try{
+        const [bank]=await Promise.all([loadBank(100,tracker),loadVideoForTempo(100,false,tracker)]);
+        buffers=bank;tempoPercent=100;updateTempoUI();
+        // Immediately superseded by the shared "Reset — …" status set further
+        // down once every branch of this if/else-if finishes — set only so
+        // playBtnLoadingDone() (which colors the log row from #status's
+        // current class) marks this row good/error correctly either way.
+        setStatus(cfg.label+' 100% reloaded.','good');
+      }catch(err){
+        setStatus('Reset: 100% reload failed — '+(err?.message||err),'error');
+        throw err; // outer catch still owns disabling/re-enabling + the user-facing message
+      }finally{playBtnLoadingDone();}
       bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
     }else if(engine.info){
       engine.seekTo(0);
@@ -1804,7 +1904,13 @@ metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
 buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();updateFocusUI();updateUI();
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
-loadVideoForTempo(100,false).then(()=>paintAt(0)).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');});
+// Logged (Aug 2026) the same way prefetchTempoBanks() is — this is the OTHER
+// silent video fetch that used to leave the log with nothing to show for the
+// very first video download of the session (before Play is ever pressed).
+{
+  const initialVideoTracker=makeLoadProgress(cfg.label+' 100% (initial video)');
+  loadVideoForTempo(100,false,initialVideoTracker).then(()=>{paintAt(0);initialVideoTracker.stop('good');}).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');initialVideoTracker.stop('error');});
+}
 })();
 </script>
 </body>
