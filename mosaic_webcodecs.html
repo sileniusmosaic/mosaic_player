@@ -335,8 +335,18 @@ const MOSAICS={
     // page. Only Abakuá has one for now; hidden entirely for any piece without.
     notationStrip:'abakua_notation_strip_1.png',
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
-    videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/abakua_4x2_1920x960_',
-    stemFiles:['01_clave_abakua.aac','02_bembe_abakua.aac','03_cata_abakua.aac','04_erikundi_abakua.aac','05_quinto_abakua.aac','06_conga_abakua.aac','07_tumba_abakua.aac','08_coro_abakua.aac']
+    // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
+    // bundled into the git repo/Worker static assets while every other
+    // piece's audio and everyone's video lived in R2. Moved into the same
+    // multi-cam-media bucket as everything else so there's a single source
+    // of truth for media. Using the custom domain (not pub-...r2.dev) since
+    // Cloudflare's own docs say r2.dev is for testing only and can be
+    // throttled — the custom domain measured the same real-world speed in
+    // testing, so there's no downside to using the production-correct
+    // endpoint from the start. (Congo/Flip Swing still use r2.dev for now —
+    // a separate, optional follow-up if consistency there matters later.)
+    videoBase:'https://media.beatsmosaic.co.uk/abakua_4x2_1920x960_',
+    stemFiles:['https://media.beatsmosaic.co.uk/01_clave_abakua.aac','https://media.beatsmosaic.co.uk/02_bembe_abakua.aac','https://media.beatsmosaic.co.uk/03_cata_abakua.aac','https://media.beatsmosaic.co.uk/04_erikundi_abakua.aac','https://media.beatsmosaic.co.uk/05_quinto_abakua.aac','https://media.beatsmosaic.co.uk/06_conga_abakua.aac','https://media.beatsmosaic.co.uk/07_tumba_abakua.aac','https://media.beatsmosaic.co.uk/08_coro_abakua.aac']
   },
   congo:{
     id:'congo', label:'Congo Yambumba', poster:'poster_congo.jpg',
