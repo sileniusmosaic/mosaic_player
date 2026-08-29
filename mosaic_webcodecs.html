@@ -369,6 +369,14 @@ const MOSAICS={
     // spacing is a fixed 60/bpm seconds, scaled by the current tempo
     // control the same way the audio/video already are).
     beatsPerBar:4, bpm:80,
+    // Progressive video streaming (Aug 29 2026) — see loadVideoForTempoZero()
+    // and progressive-loader.js's own header comment for the mechanism.
+    // Verified against the real production export
+    // (congo_yambumba_4x2_1920x960_100.mp4): faststart (moov arrives after
+    // ~9.7KB, mdat is ~21MB), and parseMP4() reads its metadata correctly
+    // from just that prefix — same ffmpeg pipeline and codec (H.264/avc1) as
+    // Abakuá, which is what actually made this safe to turn on here too.
+    progressiveVideo:true,
     notation:['congo_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now.
     notationStrip:'notation_strip_placeholder.png',
@@ -389,6 +397,11 @@ const MOSAICS={
     // by 36, so it stays correct automatically at 50%/75% too, no separate
     // per-tempo numbers required.
     beatsPerBar:3, bars:12,
+    // Progressive video streaming (Aug 29 2026) — see the comment on Congo's
+    // own progressiveVideo above; verified the same way against the real
+    // production export (flip_swing_4x2_1920x960_100.mp4: faststart, moov
+    // after ~6.5KB).
+    progressiveVideo:true,
     notation:['flipswing_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now.
     notationStrip:'notation_strip_placeholder.png',
@@ -943,14 +956,17 @@ function loadVideoForTempoProgressive(percent,tracker,onReady){
 }
 // Progressive-streaming dispatcher (Aug 2026): routes a fresh, position-0
 // video load through the new progressive path when the current mosaic has
-// opted in (cfg.progressiveVideo — Abakuá only so far, our proving ground for
-// this). Used only at call sites where nothing is about to immediately start
-// live tick()-driven playback (the initial page-load video, and switching
-// between pieces) — a live tempo switch or Reset (which resume straight into
-// playback) deliberately still go through the exact unchanged
-// loadVideoForTempo() below, since seeking into a spot the download hasn't
-// reached yet needs real HTTP Range support, which this first pass doesn't
-// add. Every other mosaic (no cfg.progressiveVideo) also falls through here
+// opted in (cfg.progressiveVideo — now all three pieces, Aug 29 2026: Abakuá
+// was the original proving ground, then verified safe to extend to Congo and
+// Flip Swing too, since all three come out of the same faststart ffmpeg
+// pipeline — see each piece's own progressiveVideo comment). Used only at
+// call sites where nothing is about to immediately start live tick()-driven
+// playback (the initial page-load video, and switching between pieces) — a
+// live tempo switch or Reset (which resume straight into playback)
+// deliberately still go through the exact unchanged loadVideoForTempo()
+// below, since seeking into a spot the download hasn't reached yet needs
+// real HTTP Range support, which this first pass doesn't add. A mosaic
+// without cfg.progressiveVideo set (none currently) would fall through here
 // unchanged.
 function loadVideoForTempoZero(percent,tracker,onReady){
   if(cfg.progressiveVideo)return loadVideoForTempoProgressive(percent,tracker,onReady);
@@ -2367,10 +2383,10 @@ setStatus('WebCodecs build: one decode pipeline drives both views — audio is t
 // silent video fetch that used to leave the log with nothing to show for the
 // very first video download of the session (before Play is ever pressed).
 // Routed through loadVideoForTempoZero() (Aug 2026) — for a mosaic with
-// cfg.progressiveVideo set (Abakuá, our first proving ground), paintAt(0)
+// cfg.progressiveVideo set (all three pieces as of Aug 29 2026), paintAt(0)
 // now fires the moment the file's metadata has arrived and the first frame
 // or two have decoded, instead of waiting for the entire video (tens of MB)
-// to download first. Every other mosaic keeps today's exact behavior.
+// to download first.
 {
   const initialVideoTracker=makeLoadProgress(cfg.label+' 100% (initial video)');
   loadVideoForTempoZero(100,initialVideoTracker,()=>paintAt(0)).then(()=>{initialVideoTracker.stop('good');}).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');initialVideoTracker.stop('error');});
