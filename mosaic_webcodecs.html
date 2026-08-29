@@ -289,6 +289,7 @@
   </div>
 </main>
 <script src="mp4-demuxer.js"></script>
+<script src="progressive-loader.js"></script>
 <script src="wc-engine.js"></script>
 <script>
 (() => {
@@ -317,6 +318,14 @@ const MOSAICS={
   abakua:{
     id:'abakua', label:'Abakuá', poster:'poster_abakua.jpg',
     cols:4, rows:2, tileCount:8, loopEnd:45.600,
+    // True progressive video streaming (Aug 2026) — Abakuá is the proving
+    // ground since it's the longest/hardest piece (biggest files, longest
+    // wait today). Only affects position-0 loads that don't immediately
+    // start live playback (initial page load, switching pieces) — see
+    // loadVideoForTempoZero() for the exact scope and why. Flip this off (or
+    // just remove it) to fall straight back to the original, unchanged
+    // whole-buffer path with zero other code changes needed.
+    progressiveVideo:true,
     // Beat counter: 19 bars x 4 beats/bar = 76 beats per loop (bar-count
     // mode — see updateMetro(): with `bars` set, beat spacing is derived
     // from the loop's actual measured length rather than a fixed BPM, so
@@ -752,6 +761,87 @@ async function loadVideoForTempo(percent,keepPos,tracker){
   // gets configured once here (see wc-engine.js loadTempo()/seekTo() for why).
   engine.seekTo(pos);
 }
+// Progressive sibling of loadVideoBuffer() (Aug 2026) — identical external
+// contract (same videoBufferCache/videoLoads keys, same eventual resolved
+// ArrayBuffer) so every other caller that shares those maps (prefetchTempoBanks,
+// changeTempoImpl, the stall-watchdog's decoder rebuild) keeps working
+// completely unchanged and will correctly see/reuse/await this exact load.
+// The difference is entirely internal: onMetadataReady fires the moment the
+// file's moov box has streamed in (typically the first few tens of KB), well
+// before the rest of the video has downloaded, so a decoder can start
+// decoding immediately instead of waiting for the whole file — see
+// cfg.progressiveVideo and loadVideoForTempoZero() below for how that's used.
+// Proven out first as a standalone prototype (correctness-tested against real
+// files in Node, then measured end-to-end with a real decoder under a
+// throttled connection) before being wired in here.
+function loadVideoBufferProgressive(percent,tracker,onMetadataReady){
+  const key=cacheKey(percent);
+  if(videoBufferCache.has(key))return videoBufferCache.get(key);
+  if(videoLoads.has(key))return videoLoads.get(key);
+  tracker?.track('video:'+key,0,null);
+  const promise=(async()=>{
+    setStatus('Downloading '+percent+'% video…');
+    let loader;
+    const ab=await fetchWithRetry(
+      VIDEO_SOURCES[percent],3,
+      (r,t,chunk)=>{
+        tracker?.track('video:'+key,r,t);
+        if(chunk){
+          if(loader.totalBytes===null)loader.setTotalBytes(t);
+          loader.push(chunk);
+        }
+      },
+      tracker?.signal,
+      n=>tracker?.retry('video:'+key,n),
+      // A retry restarts the whole fetch from byte 0 (fetchWithRetry has no
+      // Range-resume — see memory/chat), so every attempt, including the
+      // first, needs its own fresh loader rather than reusing/appending to a
+      // partially-filled one from an attempt that failed partway through.
+      ()=>{loader=new ProgressiveMP4Loader({onMetadata:(info)=>onMetadataReady?.(loader,info)});}
+    );
+    loader.finish();
+    videoBufferCache.set(key,ab);videoLoads.delete(key);return ab;
+  })().catch(e=>{videoLoads.delete(key);throw e});
+  videoLoads.set(key,promise);return promise;
+}
+// Progressive sibling of loadVideoForTempo() (Aug 2026), for position-0 loads
+// only (see loadVideoForTempoZero() below) — configures the decoder and lets
+// the caller start painting/pumping as soon as the file's metadata has
+// arrived, instead of waiting for the whole video to download first. onReady
+// fires once the engine has been seeked and is ready to start producing
+// frames; the returned promise still only resolves once the full file has
+// downloaded, exactly like loadVideoForTempo(), so callers/cache consumers
+// that need the complete ArrayBuffer keep working unchanged. If a retry
+// restarts the download (see loadVideoBufferProgressive() above), its fresh
+// metadata event re-drives the engine from scratch — a visible restart of the
+// progressive fill, which is an honest reflection of the connection actually
+// having had a real hiccup, exactly like the whole-buffer path just making
+// the user wait longer in the same situation.
+function loadVideoForTempoProgressive(percent,tracker,onReady){
+  return loadVideoBufferProgressive(percent,tracker,(loader)=>{
+    engine.loadTempoProgressive(loader).then(()=>{
+      videoCycle=engine.cycleSeconds||LOOP_END;
+      engine.selected=selected;
+      engine.seekTo(0);
+      onReady?.();
+    }).catch(err=>console.error('Progressive engine start failed',err));
+  });
+}
+// Progressive-streaming dispatcher (Aug 2026): routes a fresh, position-0
+// video load through the new progressive path when the current mosaic has
+// opted in (cfg.progressiveVideo — Abakuá only so far, our proving ground for
+// this). Used only at call sites where nothing is about to immediately start
+// live tick()-driven playback (the initial page-load video, and switching
+// between pieces) — a live tempo switch or Reset (which resume straight into
+// playback) deliberately still go through the exact unchanged
+// loadVideoForTempo() below, since seeking into a spot the download hasn't
+// reached yet needs real HTTP Range support, which this first pass doesn't
+// add. Every other mosaic (no cfg.progressiveVideo) also falls through here
+// unchanged.
+function loadVideoForTempoZero(percent,tracker,onReady){
+  if(cfg.progressiveVideo)return loadVideoForTempoProgressive(percent,tracker,onReady);
+  return loadVideoForTempo(percent,false,tracker).then(ab=>{onReady?.();return ab;});
+}
 // Paints the frame at `pos` as soon as decode catches up to it — used whenever
 // we're NOT in the middle of the regular playing tick() loop (paused reset,
 // paused scrub-release, paused tempo switch, initial page load) since a single
@@ -1036,10 +1126,19 @@ function tempoUrls(percent){
 // very last attempt (there's no retry left to announce) or on a caller-
 // initiated cancel (that path throws immediately, see below, without ever
 // reaching this).
-async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry){
+// onAttemptStart (Aug 2026, additive/optional — every existing caller ignores
+// it) fires right before each attempt's fetch begins, including retries —
+// lets a caller reset any per-attempt state of its own (see
+// loadVideoBufferProgressive() below, which needs a FRESH progressive loader
+// per attempt, since a retry restarts the download from byte 0). onChunk also
+// now receives the raw chunk bytes as a 3rd argument, for the same reason —
+// existing callers only look at the first two (received,total) and simply
+// ignore the extra one.
+async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart){
   let lastErr;
   for(let i=0;i<attempts;i++){
     if(signal&&signal.aborted)throw signal.reason||new Error('Cancelled');
+    onAttemptStart?.();
     const controller=new AbortController();
     const onExternalAbort=()=>controller.abort(signal.reason);
     if(signal)signal.addEventListener('abort',onExternalAbort);
@@ -1081,7 +1180,7 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry){
         if(done)break;
         armIdle(); // real bytes just arrived — push the stall deadline back out
         chunks.push(value);received+=value.byteLength;
-        onChunk?.(received,total);
+        onChunk?.(received,total,value);
       }
       const out=new Uint8Array(received);let off=0;
       for(const c of chunks){out.set(c,off);off+=c.byteLength;}
@@ -1627,18 +1726,20 @@ async function switchMosaic(id){
 
     // Logged (Aug 2026) the same way the initial page-load video fetch and
     // prefetchTempoBanks() are — a piece switch's 100% video is a third
-    // previously-invisible video download.
+    // previously-invisible video download. Routed through
+    // loadVideoForTempoZero() (Aug 2026) so switching TO Abakuá gets the same
+    // progressive-streaming benefit as the initial page load — paintAt(0)
+    // fires as soon as the decoder is ready, not after the whole file lands.
     {
       const switchVideoTracker=makeLoadProgress(cfg.label+' 100% (piece switch)');
       try{
-        await loadVideoForTempo(100,false,switchVideoTracker);
+        await loadVideoForTempoZero(100,switchVideoTracker,()=>paintAt(0));
         switchVideoTracker.stop('good');
       }catch(err){
         switchVideoTracker.stop('error');
         throw err; // outer catch below still owns the failure status message
       }
     }
-    paintAt(0);
     setStatus('Tap Play to start '+cfg.label+'.');
   }catch(err){
     console.error(err);
@@ -1960,9 +2061,14 @@ setStatus('WebCodecs build: one decode pipeline drives both views — audio is t
 // Logged (Aug 2026) the same way prefetchTempoBanks() is — this is the OTHER
 // silent video fetch that used to leave the log with nothing to show for the
 // very first video download of the session (before Play is ever pressed).
+// Routed through loadVideoForTempoZero() (Aug 2026) — for a mosaic with
+// cfg.progressiveVideo set (Abakuá, our first proving ground), paintAt(0)
+// now fires the moment the file's metadata has arrived and the first frame
+// or two have decoded, instead of waiting for the entire video (tens of MB)
+// to download first. Every other mosaic keeps today's exact behavior.
 {
   const initialVideoTracker=makeLoadProgress(cfg.label+' 100% (initial video)');
-  loadVideoForTempo(100,false,initialVideoTracker).then(()=>{paintAt(0);initialVideoTracker.stop('good');}).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');initialVideoTracker.stop('error');});
+  loadVideoForTempoZero(100,initialVideoTracker,()=>paintAt(0)).then(()=>{initialVideoTracker.stop('good');}).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');initialVideoTracker.stop('error');});
 }
 })();
 </script>

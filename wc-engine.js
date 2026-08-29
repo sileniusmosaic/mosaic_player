@@ -34,6 +34,7 @@ class WebCodecsVideoEngine {
     this.onStatus = onStatus || (() => {});
     this.onError = onError || (() => {});
     this.decoder = null;
+    this._loader = null;       // set only during a progressive load (loadTempoProgressive()) — see _pump()
     this.info = null;          // demuxed MP4 info for the current tempo
     this.sampleIdx = 0;        // next sample to feed to the decoder (decode order)
     this.frameQueue = [];      // decoded VideoFrames, in presentation order (by construction)
@@ -98,6 +99,7 @@ class WebCodecsVideoEngine {
   // full stop, and only genuinely-in-flight decodes ever get reset.
   async loadTempo(arrayBuffer) {
     this._teardownDecoder();
+    this._loader = null; // this is the whole-buffer path — make sure a PRIOR progressive load's loader reference doesn't linger and confuse _pump()
     const info = parseMP4(arrayBuffer);
     this.info = info;
     this.cycleSeconds = info.samples.reduce((a, s) => a + s.duration, 0) / info.timescale;
@@ -117,8 +119,47 @@ class WebCodecsVideoEngine {
     this._everPumped = false; // nothing fed to this decoder instance yet — seekTo() can skip reset()
   }
 
+  // Progressive sibling of loadTempo() (Aug 2026) — configures the decoder
+  // from metadata ALONE (already available the instant the loader's moov box
+  // has streamed in — see progressive-loader.js) and starts the decode-ahead
+  // pump immediately, WITHOUT waiting for the rest of the file (mdat) to
+  // download. `_pump()` below becomes byte-availability-aware whenever
+  // `this._loader` is set: it feeds whatever samples have actually arrived
+  // and stops cleanly (not an error — just "nothing to do yet") at the first
+  // one that hasn't, resuming on the next call once more bytes are in.
+  //
+  // Currently only ever called for a fresh, position-0 load (initial page
+  // load, switching between pieces) — see mosaic_webcodecs.html's
+  // cfg.progressiveVideo/loadVideoForTempoZero() for why a live mid-playback
+  // tempo switch deliberately still uses the original whole-buffer loadTempo()
+  // instead: seeking into a spot the download hasn't reached yet needs real
+  // HTTP Range support, which this first pass doesn't add.
+  async loadTempoProgressive(loader) {
+    this._teardownDecoder();
+    const info = loader.info;
+    if (!info) throw new Error('loadTempoProgressive() requires loader.info to already be set (metadata not ready yet)');
+    this.info = info;
+    this._loader = loader;
+    this.cycleSeconds = info.samples.reduce((a, s) => a + s.duration, 0) / info.timescale;
+    this.sampleIdx = 0;
+    this._clearQueue();
+    this._resetLapTracking();
+    const config = { codec: info.codec, codedWidth: info.codedWidth, codedHeight: info.codedHeight };
+    if (info.description && info.description.length) config.description = info.description;
+    const support = await VideoDecoder.isConfigSupported(config);
+    if (!support.supported) throw new Error('VideoDecoder does not support this stream: ' + info.codec);
+    this.decoder = new VideoDecoder({
+      output: (frame) => this._onFrame(frame),
+      error: (e) => { console.error('VideoDecoder error:', e); this.onStatus('Video decode error: ' + e.message, 'error'); this.onError(e); }
+    });
+    this._config = config;
+    this.decoder.configure(config);
+    this._everPumped = false; // nothing fed to this decoder instance yet — seekTo() can skip reset()
+  }
+
   destroy() {
     this.destroyed = true;
+    this._loader = null;
     this._teardownDecoder();
     this._clearQueue();
   }
@@ -146,13 +187,20 @@ class WebCodecsVideoEngine {
     if (!this.decoder || this.decoder.state !== 'configured') return;
     const t0 = performance.now();
     const samples = this.info.samples;
+    // Progressive mode (this._loader set, see loadTempoProgressive() above)
+    // reads from the loader's own live, still-growing buffer instead of
+    // info.buffer, and — critically — must never read a sample whose bytes
+    // haven't actually streamed in yet. Whole-buffer mode (the original,
+    // unchanged path) has no loader and behaves exactly as before.
+    const buf = this._loader ? this._loader.buffer : this.info.buffer;
     while (
       this.decoder.decodeQueueSize < this.maxQueuedFrames &&
       this.frameQueue.length < this.maxQueuedFrames &&
       performance.now() - t0 < this.pumpBudgetMs
     ) {
       const s = samples[this.sampleIdx];
-      const data = new Uint8Array(this.info.buffer, s.offset, s.size);
+      if (this._loader && !this._loader.hasBytes(s.offset, s.size)) break; // not downloaded yet — stop cleanly, not an error; the next render()/paintAt() tick tries again
+      const data = new Uint8Array(buf, s.offset, s.size);
       const chunk = new EncodedVideoChunk({
         type: s.isSync ? 'key' : 'delta',
         timestamp: Math.round((s.pts / this.info.timescale) * 1e6), // microseconds
@@ -161,7 +209,14 @@ class WebCodecsVideoEngine {
       });
       try { this.decoder.decode(chunk); this._everPumped = true; } catch (e) { console.error('decode() threw', e); break; }
       this.sampleIdx++;
-      if (this.sampleIdx >= samples.length) this.sampleIdx = 0; // loop: sample 0 is always sync
+      if (this.sampleIdx >= samples.length) {
+        // Don't loop back to sample 0 until the WHOLE file has actually
+        // arrived — reaching here at all already implies every sample's
+        // bytes were available (offsets only increase), so in practice this
+        // guard is a pure safety net, never load-bearing.
+        if (this._loader && !this._loader.done) break;
+        this.sampleIdx = 0; // loop: sample 0 is always sync
+      }
     }
   }
 
