@@ -546,6 +546,18 @@ let currentLoad=null, currentLoadPromise=null;
 // as a result. See the "known remaining edge case" comment inside
 // prefetchTempoBanks() this replaces.
 let currentPrefetchTracker=null;
+// Background tracker for a piece switch's OWN 100% video, once it's already
+// good enough to let Play go (Aug 29 2026 — see switchMosaic()'s own comment
+// on why Play no longer waits for the full download). The video keeps
+// streaming in after that point, same as before, but now nothing was
+// tracking it as cancellable — if the user taps a different tempo while it's
+// still catching up, that tempo's own fetch would otherwise run RIGHT
+// ALONGSIDE this leftover one, splitting bandwidth exactly like the
+// prefetch-contention bug currentPrefetchTracker above already fixed for the
+// tempo-prefetch case. Cleared the instant the switch's video finishes (or
+// fails) on its own, or cancelled early by changeTempo()/switchMosaic() the
+// same way currentPrefetchTracker is.
+let currentSwitchVideoTracker=null;
 // Whether prefetchTempoBanks() has already been kicked off for whatever
 // piece is CURRENTLY selected (Aug 29 2026) — reset to false at the top of
 // every switchMosaic() alongside `prepared`. Before this, prefetchTempoBanks()
@@ -1297,10 +1309,18 @@ function tempoUrls(percent){
 // live: a Flip Swing 75% prefetch cancelled at 2.3 of 16MB, then re-tapped
 // minutes later, redownloaded the full 16MB instead of just the remaining
 // ~13.7MB. A later fetchWithRetry() call for the same url now resumes via
-// an HTTP Range request instead. Scoped to the plain (non-progressive)
-// buffer path only — onAttemptStart callers (the progressive video loader)
-// keep their existing from-scratch-per-attempt contract untouched, since
-// resuming would conflict with how that loader parses a fresh MP4 stream.
+// an HTTP Range request instead. Extended (Aug 29 2026, second pass) to the
+// progressive video loader too — a piece switch's own 100% video, once
+// Play no longer waits for the whole thing (see switchMosaic()'s and
+// currentSwitchVideoTracker's own comments), can now itself be cancelled by
+// a subsequent tempo tap, and was found (via this exact test) to hit the
+// identical waste otherwise. onAttemptStart callers still get a FRESH
+// ProgressiveMP4Loader per attempt as before (parseMP4() needs a buffer
+// that's a genuine prefix from byte 0) — what changed is that the resumed
+// prefix is now replayed through onChunk once, right after a resume is
+// confirmed (see the "Replay the resumed prefix" comment below), so that
+// fresh loader's push() ends up with the complete byte-0-onward buffer
+// instead of only the bytes from the resume point on.
 const partialFetchCache=new Map(); // url -> Uint8Array of bytes received so far
 async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart){
   let lastErr;
@@ -1326,7 +1346,15 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart
     // Re-read fresh on every attempt (not just once per call) so a resumed
     // download that gets cancelled AGAIN mid-resume still saves its new
     // progress on top, rather than losing it a second time.
-    const resumable=!onAttemptStart?partialFetchCache.get(u):null;
+    //
+    // Now available to every caller, including the progressive video loader
+    // (Aug 29 2026 — previously `!onAttemptStart?...:null` here deliberately
+    // excluded it, since onChunk fires only for genuinely NEW bytes below,
+    // and the loader needs the FULL file from byte 0 fed through push() in
+    // order for parseMP4()'s absolute byte offsets to mean anything. Fixed
+    // by feeding the resumed prefix through onChunk once, right after a
+    // resume is confirmed — see below).
+    const resumable=partialFetchCache.get(u);
     const resumeFrom=resumable?resumable.byteLength:0;
     // Seeded with whatever's resumable and mutated as real bytes arrive below
     // — declared outside the try so the catch block can still see (and save)
@@ -1352,6 +1380,27 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart
       // prefix.
       if(resumeFrom>0&&!resuming){chunks.length=0;received=0;partialFetchCache.delete(u);}
       if(!r.ok)throw new Error('HTTP '+r.status+' for '+u);
+      // total: on a 206 resume, Content-Range carries the FULL resource size
+      // ("bytes 2300000-.../16000001") — content-length on that response is
+      // only the remainder, which would make the progress bar (and the
+      // download-completion gate) think the file is much smaller than it is.
+      // Computed up here (moved Aug 29 2026, was further down) so the
+      // resumed-prefix replay just below can pass a real value too, not null.
+      const total=(()=>{
+        const cr=r.headers.get('content-range');
+        if(cr){const m=/\/(\d+)$/.exec(cr);if(m)return +m[1];}
+        const h=+r.headers.get('content-length');return h>0?(resuming?received+h:h):null;
+      })();
+      // Replay the resumed prefix through onChunk exactly once, as if it had
+      // just arrived — this is what lets the progressive video loader (whose
+      // push() is what actually grows its buffer) end up with the SAME
+      // complete, byte-0-through-here buffer a caller reading `chunks`/
+      // `received` already has, instead of only ever seeing bytes from the
+      // resume point onward. Harmless no-op for callers that only use
+      // onChunk for progress tracking — `received`/`total` are already
+      // correct either way, this just reports it slightly earlier than the
+      // first live chunk would have.
+      if(resuming)onChunk?.(received,total,resumable);
       // Always stream through the reader when a body is available — even for
       // callers that didn't pass onChunk — rather than only doing this when
       // progress tracking was requested. That's what lets armIdle() reset on
@@ -1365,15 +1414,6 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart
         merged.set(resumable,0);merged.set(new Uint8Array(ab),received);
         return merged.buffer;
       }
-      // total: on a 206 resume, Content-Range carries the FULL resource size
-      // ("bytes 2300000-.../16000001") — content-length on that response is
-      // only the remainder, which would make the progress bar (and the
-      // download-completion gate) think the file is much smaller than it is.
-      const total=(()=>{
-        const cr=r.headers.get('content-range');
-        if(cr){const m=/\/(\d+)$/.exec(cr);if(m)return +m[1];}
-        const h=+r.headers.get('content-length');return h>0?(resuming?received+h:h):null;
-      })();
       const reader=r.body.getReader();
       for(;;){
         const {done,value}=await reader.read();
@@ -1396,7 +1436,12 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart
       // starting over. A plain timeout or network blip still retries within
       // this same call as before, untouched by any of this.
       if(signal&&signal.aborted){
-        if(!onAttemptStart&&received>0){
+        // No longer excludes onAttemptStart callers (Aug 29 2026, second
+        // pass) — see the comment above partialFetchCache's declaration for
+        // why the progressive video loader needed BOTH sides of this fixed
+        // together (this save, and the resumed-prefix replay through
+        // onChunk above) to actually benefit, not just one.
+        if(received>0){
           const merged=new Uint8Array(received);let off=0;
           for(const c of chunks){merged.set(c,off);off+=c.byteLength;}
           partialFetchCache.set(u,merged);
@@ -1742,6 +1787,12 @@ async function changeTempo(percent){
   const destNeedsNewFetch=!(bankCache.has(destKey)&&videoBufferCache.has(destKey))
     &&!bankLoads.has(destKey)&&!videoLoads.has(destKey);
   if(destNeedsNewFetch&&currentPrefetchTracker){currentPrefetchTracker.cancel(new Error('Tempo changed'));currentPrefetchTracker=null;}
+  // Same reasoning, same condition — a piece switch's own 100% video may
+  // still be quietly catching up in the background (see currentSwitchVideoTracker's
+  // own comment). percent is never 100 here (changeTempo() already returned
+  // above if percent===tempoPercent, and tempoPercent is always 100 right
+  // after a switch), so this is never cancelling the very thing being tapped.
+  if(destNeedsNewFetch&&currentSwitchVideoTracker){currentSwitchVideoTracker.cancel(new Error('Tempo changed'));currentSwitchVideoTracker=null;}
   const myGen=++loadGeneration;
   const tracker=playBtnLoadingStart(cfg.label+' '+percent+'% (switch)');
   currentLoad=tracker;
@@ -1931,6 +1982,12 @@ async function switchMosaic(id){
   // to completion even after the piece it was prefetching FOR was no longer
   // selected. See currentPrefetchTracker's own comment for the HAR evidence.
   if(currentPrefetchTracker){currentPrefetchTracker.cancel(new Error('Switched piece'));currentPrefetchTracker=null;}
+  // Same reasoning for the OLD piece's own switch-time video, if it was
+  // still quietly catching up in the background (see currentSwitchVideoTracker's
+  // own comment) — moving on to a THIRD piece before that finished should
+  // free its bandwidth too, not let it keep running for a piece nobody's
+  // looking at anymore.
+  if(currentSwitchVideoTracker){currentSwitchVideoTracker.cancel(new Error('Switched piece'));currentSwitchVideoTracker=null;}
   window.scrollTo(0,0); // instant, not smooth: an animated scroll here was getting cut short by the layout shifting under it (new poster/notation/tile grid all resizing mid-animation)
   try{
     playing=false;cancelAnimationFrame(raf);raf=0;
@@ -2024,21 +2081,63 @@ async function switchMosaic(id){
     // is genuinely instant once it's enabled — unlockContext()/ensureGains()
     // moved up so ctx exists before loadBank()'s decodeAudioData() needs it.
     // Deliberately NOT gated behind cfg.progressiveVideo or any other
-    // per-piece flag, unlike the video path (still Abakuá-only while that's
-    // being proven out) — this applies identically to every piece, and only
-    // ever loads the 100% bank, exactly what ensurePrepared() would have
-    // loaded anyway on the first Play tap. If either half fails, the switch
-    // fails exactly as it already did when only the video could fail.
+    // per-piece flag, unlike the video path — this applies identically to
+    // every piece, and only ever loads the 100% bank, exactly what
+    // ensurePrepared() would have loaded anyway on the first Play tap. If
+    // either half fails, the switch fails exactly as it already did when
+    // only the video could fail.
+    //
+    // Play no longer waits for the FULL video (Aug 29 2026, second pass):
+    // reported live as switching to Abakuá, listening for several seconds
+    // while the load log still showed the video downloading, then tapping a
+    // tempo and having a long wait because that video AND the just-requested
+    // tempo's own download were now splitting the connection — the full
+    // download was never actually necessary before Play could go. The very
+    // first Play tap of a session (ensurePreparedImpl() above) never waited
+    // on video at all, relying entirely on the engine's existing progressive
+    // decode pump (_pump() in wc-engine.js) plus the stall watchdog's
+    // "Picture is buffering — audio keeps playing normally" fallback to let
+    // the picture catch up live. switchMosaic() was needlessly stricter for
+    // no real reason — bringing it in line here means Play goes the instant
+    // the first frame is decoded, exactly like landing on a piece fresh, and
+    // frees the connection immediately afterward for whatever the user does
+    // next (see currentSwitchVideoTracker above for how that download stays
+    // cancellable once Play no longer depends on it).
     await unlockContext();ensureGains(true);
     {
       const switchVideoTracker=makeLoadProgress(cfg.label+' 100% (piece switch)');
       const switchAudioTracker=makeLoadProgress(cfg.label+' 100% (piece switch audio)');
+      currentSwitchVideoTracker=switchVideoTracker;
       let bank;
+      let videoFirstFrameReady,videoFirstFrameFailed,videoReadyResolved=false;
+      const videoReadyPromise=new Promise((res,rej)=>{videoFirstFrameReady=res;videoFirstFrameFailed=rej;});
+      loadVideoForTempoZero(100,switchVideoTracker,()=>{paintAt(0);videoReadyResolved=true;videoFirstFrameReady();})
+        .then(()=>{switchVideoTracker.stop('good');})
+        .catch(err=>{
+          switchVideoTracker.stop('error');
+          // A failure before the first frame ever arrived is a real "the
+          // switch failed" case, exactly as it was before this change —
+          // surface it through the same path so the catch block below still
+          // reports it. A failure AFTER the first frame was already good
+          // enough to let Play go is just the background catch-up not
+          // finishing (same as any other mid-playback network hiccup the
+          // stall watchdog already handles) — nothing to report to the user,
+          // Play already went. A deliberate cancel (tracker.signal.aborted —
+          // changeTempo()/switchMosaic() freeing this up for something else,
+          // see currentSwitchVideoTracker) isn't a real error either way and
+          // must not hit console.error: this is the exact "lot of red error
+          // messages" the user reported live — every one of these trackers'
+          // own internal AbortController rejection was logged unconditionally
+          // before this check existed.
+          if(!videoReadyResolved)videoFirstFrameFailed(err);
+          else if(!switchVideoTracker.signal.aborted)console.error(err);
+        })
+        .finally(()=>{if(currentSwitchVideoTracker===switchVideoTracker)currentSwitchVideoTracker=null;});
       try{
         [bank]=await Promise.all([
           loadBank(100,switchAudioTracker).then(b=>{switchAudioTracker.stop('good');return b;}).catch(err=>{switchAudioTracker.stop('error');throw err;}),
           ensureMetroBuffers(),
-          loadVideoForTempoZero(100,switchVideoTracker,()=>paintAt(0)).then(()=>switchVideoTracker.stop('good')).catch(err=>{switchVideoTracker.stop('error');throw err;})
+          videoReadyPromise
         ]);
       }catch(err){
         throw err; // outer catch below still owns the failure status message
