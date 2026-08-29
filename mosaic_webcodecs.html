@@ -526,6 +526,31 @@ let currentLoad=null, currentLoadPromise=null;
 // as a result. See the "known remaining edge case" comment inside
 // prefetchTempoBanks() this replaces.
 let currentPrefetchTracker=null;
+// Whether prefetchTempoBanks() has already been kicked off for whatever
+// piece is CURRENTLY selected (Aug 29 2026) — reset to false at the top of
+// every switchMosaic() alongside `prepared`. Before this, prefetchTempoBanks()
+// was only ever called from the `!prepared` branches of playFromGesture()/
+// reset() — fine on the very first piece of a session (prepared genuinely
+// starts false), but switchMosaic() now sets prepared=true itself (see the
+// audio-preload-during-switch fix), so that branch was never reached again
+// for Congo/Flip Swing after a switch and their other tempos silently never
+// got prefetched. schedulePrefetchOnce() below is the shared call site that
+// fixes this uniformly for every piece, first play or after any switch.
+let prefetchScheduled=false;
+// Called from wherever a piece is about to start playing for the first time
+// this visit (playFromGesture(), reset()) — fires prefetchTempoBanks() at
+// most once per piece. Placed just before the actual startStems()/playing=true
+// lines at each call site, same position the original single call held, so
+// the ordering he asked for (never fetch a tempo variant ahead of the
+// currently-selected piece's own request) is unchanged: prefetchTempoBanks()
+// only starts real network fetches after its own 1200ms delay plus waiting
+// out any in-flight foreground load, by which time playback has always
+// already started.
+function schedulePrefetchOnce(){
+  if(prefetchScheduled)return;
+  prefetchScheduled=true;
+  prefetchTempoBanks();
+}
 // Bumped every time a NEW load (ensurePrepared()/changeTempo()) takes over.
 // Needed once Reset/switchMosaic() can give up on waiting for an abandoned
 // load (see DECODE_STEP_TIMEOUT_MS and the Reset/switchMosaic code below):
@@ -1802,7 +1827,7 @@ async function switchMosaic(id){
     muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
     soloed=Array(TILE_COUNT).fill(false);engine.soloDim=soloed.map(()=>false);
     engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
-    prepared=false;fallbackMode=false;buffers=[];
+    prepared=false;fallbackMode=false;buffers=[];prefetchScheduled=false;
     // Tempo (and the loop-boundary resync tracker) must not carry over from the
     // previous piece: the video we're about to load below is always the 100%
     // variant, so a stale tempoPercent from the last mosaic would silently
@@ -1920,7 +1945,8 @@ async function playFromGesture(){
   if(startingPlayback||playing||switchingMosaic)return; // a fast double-tap can otherwise land here twice before `playing` flips
   startingPlayback=true;
   try{
-    if(!prepared){const ok=await ensurePrepared();if(!ok)return;prefetchTempoBanks();}
+    if(!prepared){const ok=await ensurePrepared();if(!ok)return;}
+    schedulePrefetchOnce();
     const pos=pausedPos;
     try{
       if(!fallbackMode){await unlockContext();startStems(pos);}
@@ -1966,7 +1992,6 @@ async function reset(){
       tempoPercent=100;updateTempoUI();
       const ok=await ensurePrepared();
       if(!ok)throw new Error('Audio setup failed');
-      prefetchTempoBanks();
     }else if(tempoPercent!==100){
       bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
       // Tracked (Aug 2026) the same way ensurePrepared()/changeTempo() are,
@@ -1994,6 +2019,7 @@ async function reset(){
     }else if(engine.info){
       engine.seekTo(0);
     }
+    schedulePrefetchOnce();
     if(fallbackMode){fallbackAudio.currentTime=0;await fallbackAudio.play();}
     else{await unlockContext();startStems(0);}
     playing=true;playBtn.textContent='Pause';badge.textContent='Playing · 100%';setStatus('Reset — mute/solo cleared, back to 100%, playing from the start.','good');
