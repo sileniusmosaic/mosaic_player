@@ -512,6 +512,20 @@ let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 // (which already knows how to put bankBusy/preparing/the buttons back)
 // finishes before anything else touches shared state like buffers/tempoPercent.
 let currentLoad=null, currentLoadPromise=null;
+// The single in-flight prefetchTempoBanks() video fetch, if any (Aug 29
+// 2026) — a background download for a tempo of whichever piece is CURRENTLY
+// selected, started 1.2s after it settles into view. Unlike currentLoad, it
+// deliberately never blocks Play or shows up as "busy" anywhere; it only
+// needs to be cancellable so switchMosaic() can free up the bandwidth/
+// connection it's using the instant the user moves to a different piece,
+// instead of letting it run to completion in the background and compete with
+// the new piece's own switch-time downloads. Confirmed as a real, measurable
+// problem via a HAR capture: an abandoned Abakuá 75% prefetch (started
+// mid-flight) overlapped for ~13s with Congo's switch-time video+audio
+// fetches, and Congo's own video request showed 2s+ of connection queueing
+// as a result. See the "known remaining edge case" comment inside
+// prefetchTempoBanks() this replaces.
+let currentPrefetchTracker=null;
 // Bumped every time a NEW load (ensurePrepared()/changeTempo()) takes over.
 // Needed once Reset/switchMosaic() can give up on waiting for an abandoned
 // load (see DECODE_STEP_TIMEOUT_MS and the Reset/switchMosaic code below):
@@ -946,13 +960,20 @@ function paintAt(pos){
   requestAnimationFrame(tryPaint);
 }
 function tileSource(i,w,h){const tw=w/TILE_COLS,th=h/TILE_ROWS;return [(i%TILE_COLS)*tw,Math.floor(i/TILE_COLS)*th,tw,th]}
-// Poster now only ever fills the small grid tiles (instant feedback for mute/
-// solo/selection state while a piece loads) — it no longer paints into the
-// big focus square. The focus square used to show a poster crop blown up to
-// fill it, which is markedly lower-res than a decoded video frame; now it
-// just shows the buffering spinner (see paintAt()) until the real frame is
-// ready, so it only ever displays one, full-resolution picture instead of a
-// blurry placeholder that then visibly upgrades itself.
+// Poster fills the small grid tiles (instant feedback for mute/solo/selection
+// state while a piece loads) via drawOneTile() below. The big focus square
+// used to rely on the buffering spinner alone here (Aug 2026 reasoning: a
+// blown-up poster crop is markedly lower-res than a decoded video frame, so
+// showing one felt like a step backward once the real frame arrived and
+// "upgraded" it). Reversed (Aug 29 2026) — real testing on Congo/Flip Swing
+// (whole-file, non-progressive video loads) showed a plain black square for
+// the full download, sometimes 10-20+ seconds, with only a small spinner+
+// "Loading…" overlay to say anything is happening at all; reported as
+// "breaks the user experience." drawFocusPoster() below now paints the same
+// crop used for the selected tile into the focus square too — same tradeoff
+// the grid already makes, and it only ever runs before the first real frame
+// (see its own decodedFrameCount guard), so the "one picture, no visible
+// upgrade" goal for the eventual real video is unaffected.
 // drawOneTile() is the shared per-tile poster paint step (crop + mute/solo
 // wash + selection outline) — factored out so both the mobile single-grid
 // layout and the desktop split-column layout can each place it wherever
@@ -964,10 +985,25 @@ function drawOneTile(ctx,i,w,h,dx,dy,S,Sh,anySolo){
   else if(anySolo&&!soloed[i]){ctx.fillStyle='rgba(130,130,130,.55)';ctx.fillRect(dx,dy,S,Sh)}
   ctx.strokeStyle=i===selected?'#63d7ff':'#050607';ctx.lineWidth=i===selected?4:2;ctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
 }
+// Focus-square counterpart to drawOneTile() (Aug 29 2026) — crops the same
+// selected-tile region out of the poster image, but scales it to fill the
+// whole focus canvas instead of one grid cell. Deliberately a no-op once a
+// real decoded frame exists (engine.decodedFrameCount>0): every call site
+// below (drawPoster(), paintAt(), the poster 'load' listener) can just call
+// this unconditionally without worrying about it ever clobbering live video —
+// it only ever draws the placeholder that's about to be replaced.
+function drawFocusPoster(){
+  if(engine.decodedFrameCount>0)return;
+  if(!poster.complete||!poster.naturalWidth)return;
+  const w=poster.naturalWidth,h=poster.naturalHeight;
+  const [sx,sy,sw,sh]=tileSource(selected,w,h);
+  focusCtx.drawImage(poster,sx,sy,sw,sh,0,0,focusCanvas.width,focusCanvas.height);
+}
 function drawPoster(){
   if(!poster.complete||!poster.naturalWidth)return;
   const w=poster.naturalWidth,h=poster.naturalHeight;
   const anySolo=soloed.some(Boolean);
+  drawFocusPoster();
   if(IS_DESKTOP){
     const half=Math.ceil(TILE_COLS*TILE_ROWS/2);
     const drawColumn=(ctx,startIdx)=>{
@@ -1715,14 +1751,16 @@ function prefetchTempoBanks(){
       const t=makeLoadProgress(cfg.label+' '+p+'% (prefetch)');
       // Awaited now, not fire-and-forget (Aug 2026) — so if there's more than
       // one other tempo to prefetch, they run one at a time instead of both
-      // racing each other for the same bandwidth. Known remaining edge case:
-      // if a manual switch starts WHILE this fetch is already mid-flight (not
-      // just before it), the two will still share bandwidth for whatever's
-      // left of this download — genuinely pausing/cancelling an in-progress
-      // prefetch to fully hand over bandwidth would need real work (aborting
-      // loses whatever's already downloaded), left for later if it turns out
-      // to matter in practice.
+      // racing each other for the same bandwidth. The "manual switch starts
+      // WHILE this fetch is mid-flight" edge case noted here previously is
+      // now handled — currentPrefetchTracker (set just below) is what
+      // switchMosaic() cancels; aborting does throw away whatever partial
+      // bytes this fetch already had, but a full-bandwidth-handover to the
+      // piece actually being switched to is worth far more than those
+      // partial, now-pointless bytes for the piece being left.
+      currentPrefetchTracker=t;
       await loadVideoBuffer(p,t).then(()=>t.stop('good')).catch(()=>t.stop('error'));
+      if(currentPrefetchTracker===t)currentPrefetchTracker=null;
     }
   },1200);
 }
@@ -1743,6 +1781,13 @@ async function switchMosaic(id){
   // additionally guarantees this doesn't wait forever even if the old load
   // is stuck somewhere cancellation can't reach (see its own comment).
   await abandonCurrentLoad('Switched piece');
+  // Also free up whatever bandwidth/connection a background prefetch for the
+  // OLD piece is still using (Aug 29 2026) — abandonCurrentLoad() above only
+  // ever knew about a FOREGROUND load (ensurePrepared()/changeTempo());
+  // prefetchTempoBanks() runs independently and, until now, kept downloading
+  // to completion even after the piece it was prefetching FOR was no longer
+  // selected. See currentPrefetchTracker's own comment for the HAR evidence.
+  if(currentPrefetchTracker){currentPrefetchTracker.cancel(new Error('Switched piece'));currentPrefetchTracker=null;}
   window.scrollTo(0,0); // instant, not smooth: an animated scroll here was getting cut short by the layout shifting under it (new poster/notation/tile grid all resizing mid-animation)
   try{
     playing=false;cancelAnimationFrame(raf);raf=0;
