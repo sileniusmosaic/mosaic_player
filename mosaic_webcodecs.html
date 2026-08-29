@@ -426,6 +426,15 @@ const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoBu
 // bytes fully downloaded but still waiting on the (unmeasurable, no-
 // progress-signal) local decode step afterward. See makeLoadProgress().
 function formatMB(bytes){return (bytes/1048576).toFixed(1)+'MB';}
+// Wall-clock HH:MM:SS.mmm, local time (Aug 2026) — each load log row gets one
+// stamped at the moment it STARTS (see makeLoadProgress() below), so a row
+// can be cross-referenced against a browser DevTools Network-tab/HAR trace
+// captured at the same time, which timestamps in real time too, not just
+// "seconds since this particular load began." Needed once more than one
+// thing can be happening at overlapping times (prefetch, a switch, a stall
+// recovery, initial load) — without an absolute anchor there was no way to
+// line up which row corresponds to which request in an external capture.
+function formatClock(d){const p=(n,w)=>String(n).padStart(w||2,'0');return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+p(d.getMilliseconds(),3);}
 const MAX_LOAD_LOG_ENTRIES=25; // caps DOM growth across a long test session
 // Visual beat counter, off by default, only enabled for pieces with
 // beatsPerBar+bars set in their config (Flip Swing for now). Deliberately
@@ -1373,6 +1382,7 @@ function makeLoadProgress(label){
   // give each row its own timer, ticking while the load is in flight and
   // frozen at whatever renderLogRow() last wrote once stop() fires.
   const startedAt=performance.now();
+  const startedAtClock=formatClock(new Date()); // wall-clock anchor for this row — see formatClock()'s comment above
   const row=document.createElement('div');
   row.className='load-log-entry';
   loadLog.prepend(row);
@@ -1381,7 +1391,7 @@ function makeLoadProgress(label){
   function elapsed(){return((performance.now()-startedAt)/1000).toFixed(1)+'s';}
   function renderLogRow(){
     const cats=recomputeByCategory();
-    const bits=[label+' — '+elapsed()];
+    const bits=['['+startedAtClock+'] '+label+' — '+elapsed()];
     if(cats.video.seen)bits.push('video '+formatMB(cats.video.received)+(cats.video.totalKnown&&cats.video.total>0?' of '+formatMB(cats.video.total):'')+(retries.video?' ('+retries.video+(retries.video===1?' retry':' retries')+')':''));
     if(cats.audio.seen)bits.push('audio '+formatMB(cats.audio.received)+(cats.audio.totalKnown&&cats.audio.total>0?' of '+formatMB(cats.audio.total):'')+(retries.audio?' ('+retries.audio+(retries.audio===1?' retry':' retries')+')':''));
     row.textContent=bits.join(' · ')+phase;
