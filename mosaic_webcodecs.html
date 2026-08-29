@@ -1721,7 +1721,17 @@ async function switchMosaic(id){
     drawPoster();
     bufferingSpinner.hidden=false; // the video fetch below can take a moment (especially the R2-hosted pieces) — show the spinner from the start of the wait, not just once paintAt() takes over after it resolves
     updateUI();
-    badge.textContent='Ready to start';playBtn.textContent='Play';
+    // Play stays disabled until the new piece's video below has actually
+    // loaded (Aug 2026 fix — was a real bug: engine.info/frameQueue still
+    // belong to the OLD mosaic at this point, per the comment above
+    // drawPoster(), so a Play tap landing before loadVideoForTempoZero()
+    // resolves could start the NEW piece's audio via ensurePrepared() (which
+    // has no idea a switch is even in progress) while tick()/render() kept
+    // painting the OLD piece's video — reported as "Congo audio, Abakuá
+    // video" after switching mid-thought. playFromGesture() below also
+    // guards on switchingMosaic directly, so this holds even from the
+    // spacebar shortcut, not just a click on a disabled button.
+    badge.textContent='Ready to start';playBtn.textContent='Loading…';playBtn.disabled=true;
     setStatus('Loading '+cfg.label+'…');
 
     // Logged (Aug 2026) the same way the initial page-load video fetch and
@@ -1740,15 +1750,22 @@ async function switchMosaic(id){
         throw err; // outer catch below still owns the failure status message
       }
     }
+    playBtn.disabled=false;playBtn.textContent='Play';
     setStatus('Tap Play to start '+cfg.label+'.');
   }catch(err){
     console.error(err);
+    playBtn.disabled=false;playBtn.textContent='Play'; // don't leave Play stuck disabled if the video load above failed
     setStatus('Failed to load '+(MOSAICS[id]&&MOSAICS[id].label||id)+': '+(err?.message||err),'error');
   }finally{switchingMosaic=false;}
 }
 
 async function playFromGesture(){
-  if(startingPlayback||playing)return; // a fast double-tap can otherwise land here twice before `playing` flips
+  // switchingMosaic (Aug 2026): the Play button is disabled for the duration
+  // of a piece switch (see switchMosaic() above) specifically to prevent
+  // this, but that only stops a click — the spacebar shortcut calls
+  // toggleFromGesture()/playFromGesture() directly regardless of the
+  // button's disabled state, so the guard belongs here too.
+  if(startingPlayback||playing||switchingMosaic)return; // a fast double-tap can otherwise land here twice before `playing` flips
   startingPlayback=true;
   try{
     if(!prepared){const ok=await ensurePrepared();if(!ok)return;prefetchTempoBanks();}
