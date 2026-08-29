@@ -436,6 +436,12 @@ function formatMB(bytes){return (bytes/1048576).toFixed(1)+'MB';}
 // line up which row corresponds to which request in an external capture.
 function formatClock(d){const p=(n,w)=>String(n).padStart(w||2,'0');return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+p(d.getMilliseconds(),3);}
 const MAX_LOAD_LOG_ENTRIES=25; // caps DOM growth across a long test session
+// Aug 29 2026: temporarily disabled while debugging the audio/video load
+// timing — the full-page notation image was extra visual clutter and an
+// extra network request on every switch, both getting in the way of reading
+// what's actually happening. Per-piece cfg.notation arrays are untouched;
+// flip this back to true to restore it once the load-timing work is settled.
+const SHOW_NOTATION_PANEL=false;
 // Visual beat counter, off by default, only enabled for pieces with
 // beatsPerBar+bars set in their config (Flip Swing for now). Deliberately
 // NOT tied to tempoPercent or any per-tempo number — it derives
@@ -1112,7 +1118,7 @@ function buildPieceStrip(){
 // itself scrolls.
 function renderNotation(){
   notationPages.innerHTML='';
-  if(!cfg.notation||!cfg.notation.length){notationPanel.hidden=true;return;}
+  if(!SHOW_NOTATION_PANEL||!cfg.notation||!cfg.notation.length){notationPanel.hidden=true;return;}
   cfg.notation.forEach((src,i)=>{
     const img=document.createElement('img');
     img.src=src;img.loading='lazy';img.alt=cfg.label+' notation, page '+(i+1);
@@ -1817,15 +1823,39 @@ async function switchMosaic(id){
     // loadVideoForTempoZero() (Aug 2026) so switching TO Abakuá gets the same
     // progressive-streaming benefit as the initial page load — paintAt(0)
     // fires as soon as the decoder is ready, not after the whole file lands.
+    //
+    // Audio-prepare-during-switch (Aug 29 2026): until now, this block only
+    // ever waited on the VIDEO. The new piece's 8 audio stems were never even
+    // requested until the user's first Play tap afterward, via
+    // ensurePrepared()'s own separately-logged "(prepare)" step — which made
+    // Play look ready the instant the video finished, but tapping it then
+    // sat through a real, previously-invisible 0.5-4 second wait while those
+    // stems were fetched and decoded (reported as "a pause even after Play
+    // lights up," confirmed in the load log's own timestamps). Fetching +
+    // decoding the bank here instead, in parallel with the video, means Play
+    // is genuinely instant once it's enabled — unlockContext()/ensureGains()
+    // moved up so ctx exists before loadBank()'s decodeAudioData() needs it.
+    // Deliberately NOT gated behind cfg.progressiveVideo or any other
+    // per-piece flag, unlike the video path (still Abakuá-only while that's
+    // being proven out) — this applies identically to every piece, and only
+    // ever loads the 100% bank, exactly what ensurePrepared() would have
+    // loaded anyway on the first Play tap. If either half fails, the switch
+    // fails exactly as it already did when only the video could fail.
+    await unlockContext();ensureGains(true);
     {
       const switchVideoTracker=makeLoadProgress(cfg.label+' 100% (piece switch)');
+      const switchAudioTracker=makeLoadProgress(cfg.label+' 100% (piece switch audio)');
+      let bank;
       try{
-        await loadVideoForTempoZero(100,switchVideoTracker,()=>paintAt(0));
-        switchVideoTracker.stop('good');
+        [bank]=await Promise.all([
+          loadBank(100,switchAudioTracker).then(b=>{switchAudioTracker.stop('good');return b;}).catch(err=>{switchAudioTracker.stop('error');throw err;}),
+          ensureMetroBuffers(),
+          loadVideoForTempoZero(100,switchVideoTracker,()=>paintAt(0)).then(()=>switchVideoTracker.stop('good')).catch(err=>{switchVideoTracker.stop('error');throw err;})
+        ]);
       }catch(err){
-        switchVideoTracker.stop('error');
         throw err; // outer catch below still owns the failure status message
       }
+      buffers=bank;tempoPercent=100;updateTempoUI();prepared=true;fallbackMode=false;
     }
     playBtn.disabled=false;playBtn.textContent='Play';
     setStatus('Tap Play to start '+cfg.label+'.');
