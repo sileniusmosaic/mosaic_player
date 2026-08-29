@@ -1777,24 +1777,33 @@ function prefetchTempoBanks(){
       for(const u of tempoUrls(p)){const l=document.createElement('link');l.rel='prefetch';l.as='fetch';l.href=u;l.crossOrigin='anonymous';document.head.appendChild(l)}
       // Logged (Aug 2026) via its own makeLoadProgress(), deliberately NOT
       // routed through playBtnLoadingStart() — this stays a background load
-      // that never touches the Play button's fill/state, only the log. Before
-      // this, this prefetch silently downloading the OTHER tempo's video (the
-      // large asset) was exactly why a later manual tempo tap only ever
-      // logged audio: by the time you tapped it, loadVideoBuffer()'s cache
-      // check meant no video fetch happened at that moment at all — it had
-      // already happened here, invisibly. Now it gets its own row instead.
+      // that never touches the Play button's fill/state, only the log.
       const t=makeLoadProgress(cfg.label+' '+p+'% (prefetch)');
       // Awaited now, not fire-and-forget (Aug 2026) — so if there's more than
       // one other tempo to prefetch, they run one at a time instead of both
       // racing each other for the same bandwidth. The "manual switch starts
       // WHILE this fetch is mid-flight" edge case noted here previously is
       // now handled — currentPrefetchTracker (set just below) is what
-      // switchMosaic() cancels; aborting does throw away whatever partial
-      // bytes this fetch already had, but a full-bandwidth-handover to the
-      // piece actually being switched to is worth far more than those
-      // partial, now-pointless bytes for the piece being left.
+      // switchMosaic()/changeTempo() cancel; aborting does throw away
+      // whatever partial bytes this fetch already had, but a full-bandwidth
+      // handover to whatever the user actually tapped is worth far more than
+      // those partial, now-pointless bytes.
+      //
+      // Prefetches the audio BANK now too (Aug 29 2026), not just the video —
+      // this used to only warm videoBufferCache, silently leaving loadBank()
+      // (the sequential fetch + decodeAudioData() of every stem) as real,
+      // uncached work a manual tempo tap always paid for regardless of how
+      // long prefetching had been running. This is exactly why a tap could
+      // still take a long time to start even well after prefetching had
+      // supposedly finished for that tempo — the OLD comment here noted a
+      // subsequent manual tap "only ever logged audio" (i.e. the video was
+      // already cached, the audio never was) but never went the extra step of
+      // actually prefetching it. Both are awaited together, under the same
+      // cancellable tracker as before, so changeTempoImpl()'s later
+      // `Promise.all([loadBank(percent,tracker),loadVideoBuffer(percent,tracker)])`
+      // hits a warm cache for BOTH and can resolve near-instantly.
       currentPrefetchTracker=t;
-      await loadVideoBuffer(p,t).then(()=>t.stop('good')).catch(()=>t.stop('error'));
+      await Promise.all([loadBank(p,t),loadVideoBuffer(p,t)]).then(()=>t.stop('good')).catch(()=>t.stop('error'));
       if(currentPrefetchTracker===t)currentPrefetchTracker=null;
     }
   },1200);
