@@ -391,12 +391,12 @@ const MOSAICS={
     stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac']
   }
 };
-const MOSAIC_ORDER=['abakua','congo','flipswing'];
+const MOSAIC_ORDER=['flipswing','abakua','congo'];
 const TEMPO_PRESETS=[50,75,100]; // 25% dropped for now to reduce scope — can add back later
 function videoSourcesFor(c){return {100:c.videoBase+'100.mp4',75:c.videoBase+'75.mp4',50:c.videoBase+'50.mp4'}}
 
-let mosaicId=(new URLSearchParams(location.search).get('mosaic')||'abakua').toLowerCase();
-if(!MOSAICS[mosaicId])mosaicId='abakua';
+let mosaicId=(new URLSearchParams(location.search).get('mosaic')||'flipswing').toLowerCase();
+if(!MOSAICS[mosaicId])mosaicId='flipswing';
 let cfg=MOSAICS[mosaicId];
 // All tiles are separate Web Audio stems (sample-accurate, gapless native looping).
 // This part is UNCHANGED from the previous architecture — it was already proven
@@ -1633,6 +1633,16 @@ async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
   bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+  // Free up whatever bandwidth a background prefetch is still using for some
+  // OTHER tempo of THIS SAME piece (Aug 29 2026) — switchMosaic() already did
+  // this for piece switches (see currentPrefetchTracker's own comment for the
+  // HAR evidence), but a same-piece tempo tap fell through this gap: a HAR
+  // trace of Flip Swing 50%->75% showed the 50% prefetch fetch and the 75%
+  // switch fetch running concurrently for ~6-7s, splitting bandwidth, until
+  // the stale request was eventually aborted by some later, unrelated piece
+  // switch. The user's own tap should always win the connection immediately,
+  // regardless of whether it happens to also be a piece switch.
+  if(currentPrefetchTracker){currentPrefetchTracker.cancel(new Error('Tempo changed'));currentPrefetchTracker=null;}
   const myGen=++loadGeneration;
   const tracker=playBtnLoadingStart(cfg.label+' '+percent+'% (switch)');
   currentLoad=tracker;
