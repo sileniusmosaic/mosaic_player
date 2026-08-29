@@ -747,13 +747,28 @@ async function loadVideoBuffer(percent,tracker){
   videoLoads.set(key,promise);return promise;
 }
 async function loadVideoForTempo(percent,keepPos,tracker){
+  // Captured now (Aug 2026 fix) — this function is shared by switchMosaic(),
+  // ensurePreparedImpl()'s tempo!==100 branch, changeTempoImpl(), and Reset's
+  // fallback reload, several of which can take long enough (a big Congo/Flip
+  // Swing video on a slow connection) for the user to switch to a DIFFERENT
+  // piece before this one finishes. Without this guard, engine.loadTempo()
+  // below reconfigures the decoder unconditionally the instant this fetch
+  // completes, no matter what piece is actually selected by then — reported
+  // as "switched away, but the OLD piece's video popped up again a few
+  // seconds later while the NEW piece's audio kept playing." The buffer
+  // itself is still cached under its own mosaicId-scoped key (cacheKey()),
+  // so an abandoned load like this wastes no work — a later revisit of this
+  // exact piece+tempo still hits the cache instantly.
+  const myMosaicId=mosaicId;
   const pos=keepPos?currentPos():0;
   const ab=await loadVideoBuffer(percent,tracker);
+  if(myMosaicId!==mosaicId)return; // switched to a different piece while this was downloading — don't hijack it
   // engine.loadTempo() (decoder configure + first frames) has no progress
   // signal of its own — nudge the button into its brief "still working"
   // creep for this last, normally-quick, unmeasurable stretch.
   if(tracker)tracker.startDecodePulse();
   await withTimeout(engine.loadTempo(ab),DECODE_STEP_TIMEOUT_MS,'Video decoder setup');
+  if(myMosaicId!==mosaicId)return; // re-check: a switch could also have landed during the (slower, non-cancellable) decoder-configure step itself
   videoCycle=engine.cycleSeconds||LOOP_END;
   engine.selected=selected;
   // loadTempo() no longer starts decoding by itself — always kick it off with an
@@ -818,8 +833,46 @@ function loadVideoBufferProgressive(percent,tracker,onMetadataReady){
 // having had a real hiccup, exactly like the whole-buffer path just making
 // the user wait longer in the same situation.
 function loadVideoForTempoProgressive(percent,tracker,onReady){
+  // Same staleness guard as loadVideoForTempo() above, and for the same
+  // reason: metadata can arrive (or the decoder can finish configuring)
+  // after the user has already switched to a different piece. Known
+  // remaining edge case, deliberately not handled here: switching AWAY from
+  // and then back TO this exact piece+tempo while its own earlier attempt is
+  // still abandoned-but-running reuses that in-flight fetch (videoLoads is
+  // keyed by mosaicId|percent, shared/deduped on purpose), so only the
+  // FIRST call's onReady actually fires — harmless in practice since
+  // onReady is always just paintAt(0), safe to have fired "for" an earlier
+  // visit as long as the piece is still current when it does.
+  const myMosaicId=mosaicId;
+  // Real bug fixed here (Aug 2026): once this piece's video is already fully
+  // downloaded (cacheKey() hit — e.g. switching back to Abakuá after
+  // visiting another piece), loadVideoBufferProgressive() below returns the
+  // cached buffer straight away WITHOUT ever calling onMetadataReady — there
+  // is no fetch happening at all, so no metadata-arrival event ever fires.
+  // That left the decoder silently configured for whatever OTHER piece was
+  // visited most recently: audio switched correctly (it's a separate path),
+  // the picture did not — reported as returning to a piece and briefly (or
+  // not so briefly) seeing a different one's video. Handle a cache hit here
+  // exactly like the non-progressive loadVideoForTempo() always does:
+  // reconfigure the engine directly from the complete buffer, no progressive
+  // machinery needed since there's nothing left to stream.
+  const key=cacheKey(percent);
+  if(videoBufferCache.has(key)){
+    const ab=videoBufferCache.get(key);
+    return (async()=>{
+      await withTimeout(engine.loadTempo(ab),DECODE_STEP_TIMEOUT_MS,'Video decoder setup');
+      if(myMosaicId!==mosaicId)return ab;
+      videoCycle=engine.cycleSeconds||LOOP_END;
+      engine.selected=selected;
+      engine.seekTo(0);
+      onReady?.();
+      return ab;
+    })();
+  }
   return loadVideoBufferProgressive(percent,tracker,(loader)=>{
+    if(myMosaicId!==mosaicId)return; // switched away before metadata even arrived
     engine.loadTempoProgressive(loader).then(()=>{
+      if(myMosaicId!==mosaicId)return; // switched away during the decoder-configure step itself
       videoCycle=engine.cycleSeconds||LOOP_END;
       engine.selected=selected;
       engine.seekTo(0);
@@ -1603,8 +1656,13 @@ async function changeTempoImpl(percent,tracker,myGen){
   }
 }
 function prefetchTempoBanks(){
+  // Captured now (Aug 2026 fix, see the mosaicId re-checks below) — this can
+  // fire up to 1200ms after being scheduled, plenty of time for the user to
+  // have switched to a different piece already.
+  const myMosaicId=mosaicId;
   setTimeout(async()=>{
     for(const p of TEMPO_PRESETS){
+      if(mosaicId!==myMosaicId)return; // switched away — nothing here is worth prefetching for a piece that's no longer selected
       if(p===tempoPercent)continue;
       // Never start a prefetch while a foreground load is in flight (Aug
       // 2026) — currentLoadPromise is set by ensurePrepared()/changeTempo()
@@ -1617,6 +1675,15 @@ function prefetchTempoBanks(){
       // after waiting, since a fresh foreground load can start in the instant
       // after the previous one settles.
       while(currentLoadPromise){await currentLoadPromise.catch(()=>{});}
+      // Also wait out any plain video-only fetch already in flight — the
+      // initial page-load video, or a piece switch's video — neither of
+      // which currentLoadPromise knows about (Aug 2026 fix). Without this, a
+      // prefetch could start competing for bandwidth with the exact download
+      // progressive streaming is trying to get through as fast as possible,
+      // which is likely why prefetching was seen starting before the very
+      // first video had even finished arriving.
+      while(videoLoads.size>0){await Promise.allSettled([...videoLoads.values()]);}
+      if(mosaicId!==myMosaicId)return;
       // The selected tempo may have changed while we were waiting — re-check
       // rather than prefetching one the user has since switched away from.
       if(p===tempoPercent)continue;
@@ -2007,8 +2074,16 @@ function tick(now=performance.now()){
         if(decoderDead&&!decoderRebuildInFlight&&!bankBusy&&!preparing){
           const cachedBuf=videoBufferCache.get(cacheKey(tempoPercent));
           if(cachedBuf){
+            // mosaicId guard (Aug 2026 fix) — tick() (and this whole branch)
+            // only runs while playing, and switchMosaic() cancels raf/sets
+            // playing=false synchronously the instant a switch starts, but
+            // THIS rebuild's own promise, once kicked off, keeps running
+            // regardless — a switch landing between here and the .then()
+            // firing would otherwise reconfigure the NEW piece's decoder with
+            // the OLD piece's cached video the moment this finally resolves.
+            const myMosaicId=mosaicId;
             decoderRebuildInFlight=true;
-            engine.loadTempo(cachedBuf).then(()=>{engine.seekTo(wrappedAudioPos())}).catch(err=>{console.error('Decoder rebuild failed:',err)}).finally(()=>{decoderRebuildInFlight=false});
+            engine.loadTempo(cachedBuf).then(()=>{if(myMosaicId===mosaicId)engine.seekTo(wrappedAudioPos())}).catch(err=>{console.error('Decoder rebuild failed:',err)}).finally(()=>{decoderRebuildInFlight=false});
           }else{
             engine.seekTo(wrappedAudioPos()); // no cached buffer to rebuild from — fall back to the old (no-op-if-dead) behaviour
           }
