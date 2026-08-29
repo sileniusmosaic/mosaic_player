@@ -341,8 +341,11 @@ const MOSAICS={
     // Single-line notation strip shown directly under the focus square at all
     // times (see renderNotationStrip()) — distinct from the `notation` array
     // above, which is the full sheet-music page(s) shown further down the
-    // page. Only Abakuá has one for now; hidden entirely for any piece without.
-    notationStrip:'abakua_notation_strip_1.png',
+    // page. Placeholder (Aug 29 2026): same one static image on all three
+    // pieces for now — the real plan is 23 per-instrument strips (8 Abakuá +
+    // 8 Congo + 7 Flip Swing), swapped as the focused tile changes, once
+    // those are ready.
+    notationStrip:'notation_strip_placeholder.png',
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
     // bundled into the git repo/Worker static assets while every other
@@ -367,6 +370,8 @@ const MOSAICS={
     // control the same way the audio/video already are).
     beatsPerBar:4, bpm:80,
     notation:['congo_notation_1.png'],
+    // See Abakuá's own comment above — same placeholder strip for now.
+    notationStrip:'notation_strip_placeholder.png',
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -385,6 +390,8 @@ const MOSAICS={
     // per-tempo numbers required.
     beatsPerBar:3, bars:12,
     notation:['flipswing_notation_1.png'],
+    // See Abakuá's own comment above — same placeholder strip for now.
+    notationStrip:'notation_strip_placeholder.png',
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
@@ -1263,6 +1270,22 @@ function tempoUrls(percent){
 // now receives the raw chunk bytes as a 3rd argument, for the same reason —
 // existing callers only look at the first two (received,total) and simply
 // ignore the extra one.
+// Persists whatever bytes a fetchWithRetry() call had already received when
+// it was deliberately CANCELLED (a tempo tap or piece switch interrupting a
+// background prefetch — see currentPrefetchTracker), keyed by url (Aug 29
+// 2026). Before this, cancelling a prefetch threw away every byte it had
+// downloaded so far — fine the first time (the foreground request winning
+// the connection matters far more than those bytes), but wasteful if the
+// user comes back to that exact tempo shortly after: it had to redownload
+// the ENTIRE file from byte 0, including the part it already had. Confirmed
+// live: a Flip Swing 75% prefetch cancelled at 2.3 of 16MB, then re-tapped
+// minutes later, redownloaded the full 16MB instead of just the remaining
+// ~13.7MB. A later fetchWithRetry() call for the same url now resumes via
+// an HTTP Range request instead. Scoped to the plain (non-progressive)
+// buffer path only — onAttemptStart callers (the progressive video loader)
+// keep their existing from-scratch-per-attempt contract untouched, since
+// resuming would conflict with how that loader parses a fresh MP4 stream.
+const partialFetchCache=new Map(); // url -> Uint8Array of bytes received so far
 async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart){
   let lastErr;
   for(let i=0;i<attempts;i++){
@@ -1284,6 +1307,16 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart
     let idleTimer=null;
     const armIdle=()=>{if(idleTimer)clearTimeout(idleTimer);idleTimer=setTimeout(()=>controller.abort(new Error('Timed out waiting for '+u)),FETCH_TIMEOUT_MS);};
     armIdle();
+    // Re-read fresh on every attempt (not just once per call) so a resumed
+    // download that gets cancelled AGAIN mid-resume still saves its new
+    // progress on top, rather than losing it a second time.
+    const resumable=!onAttemptStart?partialFetchCache.get(u):null;
+    const resumeFrom=resumable?resumable.byteLength:0;
+    // Seeded with whatever's resumable and mutated as real bytes arrive below
+    // — declared outside the try so the catch block can still see (and save)
+    // partial progress from THIS attempt if it gets cancelled mid-stream.
+    const chunks=resumeFrom>0?[resumable]:[];
+    let received=resumeFrom;
     try{
       // 'no-cache' (misleadingly named — it still uses the cache) always makes
       // the browser check with the server first: a tiny, near-instant request
@@ -1293,17 +1326,39 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart
       // no manual version numbers needed. 'force-cache' (the old setting) never
       // asked at all once it had a copy, which is why updated video/audio files
       // could go on being served stale to returning visitors indefinitely.
-      const r=await fetch(u,{cache:'no-cache',signal:controller.signal});
+      const r=await fetch(u,{cache:'no-cache',signal:controller.signal,...(resumeFrom>0?{headers:{Range:'bytes='+resumeFrom+'-'}}:{})});
+      const resuming=resumeFrom>0&&r.status===206;
+      // Asked for a Range but got something else back (200 = server/CDN
+      // doesn't honor Range on this resource; anything else is treated as a
+      // real error below) — the bytes we were hoping to resume from don't
+      // line up with what's about to arrive, so drop them and treat this as
+      // a clean attempt instead of corrupting the buffer with a mismatched
+      // prefix.
+      if(resumeFrom>0&&!resuming){chunks.length=0;received=0;partialFetchCache.delete(u);}
       if(!r.ok)throw new Error('HTTP '+r.status+' for '+u);
       // Always stream through the reader when a body is available — even for
       // callers that didn't pass onChunk — rather than only doing this when
       // progress tracking was requested. That's what lets armIdle() reset on
       // every real chunk regardless of caller; a plain .arrayBuffer() call has
       // no per-chunk visibility to reset a stall timer against.
-      if(!r.body)return await r.arrayBuffer();
-      const total=(()=>{const h=+r.headers.get('content-length');return h>0?h:null})();
+      if(!r.body){
+        const ab=await r.arrayBuffer();
+        partialFetchCache.delete(u);
+        if(!resuming)return ab;
+        const merged=new Uint8Array(received+ab.byteLength);
+        merged.set(resumable,0);merged.set(new Uint8Array(ab),received);
+        return merged.buffer;
+      }
+      // total: on a 206 resume, Content-Range carries the FULL resource size
+      // ("bytes 2300000-.../16000001") — content-length on that response is
+      // only the remainder, which would make the progress bar (and the
+      // download-completion gate) think the file is much smaller than it is.
+      const total=(()=>{
+        const cr=r.headers.get('content-range');
+        if(cr){const m=/\/(\d+)$/.exec(cr);if(m)return +m[1];}
+        const h=+r.headers.get('content-length');return h>0?(resuming?received+h:h):null;
+      })();
       const reader=r.body.getReader();
-      const chunks=[];let received=0;
       for(;;){
         const {done,value}=await reader.read();
         if(done)break;
@@ -1313,13 +1368,25 @@ async function fetchWithRetry(u,attempts=3,onChunk,signal,onRetry,onAttemptStart
       }
       const out=new Uint8Array(received);let off=0;
       for(const c of chunks){out.set(c,off);off+=c.byteLength;}
+      partialFetchCache.delete(u);
       return out.buffer;
     }catch(e){
       lastErr=e;
-      // A caller-initiated cancel (Reset/switching mosaic mid-load) needs to
-      // stop right away, not spend more time retrying — that's the whole
-      // point of it. A plain timeout or network blip still retries as before.
-      if(signal&&signal.aborted)throw lastErr;
+      // A caller-initiated cancel (Reset/switching mosaic/changing tempo mid-
+      // load) needs to stop right away, not spend more time retrying — that's
+      // the whole point of it. Save whatever this attempt had already
+      // buffered (which may itself already include an earlier resume) so a
+      // LATER call for this exact url can pick up from here instead of
+      // starting over. A plain timeout or network blip still retries within
+      // this same call as before, untouched by any of this.
+      if(signal&&signal.aborted){
+        if(!onAttemptStart&&received>0){
+          const merged=new Uint8Array(received);let off=0;
+          for(const c of chunks){merged.set(c,off);off+=c.byteLength;}
+          partialFetchCache.set(u,merged);
+        }
+        throw lastErr;
+      }
       if(i<attempts-1){onRetry?.(i+2,attempts);await new Promise(res=>setTimeout(res,250*Math.pow(2,i)));}
     }finally{
       clearTimeout(idleTimer);
@@ -1642,7 +1709,23 @@ async function changeTempo(percent){
   // the stale request was eventually aborted by some later, unrelated piece
   // switch. The user's own tap should always win the connection immediately,
   // regardless of whether it happens to also be a piece switch.
-  if(currentPrefetchTracker){currentPrefetchTracker.cancel(new Error('Tempo changed'));currentPrefetchTracker=null;}
+  //
+  // ONLY cancel it, though, when this tap is actually about to compete with
+  // it for bandwidth (Aug 29 2026, second pass) — the first version of this
+  // fix cancelled unconditionally, so tapping a tempo that's already fully
+  // downloaded (an instant cache hit — no fetch happens at all) was killing
+  // a perfectly healthy, unrelated prefetch for no reason: reported live as
+  // "listening to 100%, 50% prefetched, 75% half-prefetched — tapping 50%
+  // (already complete) shouldn't touch 75% at all." And if the tempo being
+  // tapped is the very one currently mid-prefetch, loadVideoBuffer/loadBank
+  // below will transparently join that SAME in-flight fetch by cache key
+  // instead of starting a new one — cancelling here would only abort the
+  // fetch the user is about to wait on. So skip the cancel in both cases:
+  // nothing to free up, and nothing currently competing.
+  const destKey=cacheKey(percent);
+  const destNeedsNewFetch=!(bankCache.has(destKey)&&videoBufferCache.has(destKey))
+    &&!bankLoads.has(destKey)&&!videoLoads.has(destKey);
+  if(destNeedsNewFetch&&currentPrefetchTracker){currentPrefetchTracker.cancel(new Error('Tempo changed'));currentPrefetchTracker=null;}
   const myGen=++loadGeneration;
   const tracker=playBtnLoadingStart(cfg.label+' '+percent+'% (switch)');
   currentLoad=tracker;
