@@ -33,9 +33,14 @@
 .piece-strip-bar{display:flex;align-items:center;gap:8px;margin-top:6px;padding-bottom:8px}
 .piece-strip-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1;min-width:0}
 .piece-strip-scroll::-webkit-scrollbar{display:none}
-.piece-thumb{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:5px 10px 5px 5px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel);cursor:pointer;opacity:.55;filter:brightness(.75);transition:opacity .15s,filter .15s,border-color .15s;-webkit-tap-highlight-color:transparent}
-.piece-thumb.active{opacity:1;filter:none;border-color:var(--accent-purple);box-shadow:0 0 0 1px var(--accent-purple),0 0 10px rgba(139,92,246,.55)}
-.piece-thumb-img{width:36px;height:36px;border-radius:6px;background-color:#030405;background-repeat:no-repeat;flex:0 0 auto}
+/* Dimming for an unplayed piece now lives on the thumbnail picture alone
+   (Aug 2026) — was on the whole button, which dimmed the piece name text
+   right along with it. The name stays at full brightness/opacity in both
+   states so it's always as readable as the active piece's name. */
+.piece-thumb{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:5px 10px 5px 5px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel);cursor:pointer;transition:border-color .15s;-webkit-tap-highlight-color:transparent}
+.piece-thumb.active{border-color:var(--accent-purple);box-shadow:0 0 0 1px var(--accent-purple),0 0 10px rgba(139,92,246,.55)}
+.piece-thumb-img{width:36px;height:36px;border-radius:6px;background-color:#030405;background-repeat:no-repeat;flex:0 0 auto;opacity:.55;filter:brightness(.75);transition:opacity .15s,filter .15s}
+.piece-thumb.active .piece-thumb-img{opacity:1;filter:none}
 .piece-thumb-name{font-size:12px;font-weight:700;line-height:1.15;white-space:nowrap;color:var(--text)}
 .burger{width:34px;height:34px;flex:0 0 auto;border:2px solid var(--window-border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;background:var(--panel)}
 .burger span{width:16px;height:2px;background:var(--accent);display:block;border-radius:2px}
@@ -62,7 +67,14 @@
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 .focus-solo-dim{position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;display:none}.focus-wrap.is-solo-dimmed .focus-solo-dim{display:block}
-.focus-label{position:absolute;left:10px;bottom:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;z-index:4}
+/* Wraps the instrument label + notation strip as one flex column, anchored
+   to the bottom of the focus square (Aug 2026) — see the markup comment
+   near #focusWrap for why: it keeps the label riding just above the
+   notation image regardless of the image's own rendered height. Not
+   interactive itself (pointer-events:none) so it never blocks tap-to-select
+   on the square underneath; nothing inside it needs to be tappable. */
+.focus-bottom-overlay{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:flex-start;pointer-events:none}
+.focus-label{background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;margin:0 0 6px 10px}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -226,15 +238,14 @@
    source order, so without the guard the element stays visibly on screen
    even while hidden. */
 .notation-strip:not([hidden]){display:block}
-/* Anchored over the BOTTOM portion of the focus square (Aug 2026) — was
-   briefly a standalone strip above the whole page, moved back per feedback:
-   it reads better sitting on the video itself, like the old design. No
-   border-radius on its own — .focus-wrap's overflow:hidden plus its own
-   10px corner radius already clips this to match every other layer inside
-   it, the same way the canvas and dim overlays are clipped. z-index isn't
-   needed either: it's static-stacked below the buttons (dawBtn's z-index:4
-   always wins) but above the plain canvas/dim layers by DOM order alone. */
-.notation-strip{position:absolute;left:0;right:0;bottom:0;width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0}
+/* Anchored over the BOTTOM portion of the focus square (Aug 2026) via
+   .focus-bottom-overlay (see that rule) rather than its own absolute
+   position now, so the instrument label above it can share the same
+   bottom-anchored column. No border-radius needed — .focus-wrap's
+   overflow:hidden plus its own 10px corner radius already clips this to
+   match every other layer inside it, the same way the canvas and dim
+   overlays are clipped. pointer-events:none is inherited from the wrapper. */
+.notation-strip{width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -276,14 +287,21 @@
           </svg>
           <span id="metroNum" class="metro-num"></span>
         </button>
-        <div id="focusLabel" class="focus-label">Clave</div>
         <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
-        <!-- Notation strip, overlaid on the bottom portion of the focus
-             square (Aug 2026 — moved back here from a standalone strip at
-             the top of the page). Sits below the two corner buttons in
-             stacking order (their dawBtn z-index:4 always wins), so it
-             never blocks either from being tapped. -->
-        <img id="notationStrip" class="notation-strip" alt="" hidden>
+        <!-- Instrument label + notation strip, grouped (Aug 2026) so the
+             label always sits directly above the notation image instead of
+             floating at a fixed distance from the bottom — the notation
+             image's rendered height varies by piece/width, so a fixed
+             bottom offset for the label would obscure it at some sizes and
+             leave a gap at others. Stacking them in one flex column instead
+             means the label's position is always "right above the image",
+             whatever height the image turns out to be. Sits below the two
+             corner buttons in stacking order (their dawBtn z-index:4 always
+             wins), so it never blocks either from being tapped. -->
+        <div class="focus-bottom-overlay">
+          <div id="focusLabel" class="focus-label">Clave</div>
+          <img id="notationStrip" class="notation-strip" alt="" hidden>
+        </div>
       </div>
       <!-- Mobile-only: all 8 tiles as one 4x2 grid, exactly as before. Hidden
            on desktop (the two grid-stage-side columns above/below replace it
