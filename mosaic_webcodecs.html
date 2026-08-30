@@ -78,13 +78,15 @@
 .soloBtn{left:4px}
 .muteBtn.is-muted{background:#4d7c8f;color:#eaf5f9;border-color:#2c4a54}
 .soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
-/* Beat counter: bottom-left of the focus square, sized/colored differently
-   from the mute/solo tile buttons it otherwise shares .dawBtn's round-button
-   look with — must explicitly override top (dawBtn pins it to top:4px by
-   default) or it renders up near the wordmark/burger instead of down here.
-   Deliberately bigger than the tile mute/solo buttons — the number needs to
-   be readable at a glance while playing, not just identifiable. */
-.metroBtn{top:auto;right:10px;left:auto;bottom:10px;width:55px;height:55px;color:var(--tile-border);font-size:33px;border-color:var(--border);background:#0c0906}
+/* Beat counter: top-right of the focus square (Aug 2026 — moved up from
+   bottom-right so the notation overlay, now anchored to the bottom of the
+   square, has that space free). Sized/colored differently from the
+   mute/solo tile buttons it otherwise shares .dawBtn's round-button look
+   with — must explicitly override top/bottom (dawBtn pins to top:4px by
+   default) since it sits much bigger and lower than those. Deliberately
+   bigger than the tile mute/solo buttons — the number needs to be readable
+   at a glance while playing, not just identifiable. */
+.metroBtn{top:10px;right:10px;left:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);font-size:33px;border-color:var(--border);background:#0c0906}
 /* Brass tone (matches the app's --brass accent, the same warm metal a real
    metronome is made of) instead of the old pale monochrome outline — plus a
    lightly-filled body and full opacity so the idle icon reads clearly against
@@ -97,6 +99,16 @@
 .metroBtn.is-active .metro-icon{display:none}
 .metroBtn.is-active .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
+/* Manuscript toggle (Aug 2026): top-left of the focus square, mirroring the
+   beat counter at top-right. Turns the notation overlay (now anchored to
+   the bottom of the focus square — see .notation-strip) on and off. Same
+   round-button family and same brass treatment as the beat counter so the
+   two read as a matched pair. */
+.manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);border-color:var(--border);background:#0c0906}
+.manuscriptBtn .manuscript-icon{width:60%;height:60%;stroke:var(--brass);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:1}
+.manuscriptBtn .manuscript-icon rect{fill:var(--brass);fill-opacity:.12}
+.manuscriptBtn .manuscript-icon circle{fill:var(--brass);stroke:none}
+.manuscriptBtn.is-active{border-color:var(--tile-border)}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
@@ -199,34 +211,40 @@
    piece with no `notation` array in its config — see renderNotation(). */
 .notation-pages img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--border);background:#fff}
 .notation-pages img+img{margin-top:10px}
-/* Notation strip (Aug 2026): a single always-visible line of notation sitting
-   directly under the focus square, matching its width exactly — distinct
-   from .notation-pages above (the full multi-page sheet-music panel that
-   already sits further down the page, between the transport row and the
-   footer). This is deliberately just an <img>, no per-instrument swapping
-   yet (see cfg.notationStrip) — same "static PNG for now" scope as when this
-   was originally planned. Hidden entirely for any piece with no
-   notationStrip set — see renderNotationStrip(). The :not([hidden]) here
-   matters, not just style: .buffering-spinner below has the same guard for
-   the same reason — an unconditional `display:block` on the class has equal
-   specificity to the browser's own `[hidden]{display:none}` UA rule, and an
-   author rule wins ties over a UA rule regardless of source order, so
-   without the guard the element stays visibly on screen even while hidden. */
+/* Notation strip (Aug 2026, now overlaid on the focus square — see markup):
+   a single always-visible line of notation, distinct from .notation-pages
+   above (the full multi-page sheet-music panel further down the page,
+   between the transport row and the footer). Deliberately just an <img>, no
+   per-instrument swapping yet (see cfg.notationStrip) — same "static PNG for
+   now" scope as when this was originally planned. Shown/hidden by both
+   renderNotationStrip() (no notationStrip configured for this piece at all)
+   and the manuscriptBtn toggle (manuscriptOn — see script). The
+   :not([hidden]) here matters, not just style: .buffering-spinner below has
+   the same guard for the same reason — an unconditional `display:block` on
+   the class has equal specificity to the browser's own `[hidden]{display:
+   none}` UA rule, and an author rule wins ties over a UA rule regardless of
+   source order, so without the guard the element stays visibly on screen
+   even while hidden. */
 .notation-strip:not([hidden]){display:block}
-/* Moved to the very top of the page (Aug 2026) — was inside .focus-column,
-   spaced by that flex container's gap; now a standalone top-level element
-   so it needs its own margin-bottom to separate it from .viewer below. */
-.notation-strip{width:100%;height:auto;border-radius:6px;border:2px solid var(--window-border);background:#fff;margin-bottom:8px}
+/* Anchored over the BOTTOM portion of the focus square (Aug 2026) — was
+   briefly a standalone strip above the whole page, moved back per feedback:
+   it reads better sitting on the video itself, like the old design. No
+   border-radius on its own — .focus-wrap's overflow:hidden plus its own
+   10px corner radius already clips this to match every other layer inside
+   it, the same way the canvas and dim overlays are clipped. z-index isn't
+   needed either: it's static-stacked below the buttons (dawBtn's z-index:4
+   always wins) but above the plain canvas/dim layers by DOM order alone. */
+.notation-strip{position:absolute;left:0;right:0;bottom:0;width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0}
 </style>
 </head>
 <body>
 <main class="app">
   <input type="checkbox" id="menuToggle">
-  <!-- Notation strip moved to the very top of the page (Aug 2026) — was
-       between the focus square and the tile grid inside .focus-column. The
-       piece-navigation bar that used to occupy this spot now lives below
-       the play/timeline controls instead (see further down). -->
-  <img id="notationStrip" class="notation-strip" alt="" hidden>
+  <!-- The notation strip briefly lived here as a standalone top-of-page
+       element (Aug 2026) so the piece-navigation bar could move below the
+       play/timeline controls — that nav-bar move stays (see further down),
+       but the notation strip itself is back on the focus square, overlaid
+       on its bottom portion (see #focusWrap below). -->
   <div class="viewer">
     <!-- Desktop-only: left half of the tile order, stacked vertically. Hidden
          on mobile (.grid-stage-side is display:none by default); engine only
@@ -237,6 +255,19 @@
         <canvas id="mosaicFocus" class="focus-video"></canvas>
         <div class="focus-dim"></div>
         <div class="focus-solo-dim"></div>
+        <!-- Manuscript toggle: top-left, mirrors the beat counter at
+             top-right. Icon is a small page with a scribbled/handwritten
+             notation line across it — abstract, matching the beat counter's
+             level of detail rather than a literal music note. -->
+        <button id="manuscriptBtn" type="button" class="dawBtn manuscriptBtn" aria-label="Manuscript notation: on">
+          <svg class="manuscript-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5.5" y="3.5" width="13" height="17" rx="1.3"></rect>
+            <path d="M16.2 3.5v3.4h2.3" fill="none"></path>
+            <path d="M7.8 8.3q1-1.4 2-.2t2-.2 2-.2 2-.2 1.7-.2"></path>
+            <path d="M7.8 12.1q1.3-1.1 2.3.1t2.1.1 2-.4 1.5.2"></path>
+            <path d="M7.8 15.9q1-1.3 1.8-.3t1.6-.1 1.6-.4 1.6.3"></path>
+          </svg>
+        </button>
         <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
           <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
@@ -247,6 +278,12 @@
         </button>
         <div id="focusLabel" class="focus-label">Clave</div>
         <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
+        <!-- Notation strip, overlaid on the bottom portion of the focus
+             square (Aug 2026 — moved back here from a standalone strip at
+             the top of the page). Sits below the two corner buttons in
+             stacking order (their dawBtn z-index:4 always wins), so it
+             never blocks either from being tapped. -->
+        <img id="notationStrip" class="notation-strip" alt="" hidden>
       </div>
       <!-- Mobile-only: all 8 tiles as one 4x2 grid, exactly as before. Hidden
            on desktop (the two grid-stage-side columns above/below replace it
@@ -459,7 +496,7 @@ const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controls
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout'), loadLog=$('#loadLog');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout'), loadLog=$('#loadLog'), manuscriptBtn=$('#manuscriptBtn');
 // Numeric byte/timing log — separate from the Play button's 0-1 visual fill
 // (setPlayFill) so a real byte count and elapsed time are always visible,
 // including the specific case that visual fill alone can't distinguish:
@@ -488,6 +525,11 @@ const SHOW_NOTATION_PANEL=false;
 // seconds-per-beat from the loop's ACTUAL current-tempo length (videoCycle)
 // divided by total beats, so it stays correct across every tempo automatically.
 let metroActive=false; // defaults OFF (Aug 30 2026 — was ON) — tap to turn on, per-piece (see metroReady())
+// Manuscript notation overlay toggle (Aug 30 2026) — defaults ON, unlike the
+// beat counter above. Unlike metroActive, this is NOT reset on every piece
+// switch/page load below — once the user picks a state it persists across
+// switching pieces, since nothing asked for switch-reset behavior here.
+let manuscriptOn=true;
 function metroReady(){return !!(cfg.beatsPerBar&&(cfg.bars||cfg.bpm));}
 function updateMetro(){
   if(!metroReady()||!metroActive)return; // idle look (metronome icon) is pure CSS via .is-active
@@ -529,6 +571,16 @@ metroBtn.addEventListener('click',()=>{
     cancelScheduledMetroClicks();
   }
   updateMetro();
+});
+// Manuscript toggle: purely a visibility flip on the already-loaded
+// notationStrip <img> — no reload, no per-piece gating beyond what
+// renderNotationStrip() already applies (a piece with no notationStrip
+// configured stays hidden regardless of manuscriptOn).
+manuscriptBtn.addEventListener('click',()=>{
+  manuscriptOn=!manuscriptOn;
+  manuscriptBtn.classList.toggle('is-active',manuscriptOn);
+  manuscriptBtn.setAttribute('aria-label','Manuscript notation: '+(manuscriptOn?'on':'off'));
+  renderNotationStrip();
 });
 noteText.textContent=IS_DESKTOP
   ?'Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.'
@@ -1279,8 +1331,14 @@ function renderNotation(){
 // — separate from the full sheet-music panel above. Hidden entirely for any
 // piece without one set, same pattern as renderNotation().
 function renderNotationStrip(){
-  if(cfg.notationStrip){notationStrip.src=cfg.notationStrip;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;}
+  if(cfg.notationStrip){notationStrip.src=cfg.notationStrip;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=!manuscriptOn;}
   else{notationStrip.hidden=true;notationStrip.removeAttribute('src');}
+  // The button itself stays enabled/showable even when this piece has no
+  // notationStrip at all — matching metroBtn's own pattern of disabling
+  // rather than hiding when a piece can't support the feature would need a
+  // per-piece capability flag notation doesn't have yet; every piece
+  // currently ships a notationStrip (see MOSAICS), so this is unreachable
+  // in practice today.
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
 function currentPos(){
@@ -2575,6 +2633,9 @@ metroActive=false;
 metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
+// Manuscript notation starts ON (per its own default above — unlike the
+// beat counter, this one is NOT flipped to off here).
+manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();updateFocusUI();updateUI();
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap anywhere to begin.');
