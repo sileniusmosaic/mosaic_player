@@ -816,6 +816,11 @@ function sizeFocusCanvas(){
 window.addEventListener('resize',sizeFocusCanvas);
 
 const videoBufferCache=new Map(), videoLoads=new Map();
+// Tracks the live ProgressiveMP4Loader for each in-flight progressive video
+// fetch, keyed the same as videoLoads (Aug 30 2026) — see
+// loadVideoBufferProgressive()'s dedupe-reuse branch for why a second caller
+// needs direct access to the loader itself, not just the shared promise.
+const videoLoaders=new Map();
 async function loadVideoBuffer(percent,tracker){
   const key=cacheKey(percent);
   if(videoBufferCache.has(key))return videoBufferCache.get(key);
@@ -883,7 +888,35 @@ async function loadVideoForTempo(percent,keepPos,tracker){
 function loadVideoBufferProgressive(percent,tracker,onMetadataReady){
   const key=cacheKey(percent);
   if(videoBufferCache.has(key))return videoBufferCache.get(key);
-  if(videoLoads.has(key))return videoLoads.get(key);
+  if(videoLoads.has(key)){
+    // Reusing an ALREADY in-flight fetch for this exact piece+tempo (existing
+    // dedupe — videoLoads is shared/keyed on purpose, e.g. the page-load
+    // preload of the default piece and a later switchMosaic() call back to
+    // it can overlap). This caller still needs ITS OWN onMetadataReady to
+    // fire, though (Aug 30 2026 fix) — previously only the FIRST caller's
+    // ever ran, which was harmless back when onMetadataReady only ever
+    // painted the first frame (already visibly correct from that first
+    // call). Now that switchMosaic() also drives autoplay off of it
+    // (videoFirstFrameReady() settling videoReadyPromise), a second caller
+    // whose callback never fires means that switch's own Promise.all hangs
+    // for the full DECODE_STEP_TIMEOUT_MS and then reports a spurious
+    // failure — found via a rapid piece-switching stress test (switch away
+    // and back again before the video finishes downloading). If metadata
+    // already arrived, the loader already has `.info` — fire on a fresh
+    // microtask (never synchronously inside the caller's own call stack, to
+    // match every other async path here) rather than waiting for an event
+    // that already happened. Otherwise, chain onto whatever the loader's
+    // onMetadata already does, so both fire once it does arrive.
+    const loader=videoLoaders.get(key);
+    if(loader){
+      if(loader.info)Promise.resolve().then(()=>onMetadataReady?.(loader,loader.info));
+      else{
+        const prevOnMetadata=loader.onMetadata;
+        loader.onMetadata=(info)=>{prevOnMetadata(info);onMetadataReady?.(loader,info);};
+      }
+    }
+    return videoLoads.get(key);
+  }
   tracker?.track('video:'+key,0,null);
   const promise=(async()=>{
     setStatus('Downloading '+percent+'% video…');
@@ -903,11 +936,11 @@ function loadVideoBufferProgressive(percent,tracker,onMetadataReady){
       // Range-resume — see memory/chat), so every attempt, including the
       // first, needs its own fresh loader rather than reusing/appending to a
       // partially-filled one from an attempt that failed partway through.
-      ()=>{loader=new ProgressiveMP4Loader({onMetadata:(info)=>onMetadataReady?.(loader,info)});}
+      ()=>{loader=new ProgressiveMP4Loader({onMetadata:(info)=>onMetadataReady?.(loader,info)});videoLoaders.set(key,loader);}
     );
     loader.finish();
-    videoBufferCache.set(key,ab);videoLoads.delete(key);return ab;
-  })().catch(e=>{videoLoads.delete(key);throw e});
+    videoBufferCache.set(key,ab);videoLoads.delete(key);videoLoaders.delete(key);return ab;
+  })().catch(e=>{videoLoads.delete(key);videoLoaders.delete(key);throw e});
   videoLoads.set(key,promise);return promise;
 }
 // Progressive sibling of loadVideoForTempo() (Aug 2026), for position-0 loads
@@ -2143,7 +2176,23 @@ async function switchMosaic(id){
         [bank]=await Promise.all([
           loadBank(100,switchAudioTracker).then(b=>{switchAudioTracker.stop('good');return b;}).catch(err=>{switchAudioTracker.stop('error');throw err;}),
           ensureMetroBuffers(),
-          videoReadyPromise
+          // Bounded (Aug 30 2026) — videoReadyPromise only ever settles via
+          // onReady()/the catch above, and BOTH loadVideoForTempoProgressive()
+          // staleness checks ("switched away before metadata arrived"/"...
+          // during the decoder-configure step itself") silently abandon it
+          // with no resolve or reject at all when this exact switch gets
+          // superseded by a newer one. Before autoplay-on-switch existed that
+          // was rare (a manual Play tap came long after things settled); now
+          // that switching is instant and encourages rapid back-to-back
+          // taps, an abandoned switch's own Promise.all could hang forever —
+          // and since switchingMosaic only clears in THIS call's finally
+          // below, a single hung switch would permanently block every future
+          // piece switch for the rest of the session. Found via a rapid-
+          // switching stress test, not a live report. withTimeout()/
+          // DECODE_STEP_TIMEOUT_MS already exist for exactly this class of
+          // "can't be cancelled, so bound it instead" problem elsewhere in
+          // this file (see abandonCurrentLoad()'s own comment).
+          withTimeout(videoReadyPromise,DECODE_STEP_TIMEOUT_MS,cfg.label+' first frame')
         ]);
       }catch(err){
         throw err; // outer catch below still owns the failure status message
@@ -2151,14 +2200,47 @@ async function switchMosaic(id){
       buffers=bank;tempoPercent=100;updateTempoUI();prepared=true;fallbackMode=false;
     }
     playBtn.disabled=false;playBtn.textContent='Play';
-    setStatus('Tap Play to start '+cfg.label+'.');
+    // Autoplay on switch (Aug 30 2026): picking a different piece now starts
+    // it playing immediately once ready, the same way the very first
+    // interaction of a session now does (see the pointerdown/keydown listener
+    // near the bottom of this script) — no separate Play tap needed. Safe to
+    // call startPlaybackNow() directly here (rather than playFromGesture(),
+    // which would bail out on switchingMosaic still being true) because this
+    // whole function already ran inside the same click that chose the piece,
+    // and unlockContext() above already succeeded within that same gesture.
+    await startPlaybackNow();
   }catch(err){
-    console.error(err);
-    playBtn.disabled=false;playBtn.textContent='Play'; // don't leave Play stuck disabled if the video load above failed
-    setStatus('Failed to load '+(MOSAICS[id]&&MOSAICS[id].label||id)+': '+(err?.message||err),'error');
+    // A newer switch may already have taken over by the time the
+    // withTimeout() above gives up on this one (Aug 30 2026) — id!==mosaicId
+    // here means exactly that: this call's own piece was superseded before
+    // it finished, its videoReadyPromise was silently abandoned rather than
+    // rejected (see the withTimeout comment above), and whatever piece is
+    // actually on screen now already loaded fine via that later call. Not a
+    // real failure — same reasoning as the deliberate-cancel check on
+    // switchVideoTracker above, just one level out. Only alarm the user when
+    // the piece that failed is still the one they're actually looking at.
+    if(id===mosaicId){
+      console.error(err);
+      playBtn.disabled=false;playBtn.textContent='Play'; // don't leave Play stuck disabled if the video load above failed
+      setStatus('Failed to load '+(MOSAICS[id]&&MOSAICS[id].label||id)+': '+(err?.message||err),'error');
+    }
   }finally{switchingMosaic=false;}
 }
 
+// Extracted (Aug 30 2026) from what used to be playFromGesture()'s own tail,
+// so switchMosaic() can start playback the same way once a switch finishes
+// preparing, instead of leaving Play idle at "Tap Play to start" — see
+// switchMosaic()'s own autoplay comment for why that reuse is safe (the
+// caller has already unlocked the audio context within its own gesture).
+async function startPlaybackNow(){
+  schedulePrefetchOnce();
+  const pos=pausedPos;
+  try{
+    if(!fallbackMode){await unlockContext();startStems(pos);}
+    else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
+    playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');resetStallWatchdog();if(!raf)tick();
+  }catch(err){console.warn(err);stopStems();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
+}
 async function playFromGesture(){
   // switchingMosaic (Aug 2026): the Play button is disabled for the duration
   // of a piece switch (see switchMosaic() above) specifically to prevent
@@ -2169,13 +2251,7 @@ async function playFromGesture(){
   startingPlayback=true;
   try{
     if(!prepared){const ok=await ensurePrepared();if(!ok)return;}
-    schedulePrefetchOnce();
-    const pos=pausedPos;
-    try{
-      if(!fallbackMode){await unlockContext();startStems(pos);}
-      else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
-      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');resetStallWatchdog();if(!raf)tick();
-    }catch(err){console.warn(err);stopStems();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
+    await startPlaybackNow();
   }finally{startingPlayback=false;}
 }
 function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI()}
@@ -2486,7 +2562,33 @@ metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
 buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();updateFocusUI();updateUI();
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
-setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play once.');
+setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap anywhere to begin.');
+// Autoplay on load (Aug 30 2026): the goal is for the default piece to start
+// playing the instant the app is opened, matching switchMosaic()'s own new
+// autoplay-on-switch behavior above. Browsers flatly refuse to let a page
+// play audible audio before the page has received ANY user interaction —
+// Chrome, Safari and Firefox all enforce this and there is no script-side
+// way around it — so a true zero-tap autoplay isn't possible here. This is
+// the closest real equivalent: the very first click/tap ANYWHERE on the
+// page (not specifically the Play button) immediately starts the loaded
+// piece playing, showing the same loading/buffering UI Play already shows
+// (see startPlaybackNow()/ensurePrepared()). Registered with capture:true so
+// it fires during the capturing phase, before the click even reaches
+// whatever was actually tapped — including elements that stopPropagation()
+// (e.g. the mute/solo tile buttons) — and `once:true` so it never fires
+// again after the session's first interaction.
+//
+// If that first tap was actually on a piece-rail item or a tempo button
+// (switching away from the default before ever hearing it, or picking a
+// tempo before Play), this fires playFromGesture() for the CURRENT piece a
+// moment before that click's own handler runs (switchMosaic()/changeTempo())
+// — any resulting in-flight prepare is simply abandoned the same way
+// Reset/switchMosaic() already abandon a stale load elsewhere in this file;
+// nothing breaks, at most one small wasted request.
+document.addEventListener('click',()=>{
+  if(playing||switchingMosaic||startingPlayback)return;
+  playFromGesture();
+},{capture:true,once:true});
 // Logged (Aug 2026) the same way prefetchTempoBanks() is — this is the OTHER
 // silent video fetch that used to leave the log with nothing to show for the
 // very first video download of the session (before Play is ever pressed).

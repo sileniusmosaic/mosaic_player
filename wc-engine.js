@@ -35,6 +35,15 @@ class WebCodecsVideoEngine {
     this.onError = onError || (() => {});
     this.decoder = null;
     this._loader = null;       // set only during a progressive load (loadTempoProgressive()) — see _pump()
+    // Bumped at the START of every loadTempo()/loadTempoProgressive() call and
+    // captured locally as myGen (Aug 30 2026) — both methods await
+    // VideoDecoder.isConfigSupported() before actually installing the new
+    // decoder/info/sampleIdx, and a second load starting during that gap (a
+    // rapid piece switch, now much more reachable since switching autoplays
+    // immediately instead of waiting for a manual Play tap) must not let its
+    // OWN completion, arriving out of order, stomp state a newer load already
+    // owns. Mirrors mosaic_webcodecs.html's own loadGeneration pattern.
+    this._loadGen = 0;
     this.info = null;          // demuxed MP4 info for the current tempo
     this.sampleIdx = 0;        // next sample to feed to the decoder (decode order)
     this.frameQueue = [];      // decoded VideoFrames, in presentation order (by construction)
@@ -98,6 +107,7 @@ class WebCodecsVideoEngine {
   // after every load means the decoder is configured exactly once per load,
   // full stop, and only genuinely-in-flight decodes ever get reset.
   async loadTempo(arrayBuffer) {
+    const myGen = ++this._loadGen;
     this._teardownDecoder();
     this._loader = null; // this is the whole-buffer path — make sure a PRIOR progressive load's loader reference doesn't linger and confuse _pump()
     const info = parseMP4(arrayBuffer);
@@ -110,6 +120,13 @@ class WebCodecsVideoEngine {
     if (info.description && info.description.length) config.description = info.description;
     const support = await VideoDecoder.isConfigSupported(config);
     if (!support.supported) throw new Error('VideoDecoder does not support this stream: ' + info.codec);
+    // A newer load (loadTempo()/loadTempoProgressive()) may have started and
+    // even finished while the await above was in flight — see _loadGen's own
+    // comment. Installing a decoder configured for OUR (now-stale) info over
+    // that newer load's already-correct state would desync this.info from
+    // whatever decoder actually ends up running. Just stop; the newer load
+    // owns the engine now.
+    if (this._loadGen !== myGen) return;
     this.decoder = new VideoDecoder({
       output: (frame) => this._onFrame(frame),
       error: (e) => { console.error('VideoDecoder error:', e); this.onStatus('Video decode error: ' + e.message, 'error'); this.onError(e); }
@@ -135,6 +152,7 @@ class WebCodecsVideoEngine {
   // instead: seeking into a spot the download hasn't reached yet needs real
   // HTTP Range support, which this first pass doesn't add.
   async loadTempoProgressive(loader) {
+    const myGen = ++this._loadGen;
     this._teardownDecoder();
     const info = loader.info;
     if (!info) throw new Error('loadTempoProgressive() requires loader.info to already be set (metadata not ready yet)');
@@ -148,6 +166,12 @@ class WebCodecsVideoEngine {
     if (info.description && info.description.length) config.description = info.description;
     const support = await VideoDecoder.isConfigSupported(config);
     if (!support.supported) throw new Error('VideoDecoder does not support this stream: ' + info.codec);
+    // See loadTempo()'s identical check — a newer load may have already taken
+    // over the engine while this awaited. This one matters even more here:
+    // switching pieces now autoplays immediately (Aug 30 2026), so a second
+    // switch landing while the first's decoder is still spinning up is a real,
+    // reachable case now, not just a theoretical one.
+    if (this._loadGen !== myGen) return;
     this.decoder = new VideoDecoder({
       output: (frame) => this._onFrame(frame),
       error: (e) => { console.error('VideoDecoder error:', e); this.onStatus('Video decode error: ' + e.message, 'error'); this.onError(e); }
@@ -199,6 +223,14 @@ class WebCodecsVideoEngine {
       performance.now() - t0 < this.pumpBudgetMs
     ) {
       const s = samples[this.sampleIdx];
+      // Defensive (Aug 30 2026): `this.sampleIdx` and `this.info` are always
+      // reassigned together, synchronously, by loadTempo()/loadTempoProgressive()
+      // — in the normal case `s` can never be undefined. It's cheap insurance
+      // against any future path that manages to observe them a half-step out
+      // of sync (e.g. this.info swapped to a piece with fewer samples by a
+      // fast follow-up switch) — treated the same as "not downloaded yet":
+      // stop cleanly rather than crash, the next tick tries again.
+      if (!s) break;
       if (this._loader && !this._loader.hasBytes(s.offset, s.size)) break; // not downloaded yet — stop cleanly, not an error; the next render()/paintAt() tick tries again
       const data = new Uint8Array(buf, s.offset, s.size);
       const chunk = new EncodedVideoChunk({
