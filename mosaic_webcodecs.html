@@ -27,7 +27,10 @@
    tap any one to switch, same switchMosaic() as everywhere else. Built to
    scroll from day one (overflow-x:auto) so adding a 4th+ piece later needs no
    layout change, even though today's 3 pieces fit without scrolling.*/
-.piece-strip-bar{display:flex;align-items:center;gap:8px;padding-bottom:8px}
+/* Moved below the play/timeline controls (Aug 2026) — was the top-of-page
+   bar originally; margin-top added since it's no longer flush against the
+   page's own top padding. */
+.piece-strip-bar{display:flex;align-items:center;gap:8px;margin-top:6px;padding-bottom:8px}
 .piece-strip-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1;min-width:0}
 .piece-strip-scroll::-webkit-scrollbar{display:none}
 .piece-thumb{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:5px 10px 5px 5px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel);cursor:pointer;opacity:.55;filter:brightness(.75);transition:opacity .15s,filter .15s,border-color .15s;-webkit-tap-highlight-color:transparent}
@@ -180,8 +183,9 @@
 .grid-stage-side canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls-vert{position:absolute;inset:0;display:grid;grid-template-columns:1fr;grid-template-rows:repeat(4,1fr)}
 /* The old separate mobile focus-topbar overlay + desktop page-header (each
-   showing a wordmark/piece-name/burger) are gone — .piece-strip-bar above
-   replaces both with one bar identical on mobile and desktop. */
+   showing a wordmark/piece-name/burger) are gone — .piece-strip-bar (now
+   below the play/timeline controls — see markup) replaces both with one
+   bar identical on mobile and desktop. */
 /* Reset + timeline + time now share one row on both mobile and desktop —
    the timeline no longer needs its own full-width row below. */
 .timeline{flex:1;min-width:0;margin:0;accent-color:var(--accent)}
@@ -209,16 +213,20 @@
    author rule wins ties over a UA rule regardless of source order, so
    without the guard the element stays visibly on screen even while hidden. */
 .notation-strip:not([hidden]){display:block}
-.notation-strip{width:100%;height:auto;border-radius:6px;border:2px solid var(--window-border);background:#fff}
+/* Moved to the very top of the page (Aug 2026) — was inside .focus-column,
+   spaced by that flex container's gap; now a standalone top-level element
+   so it needs its own margin-bottom to separate it from .viewer below. */
+.notation-strip{width:100%;height:auto;border-radius:6px;border:2px solid var(--window-border);background:#fff;margin-bottom:8px}
 </style>
 </head>
 <body>
 <main class="app">
   <input type="checkbox" id="menuToggle">
-  <div class="piece-strip-bar">
-    <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
-    <div id="pieceStrip" class="piece-strip-scroll" role="tablist" aria-label="Choose a piece"></div>
-  </div>
+  <!-- Notation strip moved to the very top of the page (Aug 2026) — was
+       between the focus square and the tile grid inside .focus-column. The
+       piece-navigation bar that used to occupy this spot now lives below
+       the play/timeline controls instead (see further down). -->
+  <img id="notationStrip" class="notation-strip" alt="" hidden>
   <div class="viewer">
     <!-- Desktop-only: left half of the tile order, stacked vertically. Hidden
          on mobile (.grid-stage-side is display:none by default); engine only
@@ -240,7 +248,6 @@
         <div id="focusLabel" class="focus-label">Clave</div>
         <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
       </div>
-      <img id="notationStrip" class="notation-strip" alt="" hidden>
       <!-- Mobile-only: all 8 tiles as one 4x2 grid, exactly as before. Hidden
            on desktop (the two grid-stage-side columns above/below replace it
            there) — see .is-desktop #gridStageMobile in the CSS. -->
@@ -257,14 +264,22 @@
       <button id="settingsBtn" type="button" class="settingsBtn" aria-label="Settings">⚙ Settings</button>
     </div>
   </section>
+  <!-- Piece navigation, moved here (Aug 2026) from the very top of the page
+       — freed up the top for the notation strip. Still one flex row with
+       the burger menu toggle, unchanged apart from position. -->
+  <div class="piece-strip-bar">
+    <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
+    <div id="pieceStrip" class="piece-strip-scroll" role="tablist" aria-label="Choose a piece"></div>
+  </div>
   <section class="panel notation-panel" id="notationPanel" hidden>
     <p class="rail-title">Notation</p>
     <div id="notationPages" class="notation-pages"></div>
   </section>
   <!-- The old standalone "Mosaics" browse-list filmstrip (scrollable strip of
-       every piece's tiles) is removed — the piece-strip-bar at the top of the
-       page is now the one place to switch pieces; the burger menu's Pieces
-       rail (#mosaicRail) is the other. buildMosaicBrowseList()/mosaicBrowseList
+       every piece's tiles) is removed — the piece-strip-bar (below the
+       play/timeline controls) is now the one place to switch pieces; the
+       burger menu's Pieces rail (#mosaicRail) is the other.
+       buildMosaicBrowseList()/mosaicBrowseList
        are unused now but left defined in case this needs to come back. -->
   <section class="panel footer-panel">
     <div id="status" class="status">Tap Play. The first tap prepares the selected tempo and starts automatically.</div>
