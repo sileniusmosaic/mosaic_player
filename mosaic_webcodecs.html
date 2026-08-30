@@ -82,8 +82,13 @@
    Deliberately bigger than the tile mute/solo buttons — the number needs to
    be readable at a glance while playing, not just identifiable. */
 .metroBtn{top:auto;right:10px;left:auto;bottom:10px;width:55px;height:55px;color:var(--tile-border);font-size:33px;border-color:var(--border);background:#0c0906}
-.metroBtn .metro-icon{width:56%;height:56%;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:.7}
-.metroBtn .metro-icon circle{fill:currentColor;stroke:none}
+/* Brass tone (matches the app's --brass accent, the same warm metal a real
+   metronome is made of) instead of the old pale monochrome outline — plus a
+   lightly-filled body and full opacity so the idle icon reads clearly against
+   the dark button rather than disappearing into it. */
+.metroBtn .metro-icon{width:60%;height:60%;stroke:var(--brass);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:1}
+.metroBtn .metro-icon path{fill:var(--brass);fill-opacity:.28}
+.metroBtn .metro-icon circle{fill:var(--brass);stroke:none}
 .metroBtn .metro-num{display:none}
 .metroBtn.is-active{border-color:var(--tile-border)}
 .metroBtn.is-active .metro-icon{display:none}
@@ -467,7 +472,7 @@ const SHOW_NOTATION_PANEL=false;
 // NOT tied to tempoPercent or any per-tempo number — it derives
 // seconds-per-beat from the loop's ACTUAL current-tempo length (videoCycle)
 // divided by total beats, so it stays correct across every tempo automatically.
-let metroActive=true; // defaults ON — tap to turn off, per-piece (see metroReady())
+let metroActive=false; // defaults OFF (Aug 30 2026 — was ON) — tap to turn on, per-piece (see metroReady())
 function metroReady(){return !!(cfg.beatsPerBar&&(cfg.bars||cfg.bpm));}
 function updateMetro(){
   if(!metroReady()||!metroActive)return; // idle look (metronome icon) is pure CSS via .is-active
@@ -2009,9 +2014,10 @@ async function switchMosaic(id){
     // desync audio/video tempo the moment the user hits Play on the new piece.
     tempoPercent=100;updateTempoUI();
     lastLoopPos=null;
-    // Beat counter now defaults to ON (counting) for every piece that has
-    // beat data — tap to switch it off, rather than tap to switch it on.
-    metroActive=metroReady();
+    // Beat counter defaults to OFF for every piece switch (Aug 30 2026 — was
+    // defaulting ON) — tap to switch it on. Still disabled outright for a
+    // piece with no beat data at all.
+    metroActive=false;
     metroBtn.classList.toggle('is-active',metroActive);
     metroBtn.disabled=!metroReady();
     metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
@@ -2471,7 +2477,10 @@ sizeFocusCanvas();
 document.title='Mosaic — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
-metroActive=metroReady();
+// Beat counter starts OFF on page load too (Aug 30 2026 — was defaulting ON),
+// matching switchMosaic()'s own default above — still disabled outright when
+// the initial piece has no beat data.
+metroActive=false;
 metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
