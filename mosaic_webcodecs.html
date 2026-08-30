@@ -16,7 +16,14 @@
    piece-strip active thumbnail, Play/Reset, active tempo button. Everything
    else (Mute blue, Solo yellow, the warm background palette) is untouched. */
 --accent-purple:#8b5cf6;--accent-purple-dim:#5b3ea8;--window-border:#000}
-*{box-sizing:border-box;font-family:'Roboto Condensed',Arial,Helvetica,sans-serif!important}html,body{margin:0;background:var(--bg);color:var(--text)}body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
+*{box-sizing:border-box;font-family:'Roboto Condensed',Arial,Helvetica,sans-serif!important}html,body{margin:0;background:var(--bg);color:var(--text)}
+/* Base font-size raised from the 16px browser default to 17.6px (Aug 30
+   2026, +10% across the board per feedback) — every element below that
+   sets its own explicit font-size was individually bumped by the same 10%;
+   this covers the couple of buttons (Reset, Settings) that use font:inherit
+   instead of their own explicit size, so they scale up too. */
+html{font-size:17.6px}
+body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
 .app{max-width:480px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))}
 /* Piece strip (Aug 2026 redesign): replaces the old separate mobile focus-topbar
    overlay and desktop page-header — one unified bar, identical on mobile and
@@ -41,7 +48,7 @@
 .piece-thumb.active{border-color:var(--accent-purple);box-shadow:0 0 0 1px var(--accent-purple),0 0 10px rgba(139,92,246,.55)}
 .piece-thumb-img{width:36px;height:36px;border-radius:6px;background-color:#030405;background-repeat:no-repeat;flex:0 0 auto;opacity:.55;filter:brightness(.75);transition:opacity .15s,filter .15s}
 .piece-thumb.active .piece-thumb-img{opacity:1;filter:none}
-.piece-thumb-name{font-size:12px;font-weight:700;line-height:1.15;white-space:nowrap;color:var(--text)}
+.piece-thumb-name{font-size:13.2px;font-weight:700;line-height:1.15;white-space:nowrap;color:var(--text)}
 .burger{width:34px;height:34px;flex:0 0 auto;border:2px solid var(--window-border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;background:var(--panel)}
 .burger span{width:16px;height:2px;background:var(--accent);display:block;border-radius:2px}
 /* Mobile no longer needs the hamburger in the top bar — the Settings button
@@ -52,17 +59,17 @@
 #menuToggle{display:none}
 .menu-panel{position:fixed;inset:0;background:rgba(15,11,7,.97);z-index:50;padding:18px 16px;transform:translateY(-100%);transition:transform .25s ease}
 #menuToggle:checked ~ .menu-panel{transform:translateY(0)}
-.menu-close{width:34px;height:34px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;margin-left:auto;color:var(--accent);font-size:18px;cursor:pointer}
+.menu-close{width:34px;height:34px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;margin-left:auto;color:var(--accent);font-size:19.8px;cursor:pointer}
 .menu-links{margin-top:20px;display:flex;flex-direction:column;gap:2px}
-.menu-links a{color:var(--text);text-decoration:none;font-family:'Fraunces',serif;font-size:19px;padding:12px 4px;border-bottom:1px solid var(--border);display:block}
+.menu-links a{color:var(--text);text-decoration:none;font-family:'Fraunces',serif;font-size:20.9px;padding:12px 4px;border-bottom:1px solid var(--border);display:block}
 .menu-links a.active{color:var(--accent)}
 .menu-sub{margin-top:22px}
-.rail-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1.5px;color:var(--brass);text-transform:uppercase;margin:0 0 10px}
+.rail-title{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1.5px;color:var(--brass);text-transform:uppercase;margin:0 0 10px}
 .rail-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:3px;margin-bottom:8px;border:1px solid var(--border);background:var(--panel);cursor:pointer}
 .rail-item.active{border-color:var(--accent)}
-.rail-name{font-family:'Fraunces',serif;font-weight:600;font-size:13px}
-.rail-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;margin-top:2px;color:var(--good)}
-.badge{font-size:12px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
+.rail-name{font-family:'Fraunces',serif;font-weight:600;font-size:14.3px}
+.rail-tag{font-family:'IBM Plex Mono',monospace;font-size:9.9px;margin-top:2px;color:var(--good)}
+.badge{font-size:13.2px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
 .focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:3px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
@@ -74,18 +81,18 @@
    interactive itself (pointer-events:none) so it never blocks tap-to-select
    on the square underneath; nothing inside it needs to be tappable. */
 .focus-bottom-overlay{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:flex-start;pointer-events:none}
-.focus-label{background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:14px;margin:0 0 6px 10px}
+.focus-label{background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;margin:0 0 6px 10px}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
-.buffering-spinner span{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
+.buffering-spinner span{font-family:'IBM Plex Mono',monospace;font-size:12.1px;letter-spacing:1px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
 @keyframes mosaic-spin{to{transform:rotate(360deg)}}
 .grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
 .focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
-.dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 12px -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;line-height:1}
+.dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 13.2px -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;line-height:1}
 .muteBtn{right:4px}
 .soloBtn{left:4px}
 .muteBtn.is-muted{background:#4d7c8f;color:#eaf5f9;border-color:#2c4a54}
@@ -98,7 +105,7 @@
    default) since it sits much bigger and lower than those. Deliberately
    bigger than the tile mute/solo buttons — the number needs to be readable
    at a glance while playing, not just identifiable. */
-.metroBtn{top:10px;right:10px;left:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);font-size:33px;border-color:var(--border);background:#0c0906}
+.metroBtn{top:10px;right:10px;left:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);font-size:36.3px;border-color:var(--border);background:#0c0906}
 /* Brass tone (matches the app's --brass accent, the same warm metal a real
    metronome is made of) instead of the old pale monochrome outline — plus a
    lightly-filled body and full opacity so the idle icon reads clearly against
@@ -121,7 +128,7 @@
 .manuscriptBtn .manuscript-icon rect{fill:var(--brass);fill-opacity:.12}
 .manuscriptBtn .manuscript-icon circle{fill:var(--brass);stroke:none}
 .manuscriptBtn.is-active{border-color:var(--tile-border)}
-.tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
+.tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
 .tile.is-selected{outline:2px solid var(--tile-border);outline-offset:-2px}
@@ -132,33 +139,49 @@
 .transport button.primary{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
 .transport button:disabled{opacity:.5}
 .settingsBtn{margin-left:auto}
-.time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
+.time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
 .tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0}
-.tempo-buttons button{font:inherit;border:2px solid var(--window-border);border-radius:6px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:700}
+/* min-height 38.5px (Aug 30 2026) — was an implicit ~35px from padding alone,
+   this is that same rendered height +10% per feedback. display:flex centers
+   the (possibly taller-than-text) content both ways; the 6px gap only does
+   anything for #play, which has an icon next to its label — a no-op for the
+   plain-text 50/75/100 buttons. */
+.tempo-buttons button{font:inherit;border:2px solid var(--window-border);border-radius:6px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:13.2px;font-weight:700;min-height:38.5px;display:flex;align-items:center;justify-content:center;gap:6px}
 .tempo-buttons button.active{background:var(--accent-purple);color:#fff;border-color:var(--window-border)}
 .tempo-buttons button:disabled{opacity:.4}
 .tempo-buttons button#play{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750}
 .tempo-buttons button#play.active{background:var(--accent-purple-dim);color:#fff}
+/* Play/pause icon (Aug 30 2026): a small triangle to the left of the label,
+   which swaps to two vertical bars while playing. Both shapes live in one
+   SVG, toggled via #play's own is-playing class (set by setPlayBtnLabel(),
+   the single place that now touches the button's label — see below and its
+   comment for why that centralization matters). currentColor picks up the
+   button's own white text color automatically in both its normal and
+   .is-loading states, no separate color rule needed. */
+.play-icon{width:11px;height:11px;flex:0 0 auto;fill:currentColor}
+.play-icon .icon-pause{display:none}
+#play.is-playing .play-icon .icon-play{display:none}
+#play.is-playing .play-icon .icon-pause{display:inline}
 /* Play/Pause doubles as a loading indicator whenever audio/video is being
    fetched or decoded (first-ever prepare in ensurePrepared(), or a live
    tempo switch in changeTempo()): its own label always reads "Loading…" for
    that whole window, and a ::before layer fills the button left-to-right
    like a bucket, in the brighter purple, over the dimmed idle background —
-   a pseudo-element rather than a real child node, so it survives the many
-   call sites that just do playBtn.textContent='Loading…' etc. without
-   wiping it out. The fill's width is driven by the real --play-progress
-   custom property (0..1) — see makeLoadProgress()/setPlayFill() — tracking
-   actual bytes received against each fetch's Content-Length, not a guessed
-   duration; a short linear transition just smooths the steps between chunk
-   events. reset-instant briefly kills that transition so the fill can jump
-   back to empty for next time without visibly draining back out. */
+   a pseudo-element rather than a real child node, so it's untouched by
+   every label change (see setPlayBtnLabel()) same as the icon above. The
+   fill's width is driven by the real --play-progress custom property
+   (0..1) — see makeLoadProgress()/setPlayFill() — tracking actual bytes
+   received against each fetch's Content-Length, not a guessed duration; a
+   short linear transition just smooths the steps between chunk events.
+   reset-instant briefly kills that transition so the fill can jump back to
+   empty for next time without visibly draining back out. */
 .tempo-buttons button#play{position:relative;overflow:hidden;--play-progress:0}
 .tempo-buttons button#play::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
 .tempo-buttons button#play.is-loading{background:var(--accent-purple-dim)}
 .tempo-buttons button#play.reset-instant::before{transition:none!important}
-.status{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
+.status{font-size:14.3px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
-.note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.35}
+.note{font-size:13.2px;color:var(--muted);margin:8px 0 0;line-height:1.35}
 /* Load log (Aug 2026): replaces the old single #loadBytesReadout line, which
    cleared the instant a load finished — not useful for comparing several
    loads against each other on a flaky connection. Newest entry on top (see
@@ -166,7 +189,7 @@
    a long test session doesn't grow the DOM without bound. Monospace so the
    byte/second columns stay visually aligned entry to entry. */
 .load-log{margin-top:8px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
-.load-log-entry{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);line-height:1.4;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.load-log-entry{font-size:12.1px;font-family:'IBM Plex Mono',monospace;color:var(--muted);line-height:1.4;padding-bottom:5px;border-bottom:1px solid var(--border)}
 .load-log-entry:last-child{border-bottom:none;padding-bottom:0}
 .load-log-entry.good{color:var(--good)}
 .load-log-entry.error{color:var(--danger)}
@@ -175,9 +198,9 @@
 .browse-item{display:flex;flex-direction:column;gap:7px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;text-align:left;font:inherit;color:inherit;width:100%}
 .browse-item:last-child{border-bottom:none}
 .browse-item-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.browse-item-title{font-family:'Fraunces',serif;font-weight:600;font-size:14px}
+.browse-item-title{font-family:'Fraunces',serif;font-weight:600;font-size:15.4px}
 .browse-item.active .browse-item-title{color:var(--accent)}
-.browse-item-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--good);white-space:nowrap}
+.browse-item-tag{font-family:'IBM Plex Mono',monospace;font-size:9.9px;letter-spacing:1px;color:var(--good);white-space:nowrap}
 .browse-strip{display:flex;gap:3px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
 .browse-tile{flex:0 0 auto;width:50px;aspect-ratio:1/1;border-radius:4px;background-color:#030405;background-repeat:no-repeat;border:1px solid var(--border)}
 @media(min-width:620px){.grid-stage{margin-top:8px}}
@@ -246,6 +269,11 @@
    match every other layer inside it, the same way the canvas and dim
    overlays are clipped. pointer-events:none is inherited from the wrapper. */
 .notation-strip{width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0;flex:0 0 auto}
+/* Manuscript toggled off (Aug 30 2026): visibility, not display — the image
+   keeps its rendered box (same height) so .focus-label above it in the same
+   flex column stays exactly where it is instead of dropping down into the
+   space the image used to occupy. */
+.notation-strip.is-off{visibility:hidden}
 </style>
 </head>
 <body>
@@ -310,7 +338,7 @@
     </div>
     <div class="grid-stage-side grid-stage-right"><canvas id="gridRight" width="480" height="1920"></canvas><div id="gridControlsRight" class="grid-controls-vert"></div></div>
   </div>
-  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary" type="button">Play</button></div></div>
+  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary" type="button"><svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg><span id="playLabel">Play</span></button></div></div>
   <section class="panel">
     <div class="transport">
       <button id="reset" type="button">Reset</button>
@@ -514,7 +542,15 @@ const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controls
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
-const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout'), loadLog=$('#loadLog'), manuscriptBtn=$('#manuscriptBtn');
+const playBtn=$('#play'), resetBtn=$('#reset'), timeline=$('#timeline'), tempoButtons=$('#tempoButtons'), timeEl=$('#time'), status=$('#status'), badge=$('#badge'), noteText=$('#noteText'), metroBtn=$('#metroBtn'), metroNum=$('#metroNum'), fpsReadout=$('#fpsReadout'), loadLog=$('#loadLog'), manuscriptBtn=$('#manuscriptBtn'), playLabel=$('#playLabel');
+// Every call site that used to do playBtn.textContent=X (Aug 30 2026) now
+// goes through this instead — textContent on the button itself would wipe
+// out the icon <svg> child (and, before this, would've been merely harmless
+// with the ::before progress-fill pseudo-element, but a real child element
+// is a different story). Also flips is-playing so the icon swaps between
+// the play triangle and the pause bars — true only for the literal 'Pause'
+// label, same as every other piece of code that keys off that string.
+function setPlayBtnLabel(text){playLabel.textContent=text;playBtn.classList.toggle('is-playing',text==='Pause');}
 // Numeric byte/timing log — separate from the Play button's 0-1 visual fill
 // (setPlayFill) so a real byte count and elapsed time are always visible,
 // including the specific case that visual fill alone can't distinguish:
@@ -1349,14 +1385,23 @@ function renderNotation(){
 // — separate from the full sheet-music panel above. Hidden entirely for any
 // piece without one set, same pattern as renderNotation().
 function renderNotationStrip(){
-  if(cfg.notationStrip){notationStrip.src=cfg.notationStrip;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=!manuscriptOn;}
-  else{notationStrip.hidden=true;notationStrip.removeAttribute('src');}
-  // The button itself stays enabled/showable even when this piece has no
-  // notationStrip at all — matching metroBtn's own pattern of disabling
-  // rather than hiding when a piece can't support the feature would need a
-  // per-piece capability flag notation doesn't have yet; every piece
-  // currently ships a notationStrip (see MOSAICS), so this is unreachable
-  // in practice today.
+  if(cfg.notationStrip){
+    notationStrip.src=cfg.notationStrip;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;
+    // Toggled off (manuscriptBtn) now uses visibility, not the hidden
+    // attribute (Aug 30 2026) — per feedback, the instrument label above it
+    // shouldn't "pop down" to fill the gap when notation is switched off.
+    // visibility:hidden makes the image invisible but keeps its layout box
+    // (same rendered height, since it's still a real <img> with a real src)
+    // so the label sitting above it in the same flex column never moves.
+    notationStrip.classList.toggle('is-off',!manuscriptOn);
+  }else{
+    // No notationStrip configured for this piece at all — collapse for
+    // real (the hidden attribute takes it fully out of layout), since
+    // there's no "space above it" worth preserving. Every piece currently
+    // ships a notationStrip (see MOSAICS), so this branch is unreachable
+    // in practice today.
+    notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
+  }
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
 function currentPos(){
@@ -1824,7 +1869,7 @@ async function ensurePrepared(){
   finally{if(currentLoad===tracker){currentLoad=null;currentLoadPromise=null;}}
 }
 async function ensurePreparedImpl(tracker,myGen){
-  playBtn.disabled=true;playBtn.textContent='Loading…';badge.textContent='Preparing '+tempoPercent+'%…';
+  playBtn.disabled=true;setPlayBtnLabel('Loading…');badge.textContent='Preparing '+tempoPercent+'%…';
   try{
     await unlockContext();ensureGains();
     const [bank]=await Promise.all([loadBank(tempoPercent,tracker),ensureMetroBuffers()]);
@@ -1874,7 +1919,7 @@ async function ensurePreparedImpl(tracker,myGen){
     // switchMosaic gave up on it) would clear preparing/re-enable/re-caption
     // the Play button out from under whatever the newer load is actively
     // doing right now.
-    if(myGen===loadGeneration){preparing=false;playBtn.disabled=false;playBtn.textContent=playing?'Pause':'Play';playBtnLoadingDone();}
+    if(myGen===loadGeneration){preparing=false;playBtn.disabled=false;setPlayBtnLabel(playing?'Pause':'Play');playBtnLoadingDone();}
   }
 }
 function buildTempoButtons(){
@@ -1939,7 +1984,7 @@ async function changeTempoImpl(percent,tracker,myGen){
   // takes — the button is the only visible sign a switch is even happening,
   // so it always says "Loading…" (not "Pause") and fills like a bucket for
   // the whole wait, exactly like the first-ever prepare above.
-  playBtn.textContent='Loading…';
+  setPlayBtnLabel('Loading…');
   try{
     // Prepare the audio bank AND the video buffer in parallel while the existing
     // transport remains untouched — this intentionally mirrors the reliable Reset path.
@@ -1990,11 +2035,11 @@ async function changeTempoImpl(percent,tracker,myGen){
       await unlockContext();
       startStems(newPos);
       playing=true;
-      playBtn.textContent='Pause';
+      setPlayBtnLabel('Pause');
       resetStallWatchdog();
       if(!raf)tick();
     }else{
-      playBtn.textContent='Play';
+      setPlayBtnLabel('Play');
       paintAt(newPos);
     }
     updateTempoUI();
@@ -2005,7 +2050,7 @@ async function changeTempoImpl(percent,tracker,myGen){
       // Failed after we'd already stopped the OLD tempo and committed to the
       // new one (e.g. unlockContext()/startStems() below the cutover point) —
       // there's no clean state left to fall back to, so stop like before.
-      playing=false;stopStems();playBtn.textContent='Play';
+      playing=false;stopStems();setPlayBtnLabel('Play');
       if(tracker.signal.aborted)setStatus('Tempo change cancelled.');
       else{console.error(err);setStatus('Tempo change failed. Tap Play to continue: '+(err?.message||err),'error');}
     }else{
@@ -2013,7 +2058,7 @@ async function changeTempoImpl(percent,tracker,myGen){
       // the OLD tempo's audio was never stopped and is still playing (or
       // still paused) exactly as it was before this tempo was tapped. The
       // picture stays frozen on its last frame either way, same as before.
-      playBtn.textContent=wasPlaying?'Pause':'Play';
+      setPlayBtnLabel(wasPlaying?'Pause':'Play');
       if(tracker.signal.aborted)setStatus('Tempo change cancelled.');
       else{console.error(err);setStatus(percent+'% failed to load — still playing at '+tempoPercent+'%. '+(err?.message||err),'error');}
     }
@@ -2189,7 +2234,7 @@ async function switchMosaic(id){
     // video" after switching mid-thought. playFromGesture() below also
     // guards on switchingMosaic directly, so this holds even from the
     // spacebar shortcut, not just a click on a disabled button.
-    badge.textContent='Ready to start';playBtn.textContent='Loading…';playBtn.disabled=true;
+    badge.textContent='Ready to start';setPlayBtnLabel('Loading…');playBtn.disabled=true;
     setStatus('Loading '+cfg.label+'…');
 
     // Logged (Aug 2026) the same way the initial page-load video fetch and
@@ -2290,12 +2335,13 @@ async function switchMosaic(id){
       }
       buffers=bank;tempoPercent=100;updateTempoUI();prepared=true;fallbackMode=false;
     }
-    playBtn.disabled=false;playBtn.textContent='Play';
+    playBtn.disabled=false;setPlayBtnLabel('Play');
     // Autoplay on switch (Aug 30 2026): picking a different piece now starts
-    // it playing immediately once ready, the same way the very first
-    // interaction of a session now does (see the pointerdown/keydown listener
-    // near the bottom of this script) — no separate Play tap needed. Safe to
-    // call startPlaybackNow() directly here (rather than playFromGesture(),
+    // it playing immediately once ready — no separate Play tap needed. This
+    // is kept even after the page-load "tap anywhere" listener was removed
+    // (see the bottom of this script) since it's a distinct, deliberately
+    // requested behavior of its own. Safe to call startPlaybackNow() directly
+    // here (rather than playFromGesture(),
     // which would bail out on switchingMosaic still being true) because this
     // whole function already ran inside the same click that chose the piece,
     // and unlockContext() above already succeeded within that same gesture.
@@ -2312,7 +2358,7 @@ async function switchMosaic(id){
     // the piece that failed is still the one they're actually looking at.
     if(id===mosaicId){
       console.error(err);
-      playBtn.disabled=false;playBtn.textContent='Play'; // don't leave Play stuck disabled if the video load above failed
+      playBtn.disabled=false;setPlayBtnLabel('Play'); // don't leave Play stuck disabled if the video load above failed
       setStatus('Failed to load '+(MOSAICS[id]&&MOSAICS[id].label||id)+': '+(err?.message||err),'error');
     }
   }finally{switchingMosaic=false;}
@@ -2329,7 +2375,7 @@ async function startPlaybackNow(){
   try{
     if(!fallbackMode){await unlockContext();startStems(pos);}
     else{fallbackAudio.currentTime=pos;await fallbackAudio.play();}
-    playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');resetStallWatchdog();if(!raf)tick();
+    playing=true;setPlayBtnLabel('Pause');badge.textContent='Playing';setStatus('Playing at '+tempoPercent+'%.','good');resetStallWatchdog();if(!raf)tick();
   }catch(err){console.warn(err);stopStems();fallbackAudio.pause();setStatus('Playback was blocked. Tap Play once more.','error');}
 }
 async function playFromGesture(){
@@ -2345,7 +2391,7 @@ async function playFromGesture(){
     await startPlaybackNow();
   }finally{startingPlayback=false;}
 }
-function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();playBtn.textContent='Play';badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI()}
+function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();setPlayBtnLabel('Play');badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI()}
 function toggleFromGesture(){if(playing)pause();else playFromGesture()}
 // Reset is a full "start over": clears every Mute and Solo, drops back to
 // 100% tempo (re-preparing that bank/video first if a different tempo was
@@ -2412,12 +2458,12 @@ async function reset(){
     schedulePrefetchOnce();
     if(fallbackMode){fallbackAudio.currentTime=0;await fallbackAudio.play();}
     else{await unlockContext();startStems(0);}
-    playing=true;playBtn.textContent='Pause';badge.textContent='Playing · 100%';setStatus('Reset — mute/solo cleared, back to 100%, playing from the start.','good');
+    playing=true;setPlayBtnLabel('Pause');badge.textContent='Playing · 100%';setStatus('Reset — mute/solo cleared, back to 100%, playing from the start.','good');
     resetStallWatchdog();if(!raf)tick();
   }catch(err){
     console.error(err);
     playing=false;
-    playBtn.textContent='Play';
+    setPlayBtnLabel('Play');
     setStatus('Reset failed: '+(err?.message||err),'error');
     bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
   }finally{
@@ -2632,9 +2678,9 @@ async function endScrub(e){
     try{
       if(fallbackMode){fallbackAudio.currentTime=scrubPos;if(fallbackAudio.paused)await fallbackAudio.play();}
       else{await unlockContext();startStems(scrubPos);}
-      playing=true;playBtn.textContent='Pause';badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');resetStallWatchdog();if(!raf)tick();
+      playing=true;setPlayBtnLabel('Pause');badge.textContent='Playing';setStatus('Jumped to new position and continued playing.','good');resetStallWatchdog();if(!raf)tick();
     }catch(err){console.warn(err)}
-  }else{playing=false;playBtn.textContent='Play';badge.textContent='Paused';bufferingSpinner.hidden=true;paintAt(scrubPos);}
+  }else{playing=false;setPlayBtnLabel('Play');badge.textContent='Paused';bufferingSpinner.hidden=true;paintAt(scrubPos);}
   scrubPointerId=null;updateUI();e.preventDefault();
 }
 timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginScrub);timeline.addEventListener('pointermove',moveScrub);timeline.addEventListener('pointerup',endScrub);timeline.addEventListener('pointercancel',endScrub);
@@ -2656,33 +2702,12 @@ metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();updateFocusUI();updateUI();
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
-setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap anywhere to begin.');
-// Autoplay on load (Aug 30 2026): the goal is for the default piece to start
-// playing the instant the app is opened, matching switchMosaic()'s own new
-// autoplay-on-switch behavior above. Browsers flatly refuse to let a page
-// play audible audio before the page has received ANY user interaction —
-// Chrome, Safari and Firefox all enforce this and there is no script-side
-// way around it — so a true zero-tap autoplay isn't possible here. This is
-// the closest real equivalent: the very first click/tap ANYWHERE on the
-// page (not specifically the Play button) immediately starts the loaded
-// piece playing, showing the same loading/buffering UI Play already shows
-// (see startPlaybackNow()/ensurePrepared()). Registered with capture:true so
-// it fires during the capturing phase, before the click even reaches
-// whatever was actually tapped — including elements that stopPropagation()
-// (e.g. the mute/solo tile buttons) — and `once:true` so it never fires
-// again after the session's first interaction.
-//
-// If that first tap was actually on a piece-rail item or a tempo button
-// (switching away from the default before ever hearing it, or picking a
-// tempo before Play), this fires playFromGesture() for the CURRENT piece a
-// moment before that click's own handler runs (switchMosaic()/changeTempo())
-// — any resulting in-flight prepare is simply abandoned the same way
-// Reset/switchMosaic() already abandon a stale load elsewhere in this file;
-// nothing breaks, at most one small wasted request.
-document.addEventListener('click',()=>{
-  if(playing||switchingMosaic||startingPlayback)return;
-  playFromGesture();
-},{capture:true,once:true});
+setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play to begin.');
+// The "first tap ANYWHERE starts playback" listener that used to live here
+// (Aug 30 2026) is removed per later feedback (Aug 30 2026) — only the Play
+// button itself should ever start playback on page load now. Switching
+// pieces still autoplays (see switchMosaic()'s own startPlaybackNow() call
+// above) — that's a separate, deliberately-kept behavior, not this one.
 // Logged (Aug 2026) the same way prefetchTempoBanks() is — this is the OTHER
 // silent video fetch that used to leave the log with nothing to show for the
 // very first video download of the session (before Play is ever pressed).
