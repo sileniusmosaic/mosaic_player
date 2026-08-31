@@ -23,6 +23,14 @@
    this covers the couple of buttons (Reset, Settings) that use font:inherit
    instead of their own explicit size, so they scale up too. */
 html{font-size:17.6px}
+/* Desktop-browser-only fix (Aug 31 2026): as posters/video/tiles finish
+   loading in above the fold, the browser's native scroll-anchoring nudges
+   the page down to keep whatever it picked as the "anchor" element in
+   place — harmless on the phone app (no page scroll there) but on a
+   regular browser tab it lands you a little below the top on first load.
+   overflow-anchor:none turns that auto-adjustment off; paired with the
+   scrollRestoration/scrollTo(0,0) calls in the script below. */
+html,body{overflow-anchor:none}
 body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
 .app{max-width:480px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))}
 /* Piece strip (Aug 2026 redesign): replaces the old separate mobile focus-topbar
@@ -169,6 +177,10 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    reset circular-arrow, and the settings gear read as one family rather
    than three unrelated glyphs. */
 .play-icon,.reset-icon,.settings-icon{width:20px;height:20px;flex:0 0 auto;fill:currentColor}
+/* Reset's circular-arrow reads thinner than the solid play triangle at the
+   same size (Aug 31 2026) — bump it up slightly and add a matching stroke
+   along the path edges to bulk up its line weight so the two feel matched. */
+.reset-icon{width:22px;height:22px;stroke:currentColor;stroke-width:.7;stroke-linejoin:round;stroke-linecap:round}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
 .tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0}
 /* min-height 38.5px (Aug 30 2026) — was an implicit ~35px from padding alone,
@@ -330,7 +342,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
              beamed eighth notes over a 6-line staff behind them — filled
              noteheads/beam, stroked stems, thin staff lines drawn first so
              the solid noteheads occlude them, matching the reference art. -->
-        <button id="manuscriptBtn" type="button" class="dawBtn manuscriptBtn" aria-label="Manuscript notation: on">
+        <button id="manuscriptBtn" type="button" class="dawBtn manuscriptBtn" aria-label="Manuscript notation: off">
           <svg class="manuscript-icon" viewBox="0 0 24 24" aria-hidden="true">
             <g class="staff-line">
               <line x1="1" y1="7.4" x2="23" y2="7.4"></line>
@@ -465,6 +477,18 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 <script>
 (() => {
 'use strict';
+// Desktop-browser scroll fix (Aug 31 2026, see also the overflow-anchor:none
+// rule on html/body above): stop the browser from restoring a remembered
+// scroll offset on reload, and force back to the top once everything
+// (posters, fonts, initial video frame) has actually settled in — a single
+// scrollTo right away isn't enough since late-loading content above the
+// fold can still push things down after it runs.
+if('scrollRestoration' in history)history.scrollRestoration='manual';
+window.scrollTo(0,0);
+window.addEventListener('load',()=>{
+  window.scrollTo(0,0);
+  setTimeout(()=>window.scrollTo(0,0),300);
+});
 // --- environment detection ------------------------------------------------
 // "Desktop" here means "has a precise pointer" (a real mouse/trackpad), not a
 // screen-size guess — a touchscreen laptop with a trackpad still correctly
@@ -651,7 +675,7 @@ let metroActive=false; // defaults OFF (Aug 30 2026 — was ON) — tap to turn 
 // beat counter above. Unlike metroActive, this is NOT reset on every piece
 // switch/page load below — once the user picks a state it persists across
 // switching pieces, since nothing asked for switch-reset behavior here.
-let manuscriptOn=true;
+let manuscriptOn=false; // defaults OFF (Aug 31 2026 — was ON) — tap to turn on, per user request
 function metroReady(){return !!(cfg.beatsPerBar&&(cfg.bars||cfg.bpm));}
 function updateMetro(){
   if(!metroReady()||!metroActive)return; // idle look (metronome icon) is pure CSS via .is-active
@@ -2765,8 +2789,7 @@ metroActive=false;
 metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
-// Manuscript notation starts ON (per its own default above — unlike the
-// beat counter, this one is NOT flipped to off here).
+// Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();updateFocusUI();updateUI();
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
