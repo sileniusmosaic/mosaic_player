@@ -598,8 +598,11 @@ const MOSAICS={
     // after ~6.5KB).
     progressiveVideo:true,
     notation:['flipswing_notation_1.png'],
-    // See Abakuá's own comment above — same placeholder strip for now.
+    // See Abakuá's own comment above — same placeholder strip for now,
+    // except Kit (index 6 below — first real per-tile notation strip, Aug
+    // 31 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'notation_strip_placeholder.png',
+    notationStripByIndex:{6:'07_kit_flipswing.png'},
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
@@ -1332,6 +1335,7 @@ function drawPoster(){
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
+  renderNotationStrip(); // per-tile notation (cfg.notationStripByIndex) needs to update whenever the focused tile changes, not just on load/piece-switch
   const anySolo=soloed.some(Boolean);
   focusWrap.classList.toggle('is-muted',muted[selected]);
   focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
@@ -1476,9 +1480,16 @@ function renderNotation(){
 // The always-visible single-line strip under the focus square (cfg.notationStrip)
 // — separate from the full sheet-music panel above. Hidden entirely for any
 // piece without one set, same pattern as renderNotation().
+// Per-instrument swapping (Aug 31 2026 — first real test, see cfg.notationStripByIndex
+// on Flip Swing): if the current piece has a real strip image for the
+// currently-focused tile, show that instead of the piece's generic
+// placeholder. Falls straight back to cfg.notationStrip for every other
+// tile/piece, so Abakuá and Congo (no per-tile map yet) are unaffected.
 function renderNotationStrip(){
-  if(cfg.notationStrip){
-    notationStrip.src=cfg.notationStrip;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;
+  const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[selected];
+  const src=perTile||cfg.notationStrip;
+  if(src){
+    notationStrip.src=src;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;
     // Toggled off (manuscriptBtn) now uses visibility, not the hidden
     // attribute (Aug 30 2026) — per feedback, the instrument label above it
     // shouldn't "pop down" to fill the gap when notation is switched off.
