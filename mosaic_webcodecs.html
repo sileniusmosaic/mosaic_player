@@ -330,6 +330,14 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
   .landscape-notation{position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:#fff;margin:0;padding:0}
   .landscape-notation img{width:100%;height:auto;display:block}
 }
+/* Rule (Aug 31 2026): the landscape notation view always carries the
+   instrument name, bottom-left of the screen — not overlapping the
+   notation image itself, which is only vertically centered (not
+   stretched to full height), so the corner below/beside it is always
+   clear. Same dark-badge look as .focus-label/.tile-name elsewhere in the
+   app for visual consistency. position:fixed on the parent already
+   establishes the containing block this positions against. */
+.landscape-notation-label{position:absolute;left:14px;bottom:12px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);pointer-events:none}
 </style>
 </head>
 <body>
@@ -344,7 +352,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      regardless of whether notation is switched on in portrait. pointer:coarse
      (not a screen-size guess) keeps this off on a desktop browser window
      that's simply wide, matching how IS_DESKTOP itself is detected. -->
-<div id="landscapeNotation" class="landscape-notation" hidden><img id="landscapeNotationImg" alt=""></div>
+<div id="landscapeNotation" class="landscape-notation" hidden><img id="landscapeNotationImg" alt=""><div id="landscapeNotationLabel" class="landscape-notation-label"></div></div>
 <main class="app">
   <input type="checkbox" id="menuToggle">
   <!-- The notation strip briefly lived here as a standalone top-of-page
@@ -658,7 +666,7 @@ const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$
 const gridLeft=$('#gridLeft'), gctxLeft=gridLeft.getContext('2d',{alpha:false}), gridRight=$('#gridRight'), gctxRight=gridRight.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg'), landscapeNotationLabel=$('#landscapeNotationLabel');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -1360,6 +1368,7 @@ function drawPoster(){
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
+  landscapeNotationLabel.textContent=NAMES[selected]; // rule (Aug 31 2026): landscape notation view always carries the instrument name, bottom-left, same NAMES[selected] source as focusLabel above
   renderNotationStrip(); // per-tile notation (cfg.notationStripByIndex) needs to update whenever the focused tile changes, not just on load/piece-switch
   const anySolo=soloed.some(Boolean);
   focusWrap.classList.toggle('is-muted',muted[selected]);
