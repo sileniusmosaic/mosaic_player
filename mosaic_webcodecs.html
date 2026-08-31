@@ -344,6 +344,14 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    the viewport meta tag above) so it also clears the notch/home-indicator
    safe area on a phone that has one. */
 .landscape-notation-label{position:absolute;left:max(24px,calc(env(safe-area-inset-left) + 16px));bottom:max(20px,calc(env(safe-area-inset-bottom) + 16px));background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);pointer-events:none}
+/* Landscape metronome (Aug 31 2026) — see the markup comment on
+   #metroBtnLandscape. Only top/right are overridden (same safe-area-aware
+   treatment as the label above, mirrored to the opposite corner); every
+   other rule it needs (.dawBtn/.metroBtn sizing, the is-active ring, the
+   icon-to-digit swap) already applies unchanged via its shared classes.
+   The compound selector beats the plain .dawBtn/.metroBtn rules on
+   specificity regardless of source order. */
+.metroBtn.metroBtn-landscape{top:max(20px,calc(env(safe-area-inset-top) + 14px));right:max(20px,calc(env(safe-area-inset-right) + 14px))}
 </style>
 </head>
 <body>
@@ -358,7 +366,38 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      regardless of whether notation is switched on in portrait. pointer:coarse
      (not a screen-size guess) keeps this off on a desktop browser window
      that's simply wide, matching how IS_DESKTOP itself is detected. -->
-<div id="landscapeNotation" class="landscape-notation" hidden><img id="landscapeNotationImg" alt=""><div id="landscapeNotationLabel" class="landscape-notation-label"></div></div>
+<div id="landscapeNotation" class="landscape-notation" hidden>
+  <img id="landscapeNotationImg" alt="">
+  <div id="landscapeNotationLabel" class="landscape-notation-label"></div>
+  <!-- Landscape metronome (Aug 31 2026): a second button, not a repositioned
+       original — #metroBtn stays put inside .app (which this whole view
+       hides), so a live mirror is needed here instead. Same markup/classes
+       as #metroBtn (dawBtn/metroBtn/metro-icon/metro-num) so every existing
+       CSS rule — the icon, the is-active ring, the icon-to-digit swap —
+       applies unchanged; .metroBtn-landscape below only repositions it
+       top-right of the full screen instead of the focus square. Clicking it
+       just calls #metroBtn's own click() so there is exactly one source of
+       truth for metroActive/scheduling; syncLandscapeMetroBtn() (see
+       script) then mirrors the resulting is-active/disabled/aria-label
+       back onto this button, and updateMetro() mirrors the live beat digit
+       into #metroNumLandscape alongside #metroNum. -->
+  <button id="metroBtnLandscape" type="button" class="dawBtn metroBtn metroBtn-landscape" aria-label="Beat counter: off" disabled>
+    <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path class="metro-case" d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
+      <circle class="metro-foot" cx="8" cy="20.9" r="0.9"></circle>
+      <circle class="metro-foot" cx="16" cy="20.9" r="0.9"></circle>
+      <g class="metro-ticks">
+        <line x1="12" y1="8" x2="12" y2="8.01"></line>
+        <line x1="12" y1="11" x2="12" y2="11.01"></line>
+        <line x1="12" y1="14" x2="12" y2="14.01"></line>
+        <line x1="12" y1="17" x2="12" y2="17.01"></line>
+      </g>
+      <line class="metro-arm" x1="9.5" y1="19" x2="17.5" y2="2.5"></line>
+      <rect class="metro-weight" x="14.7" y="6.3" width="2.6" height="2.6" transform="rotate(45 16 7.6)"></rect>
+    </svg>
+    <span id="metroNumLandscape" class="metro-num"></span>
+  </button>
+</div>
 <main class="app">
   <input type="checkbox" id="menuToggle">
   <!-- The notation strip briefly lived here as a standalone top-of-page
@@ -641,7 +680,7 @@ const MOSAICS={
     // except Kit (index 6 below — first real per-tile notation strip, Aug
     // 31 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'notation_strip_placeholder.png',
-    notationStripByIndex:{0:'01_bass_flipswing.png',4:'05_guitar1_flipswing.png',5:'06_guitar2_flipswing.png',6:'07_kit_flipswing.png'},
+    notationStripByIndex:{0:'01_bass_flipswing.png',1:'02_coro_flipswing.png',2:'02_coro_flipswing.png',4:'05_guitar1_flipswing.png',5:'06_guitar2_flipswing.png',6:'07_kit_flipswing.png'},
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
@@ -672,7 +711,7 @@ const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$
 const gridLeft=$('#gridLeft'), gctxLeft=gridLeft.getContext('2d',{alpha:false}), gridRight=$('#gridRight'), gctxRight=gridRight.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg'), landscapeNotationLabel=$('#landscapeNotationLabel');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -739,6 +778,17 @@ function updateMetro(){
   }
   const beatInBar=Math.floor(beatFloat%cfg.beatsPerBar)+1;
   metroNum.textContent=String(beatInBar);
+  metroNumLandscape.textContent=String(beatInBar); // mirror into the landscape metro button (see syncLandscapeMetroBtn())
+}
+// Keeps #metroBtnLandscape's visuals (ring, disabled state, aria-label) in
+// step with the real #metroBtn — call after anything that changes metroBtn
+// itself (its own click handler, a piece switch resetting it, page init).
+// The digit is mirrored separately, in updateMetro() above, since it ticks
+// every frame rather than only on a state change.
+function syncLandscapeMetroBtn(){
+  metroBtnLandscape.classList.toggle('is-active',metroBtn.classList.contains('is-active'));
+  metroBtnLandscape.disabled=metroBtn.disabled;
+  metroBtnLandscape.setAttribute('aria-label',metroBtn.getAttribute('aria-label'));
 }
 metroBtn.addEventListener('click',()=>{
   if(!metroReady())return;
@@ -759,6 +809,17 @@ metroBtn.addEventListener('click',()=>{
     cancelScheduledMetroClicks();
   }
   updateMetro();
+  syncLandscapeMetroBtn();
+});
+// Landscape metronome button (Aug 31 2026): just forwards to the real
+// button's own click() so metroActive/scheduling has exactly one source of
+// truth — #metroBtn's own listener above does the actual work (and is a
+// no-op via the metroReady() guard when disabled, same as a real click on a
+// disabled button would be), then syncLandscapeMetroBtn() picks up the
+// resulting state change here too.
+metroBtnLandscape.addEventListener('click',()=>{
+  metroBtn.click();
+  syncLandscapeMetroBtn();
 });
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
@@ -1516,6 +1577,29 @@ function renderNotation(){
     notationPages.appendChild(img);
   });
   notationPanel.hidden=false;
+}
+// Fixes the "notation lags half a second behind the focus square" report
+// (Aug 31 2026): the focus square repaints instantly on tile switch (it's
+// just redrawing an already-decoded video frame), but renderNotationStrip()
+// below was the FIRST thing to ever reference a given tile's strip image —
+// so the very first time a user tapped that tile, assigning notationStrip.src
+// kicked off a real network fetch + decode right then, and the image
+// visibly popped in after a beat. Preloading (and decoding, where
+// supported) every strip this piece could ever show — the moment the piece
+// itself loads/switches, not on demand per-tile — means the browser
+// already has each one fetched and ready by the time a tap actually needs
+// it, so the swap in renderNotationStrip() is just an instant cache hit.
+// Small enough (four ~30-60KB PNGs on Flip Swing today) that preloading
+// all of them up front costs nothing worth worrying about.
+function preloadNotationStrips(){
+  const srcs=new Set();
+  if(cfg.notationStrip)srcs.add(cfg.notationStrip);
+  if(cfg.notationStripByIndex)Object.values(cfg.notationStripByIndex).forEach(s=>srcs.add(s));
+  srcs.forEach(src=>{
+    const img=new Image();
+    img.src=src;
+    if(img.decode)img.decode().catch(()=>{}); // best-effort — a slow/failed decode here just means the old fetch-on-demand behavior for that one image, nothing worse
+  });
 }
 // The always-visible single-line strip under the focus square (cfg.notationStrip)
 // — separate from the full sheet-music panel above. Hidden entirely for any
@@ -2341,12 +2425,13 @@ async function switchMosaic(id){
     metroBtn.classList.toggle('is-active',metroActive);
     metroBtn.disabled=!metroReady();
     metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
+    syncLandscapeMetroBtn();
     if(ctx)ensureGains(true);
 
     document.title='Mosaic — '+cfg.label;
     setPieceNameText(cfg.label);
     poster.src=cfg.poster;
-    renderNotation();renderNotationStrip();
+    renderNotation();renderNotationStrip();preloadNotationStrips();
     timeline.max=String(LOOP_END);timeline.value='0';
 
     // Wipe the grid canvas(es) before drawing anything for the new mosaic.
@@ -2848,9 +2933,10 @@ metroActive=false;
 metroBtn.classList.toggle('is-active',metroActive);
 metroBtn.disabled=!metroReady();
 metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
+syncLandscapeMetroBtn();
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
-buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();updateFocusUI();updateUI();
+buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play to begin.');
 // The "first tap ANYWHERE starts playback" listener that used to live here
