@@ -106,28 +106,43 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    bigger than the tile mute/solo buttons — the number needs to be readable
    at a glance while playing, not just identifiable. */
 .metroBtn{top:10px;right:10px;left:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);font-size:36.3px;border-color:var(--border);background:#0c0906}
-/* Brass tone (matches the app's --brass accent, the same warm metal a real
-   metronome is made of) instead of the old pale monochrome outline — plus a
-   lightly-filled body and full opacity so the idle icon reads clearly against
-   the dark button rather than disappearing into it. */
-.metroBtn .metro-icon{width:60%;height:60%;stroke:var(--brass);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:1}
-.metroBtn .metro-icon path{fill:var(--brass);fill-opacity:.28}
-.metroBtn .metro-icon circle{fill:var(--brass);stroke:none}
-.metroBtn .metro-num{display:none}
-.metroBtn.is-active{border-color:var(--tile-border)}
+/* Metronome icon (Aug 31 2026 — picked from a reference sheet, option "T7"):
+   outline style in the same near-white tone as the manuscript icon below
+   (var(--tile-border)) rather than the old solid brass — case, pendulum arm
+   with its weight, a vertical tick/tempo scale down the middle, and two
+   small feet at the base. Every piece drawn as its own class so each part
+   can be stroke-only or fill-only as appropriate (see rules below) instead
+   of one blanket path/circle rule like the old design needed. */
+.metroBtn .metro-icon{width:60%;height:60%;fill:none;stroke:none}
+.metroBtn .metro-icon .metro-case{stroke:var(--tile-border);stroke-width:1.6;stroke-linejoin:round;fill:none}
+.metroBtn .metro-icon .metro-arm{stroke:var(--tile-border);stroke-width:1.6;stroke-linecap:round}
+.metroBtn .metro-icon .metro-ticks line{stroke:var(--tile-border);stroke-width:1.6;stroke-linecap:round}
+.metroBtn .metro-icon .metro-weight{fill:var(--tile-border)}
+.metroBtn .metro-icon .metro-foot{fill:var(--tile-border)}
+/* Beat-count number (Aug 31 2026): kept in the brass/brown tone the icons
+   used to be, rather than switching to the new white — it needed its own
+   color now that the icon itself went white, and brass reads clearly
+   against both the dark idle button and the white active-ring below. */
+.metroBtn .metro-num{display:none;color:var(--brass)}
+/* Active-ring (Aug 31 2026): a full white ring around the button, not just
+   a border-color tweak — same treatment on manuscriptBtn below so the two
+   read as one matched on/off language. */
+.metroBtn.is-active{border-color:var(--tile-border);box-shadow:0 0 0 2px var(--tile-border)}
 .metroBtn.is-active .metro-icon{display:none}
 .metroBtn.is-active .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
 /* Manuscript toggle (Aug 2026): top-left of the focus square, mirroring the
    beat counter at top-right. Turns the notation overlay (now anchored to
-   the bottom of the focus square — see .notation-strip) on and off. Same
-   round-button family and same brass treatment as the beat counter so the
-   two read as a matched pair. */
+   the bottom of the focus square — see .notation-strip) on and off. Icon
+   (Aug 31 2026 — reference-sheet option "M8"): two beamed eighth notes,
+   outline style, same near-white tone and same active-ring treatment as
+   the beat counter so the two read as a matched pair. */
 .manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);border-color:var(--border);background:#0c0906}
-.manuscriptBtn .manuscript-icon{width:60%;height:60%;stroke:var(--brass);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:1}
-.manuscriptBtn .manuscript-icon rect{fill:var(--brass);fill-opacity:.12}
-.manuscriptBtn .manuscript-icon circle{fill:var(--brass);stroke:none}
-.manuscriptBtn.is-active{border-color:var(--tile-border)}
+.manuscriptBtn .manuscript-icon{width:60%;height:60%;fill:none;stroke:none}
+.manuscriptBtn .manuscript-icon .note-head{fill:var(--tile-border);stroke:none}
+.manuscriptBtn .manuscript-icon .note-beam{fill:var(--tile-border);stroke:none}
+.manuscriptBtn .manuscript-icon .note-stems{fill:none;stroke:var(--tile-border);stroke-width:1.6;stroke-linecap:round}
+.manuscriptBtn.is-active{border-color:var(--tile-border);box-shadow:0 0 0 2px var(--tile-border)}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
@@ -135,10 +150,24 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .tempo-strip{margin-top:6px}
 .panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
 .transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.transport button{font:inherit;border:2px solid var(--window-border);border-radius:8px;padding:9px 14px;background:var(--panel2);color:var(--text)}
+/* display:inline-flex (Aug 30 2026) — these buttons went icon-only (no more
+   "Reset"/"Settings" text), so centering their single SVG child needs flex
+   the same way the tempo-buttons row already centers its own content. */
+.transport button{font:inherit;border:2px solid var(--window-border);border-radius:8px;padding:9px 14px;background:var(--panel2);color:var(--text);display:inline-flex;align-items:center;justify-content:center}
 .transport button.primary{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
 .transport button:disabled{opacity:.5}
 .settingsBtn{margin-left:auto}
+/* Screen-reader-only text (Aug 30 2026): kept in the DOM so the accessible
+   name still updates with state (Play/Pause/Loading…), just not painted —
+   every icon-only control button now relies on either this class (Play,
+   whose label genuinely changes) or a static aria-label (Reset, Settings,
+   whose names never change) for its accessible name. */
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* Same visual language across all three transport-row icons (Aug 30 2026):
+   identical size and identical currentColor fill, so the play arrow, the
+   reset circular-arrow, and the settings gear read as one family rather
+   than three unrelated glyphs. */
+.play-icon,.reset-icon,.settings-icon{width:20px;height:20px;flex:0 0 auto;fill:currentColor}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
 .tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0}
 /* min-height 38.5px (Aug 30 2026) — was an implicit ~35px from padding alone,
@@ -151,14 +180,15 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .tempo-buttons button:disabled{opacity:.4}
 .tempo-buttons button#play{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750}
 .tempo-buttons button#play.active{background:var(--accent-purple-dim);color:#fff}
-/* Play/pause icon (Aug 30 2026): a small triangle to the left of the label,
-   which swaps to two vertical bars while playing. Both shapes live in one
-   SVG, toggled via #play's own is-playing class (set by setPlayBtnLabel(),
-   the single place that now touches the button's label — see below and its
-   comment for why that centralization matters). currentColor picks up the
-   button's own white text color automatically in both its normal and
-   .is-loading states, no separate color rule needed. */
-.play-icon{width:11px;height:11px;flex:0 0 auto;fill:currentColor}
+/* Play/pause icon (Aug 30 2026, now the button's ONLY content — no visible
+   label): a triangle that swaps to two vertical bars while playing. Both
+   shapes live in one SVG, toggled via #play's own is-playing class (set by
+   setPlayBtnLabel(), the single place that now touches the button's
+   accessible label — see below and its comment for why that centralization
+   matters). currentColor picks up the button's own white color
+   automatically in both its normal and .is-loading states, no separate
+   color rule needed. Sizing/fill shared with the reset and settings icons
+   — see .play-icon,.reset-icon,.settings-icon near .transport above. */
 .play-icon .icon-pause{display:none}
 #play.is-playing .play-icon .icon-play{display:none}
 #play.is-playing .play-icon .icon-pause{display:inline}
@@ -295,23 +325,33 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
         <div class="focus-dim"></div>
         <div class="focus-solo-dim"></div>
         <!-- Manuscript toggle: top-left, mirrors the beat counter at
-             top-right. Icon is a small page with a scribbled/handwritten
-             notation line across it — abstract, matching the beat counter's
-             level of detail rather than a literal music note. -->
+             top-right. Icon (Aug 31 2026, reference-sheet option "M8"): two
+             beamed eighth notes — filled noteheads/beam, stroked stems. -->
         <button id="manuscriptBtn" type="button" class="dawBtn manuscriptBtn" aria-label="Manuscript notation: on">
           <svg class="manuscript-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="5.5" y="3.5" width="13" height="17" rx="1.3"></rect>
-            <path d="M16.2 3.5v3.4h2.3" fill="none"></path>
-            <path d="M7.8 8.3q1-1.4 2-.2t2-.2 2-.2 2-.2 1.7-.2"></path>
-            <path d="M7.8 12.1q1.3-1.1 2.3.1t2.1.1 2-.4 1.5.2"></path>
-            <path d="M7.8 15.9q1-1.3 1.8-.3t1.6-.1 1.6-.4 1.6.3"></path>
+            <path class="note-stems" d="M9.5 17.3V6.3M18.4 15.6V4.9"></path>
+            <path class="note-beam" d="M9.5 6.3 18.4 4.9V7.3L9.5 8.7Z"></path>
+            <ellipse class="note-head" cx="7.3" cy="17.3" rx="2.3" ry="1.7" transform="rotate(-18 7.3 17.3)"></ellipse>
+            <ellipse class="note-head" cx="16.2" cy="15.6" rx="2.3" ry="1.7" transform="rotate(-18 16.2 15.6)"></ellipse>
           </svg>
         </button>
+        <!-- Beat counter icon (Aug 31 2026, reference-sheet option "T7"):
+             outline case, pendulum arm + weight, a vertical tick/tempo
+             scale, and two small feet — see the .metro-icon rules above
+             for which parts are stroked vs. filled. -->
         <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
           <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
-            <line x1="12" y1="5.3" x2="15.4" y2="16.6"></line>
-            <circle cx="13.95" cy="11" r="1.15"></circle>
+            <path class="metro-case" d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
+            <circle class="metro-foot" cx="8" cy="20.9" r="0.9"></circle>
+            <circle class="metro-foot" cx="16" cy="20.9" r="0.9"></circle>
+            <g class="metro-ticks">
+              <line x1="12" y1="8" x2="12" y2="8.01"></line>
+              <line x1="12" y1="11" x2="12" y2="11.01"></line>
+              <line x1="12" y1="14" x2="12" y2="14.01"></line>
+              <line x1="12" y1="17" x2="12" y2="17.01"></line>
+            </g>
+            <line class="metro-arm" x1="9.5" y1="19" x2="17.5" y2="2.5"></line>
+            <rect class="metro-weight" x="14.7" y="6.3" width="2.6" height="2.6" transform="rotate(45 16 7.6)"></rect>
           </svg>
           <span id="metroNum" class="metro-num"></span>
         </button>
@@ -338,13 +378,30 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     </div>
     <div class="grid-stage-side grid-stage-right"><canvas id="gridRight" width="480" height="1920"></canvas><div id="gridControlsRight" class="grid-controls-vert"></div></div>
   </div>
-  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary" type="button"><svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg><span id="playLabel">Play</span></button></div></div>
+  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary" type="button"><svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg><span id="playLabel" class="visually-hidden">Play</span></button></div></div>
   <section class="panel">
     <div class="transport">
-      <button id="reset" type="button">Reset</button>
+      <!-- Icon-only (Aug 30 2026) — a circular-arrow "restart" glyph, same
+           visual family as the play arrow and settings gear (see the shared
+           .reset-icon sizing rule near .transport). aria-label carries the
+           accessible name now that there's no visible text. -->
+      <button id="reset" type="button" aria-label="Reset">
+        <svg class="reset-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path>
+        </svg>
+      </button>
       <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
       <span id="time" class="time">0.000 / 45.600</span>
-      <button id="settingsBtn" type="button" class="settingsBtn" aria-label="Settings">⚙ Settings</button>
+      <!-- Icon-only (Aug 30 2026) — the Unicode ⚙ glyph is replaced with a
+           real SVG gear so it matches the play arrow / reset circular-arrow
+           in weight and style (see the shared .settings-icon sizing rule
+           near .transport) instead of whatever the browser's font happens
+           to render for ⚙. -->
+      <button id="settingsBtn" type="button" class="settingsBtn" aria-label="Settings">
+        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
+        </svg>
+      </button>
     </div>
   </section>
   <!-- Piece navigation, moved here (Aug 2026) from the very top of the page
