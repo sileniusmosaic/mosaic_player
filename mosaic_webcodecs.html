@@ -317,9 +317,34 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    flex column stays exactly where it is instead of dropping down into the
    space the image used to occupy. */
 .notation-strip.is-off{visibility:hidden}
+/* Landscape-only full-notation view (Aug 31 2026) — see the markup comment
+   on #landscapeNotation. pointer:coarse restricts this to touch devices
+   (phones/tablets), same signal IS_DESKTOP itself is built on, so a desktop
+   browser window that happens to be wide keeps its normal two-column
+   layout instead of ever hitting this. Hidden by default/in portrait;
+   the media query below is the only thing that ever shows it. */
+.landscape-notation{display:none}
+@media (orientation:landscape) and (pointer:coarse){
+  .app{display:none}
+  .landscape-notation:not([hidden]){display:flex}
+  .landscape-notation{position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:#fff;margin:0;padding:0}
+  .landscape-notation img{width:100%;height:auto;display:block}
+}
 </style>
 </head>
 <body>
+<!-- Landscape-only full-notation view (Aug 31 2026): rotating the phone to
+     landscape hides the whole player and shows just the notation for
+     whichever tile is currently focused, stretched to the full width of
+     the screen and vertically centered — see the (orientation:landscape)
+     and (pointer:coarse) media query in the CSS below, and
+     renderNotationStrip() in the script (same per-tile source it already
+     feeds the portrait strip on the focus square). Deliberately
+     independent of the manuscriptBtn toggle/manuscriptOn — this shows
+     regardless of whether notation is switched on in portrait. pointer:coarse
+     (not a screen-size guess) keeps this off on a desktop browser window
+     that's simply wide, matching how IS_DESKTOP itself is detected. -->
+<div id="landscapeNotation" class="landscape-notation" hidden><img id="landscapeNotationImg" alt=""></div>
 <main class="app">
   <input type="checkbox" id="menuToggle">
   <!-- The notation strip briefly lived here as a standalone top-of-page
@@ -633,7 +658,7 @@ const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$
 const gridLeft=$('#gridLeft'), gctxLeft=gridLeft.getContext('2d',{alpha:false}), gridRight=$('#gridRight'), gctxRight=gridRight.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -1485,6 +1510,10 @@ function renderNotation(){
 // currently-focused tile, show that instead of the piece's generic
 // placeholder. Falls straight back to cfg.notationStrip for every other
 // tile/piece, so Abakuá and Congo (no per-tile map yet) are unaffected.
+// Also feeds #landscapeNotation (Aug 31 2026) — the full-screen, portrait-
+// toggle-independent view show when the phone is rotated to landscape (see
+// its own comment on the markup and the (orientation:landscape) media
+// query in the CSS) — same per-tile source, just displayed differently.
 function renderNotationStrip(){
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[selected];
   const src=perTile||cfg.notationStrip;
@@ -1497,6 +1526,9 @@ function renderNotationStrip(){
     // (same rendered height, since it's still a real <img> with a real src)
     // so the label sitting above it in the same flex column never moves.
     notationStrip.classList.toggle('is-off',!manuscriptOn);
+    // Deliberately NOT gated on manuscriptOn — the landscape view is meant
+    // to show regardless of whether notation is toggled on in portrait.
+    landscapeNotationImg.src=src;landscapeNotationImg.alt=cfg.label+' notation';landscapeNotation.hidden=false;
   }else{
     // No notationStrip configured for this piece at all — collapse for
     // real (the hidden attribute takes it fully out of layout), since
@@ -1504,6 +1536,7 @@ function renderNotationStrip(){
     // ships a notationStrip (see MOSAICS), so this branch is unreachable
     // in practice today.
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
+    landscapeNotation.hidden=true;landscapeNotationImg.removeAttribute('src');
   }
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
