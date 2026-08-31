@@ -336,8 +336,14 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    stretched to full height), so the corner below/beside it is always
    clear. Same dark-badge look as .focus-label/.tile-name elsewhere in the
    app for visual consistency. position:fixed on the parent already
-   establishes the containing block this positions against. */
-.landscape-notation-label{position:absolute;left:14px;bottom:12px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);pointer-events:none}
+   establishes the containing block this positions against.
+   Bumped further in from the corner (Aug 31 2026 — was 14px/12px, sat
+   right on the physical edge/rounded corner of an iPhone in landscape):
+   max() keeps a real 24px/20px of breathing room on any device, but grows
+   past that using env(safe-area-inset-*) (viewport-fit=cover is set on
+   the viewport meta tag above) so it also clears the notch/home-indicator
+   safe area on a phone that has one. */
+.landscape-notation-label{position:absolute;left:max(24px,calc(env(safe-area-inset-left) + 16px));bottom:max(20px,calc(env(safe-area-inset-bottom) + 16px));background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);pointer-events:none}
 </style>
 </head>
 <body>
@@ -635,7 +641,7 @@ const MOSAICS={
     // except Kit (index 6 below — first real per-tile notation strip, Aug
     // 31 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'notation_strip_placeholder.png',
-    notationStripByIndex:{0:'01_bass_flipswing.png',5:'06_guitar2_flipswing.png',6:'07_kit_flipswing.png'},
+    notationStripByIndex:{0:'01_bass_flipswing.png',4:'05_guitar1_flipswing.png',5:'06_guitar2_flipswing.png',6:'07_kit_flipswing.png'},
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
