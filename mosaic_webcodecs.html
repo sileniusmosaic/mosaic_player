@@ -287,7 +287,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    (converted from a PDF export — white-background score), sitting between
    the transport row and the mosaic browse list. Hidden entirely for any
    piece with no `notation` array in its config — see renderNotation(). */
-.notation-pages img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--border);background:#fff}
+.notation-pages img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--border);background:#000}
 .notation-pages img+img{margin-top:10px}
 /* Notation strip (Aug 2026, now overlaid on the focus square — see markup):
    a single always-visible line of notation, distinct from .notation-pages
@@ -311,7 +311,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    overflow:hidden plus its own 10px corner radius already clips this to
    match every other layer inside it, the same way the canvas and dim
    overlays are clipped. pointer-events:none is inherited from the wrapper. */
-.notation-strip{width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0;flex:0 0 auto}
+.notation-strip{width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#000;margin:0;flex:0 0 auto}
 /* Manuscript toggled off (Aug 30 2026): visibility, not display — the image
    keeps its rendered box (same height) so .focus-label above it in the same
    flex column stays exactly where it is instead of dropping down into the
@@ -327,7 +327,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 @media (orientation:landscape) and (pointer:coarse){
   .app{display:none}
   .landscape-notation:not([hidden]){display:flex}
-  .landscape-notation{position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:#fff;margin:0;padding:0}
+  .landscape-notation{position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:#000;margin:0;padding:0}
   .landscape-notation img{width:100%;height:auto;display:block}
 }
 /* Rule (Aug 31 2026): the landscape notation view always carries the
