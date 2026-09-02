@@ -348,20 +348,29 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .landscape-notation{display:none}
 @media (orientation:landscape) and (pointer:coarse){
   .app{display:none}
-  .landscape-notation:not([hidden]){display:block}
+  .landscape-notation:not([hidden]){display:flex}
   /* Sep 2026 (was: a full-screen white sheet showing just the notation,
      vertically centered, with the whole player — including the video —
-     hidden behind it). Now the live focus square stays visible, fit to the
-     screen's full height with black bars either side (.landscape-focus-
-     canvas below — mirrored from #mosaicFocus every frame regardless of
-     which code path last painted it; see mirrorLandscapeFocus() in the
-     script), and the notation becomes a white band anchored to the BOTTOM
-     of the screen, as wide as the screen, superimposed on top of the video
-     (later in DOM order = stacked above it) rather than replacing it. */
-  .landscape-notation{position:fixed;inset:0;z-index:1000;background:#000;margin:0;padding:0}
-  .landscape-focus-canvas{position:absolute;top:0;left:50%;transform:translateX(-50%);height:100%;width:auto;aspect-ratio:1/1;display:block}
-  .landscape-notation-band{position:absolute;left:0;right:0;bottom:0;width:100%;background:#fff;line-height:0}
+     hidden behind it; then reworked to superimpose a bottom-anchored
+     notation band directly over a full-height video). Reworked again (Sep
+     2026) — a notation band flush with the very bottom edge got its own
+     bottom corners clipped by the phone's rounded screen bezel. Now a
+     top-to-bottom flex column: the video area (flex:1 — whatever's left
+     over) on top, the notation band sized to its own content next, then a
+     fixed 10vh solid-black margin at the very bottom so the band's corners
+     sit well clear of the curved edge. This makes the video and notation
+     share the screen rather than overlap — .landscape-focus-canvas is
+     sized by its flex box, not by the full viewport height, so it
+     automatically shrinks to leave room for the band below it. */
+  .landscape-notation{position:fixed;inset:0;z-index:1000;background:#000;margin:0;padding:0;flex-direction:column}
+  .landscape-video-area{flex:1 1 auto;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+  .landscape-focus-canvas{height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block}
+  .landscape-notation-band{flex:0 0 auto;width:100%;background:#fff;line-height:0}
   .landscape-notation-canvas{width:100%;height:auto;display:block}
+  /* Bezel clearance (Sep 2026): a plain black spacer, not extra padding on
+     the band itself, so the band's own white background still ends with a
+     sharp edge rather than fading/blending into black. */
+  .landscape-bottom-margin{flex:0 0 10vh;background:#000}
 }
 /* Rule (Aug 31 2026, moved top-left Sep 2026): the landscape notation view
    always carries the instrument name. Originally bottom-left, back when the
@@ -389,29 +398,42 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 </style>
 </head>
 <body>
-<!-- Landscape-only full-notation view (Aug 31 2026; reworked Sep 2026):
+<!-- Landscape-only full-notation view (Aug 31 2026; reworked Sep 2026 twice):
      rotating the phone to landscape hides the whole normal player UI and
-     shows this instead — the live focus square (mirrored from #mosaicFocus
-     every frame via mirrorLandscapeFocus() in the script, since #mosaicFocus
-     itself is inside .app which this view hides) fit to the full height of
-     the screen with black bars either side, and the notation for whichever
-     tile is currently focused as a white band spanning the full width,
-     anchored to the bottom of the screen and superimposed on top of the
-     video — see the (orientation:landscape) and (pointer:coarse) media
-     query in the CSS below, and renderNotationStrip() in the script (same
-     per-tile source it already feeds the portrait strip on the focus
-     square). Deliberately independent of the manuscriptBtn toggle/
-     manuscriptOn — this shows regardless of whether notation is switched on
-     in portrait. pointer:coarse (not a screen-size guess) keeps this off on
-     a desktop browser window that's simply wide, matching how IS_DESKTOP
-     itself is detected. -->
+     shows this instead. First reworked from a full-screen white sheet to a
+     bottom-anchored notation band superimposed over a full-height video, but
+     a band flush with the very bottom edge got its own bottom corners
+     clipped by the phone's rounded screen bezel on real devices. Now a
+     top-to-bottom flex column instead of an overlay: the live focus square
+     (mirrored from #mosaicFocus every frame via mirrorLandscapeFocus() in
+     the script, since #mosaicFocus itself is inside .app which this view
+     hides) sized to fill whatever space is left ABOVE the notation band —
+     .landscape-video-area is a flex:1 region so the square canvas inside it
+     (still centered, still letterboxed with black bars either side) shrinks
+     to fit rather than overlapping the band below it — then the notation
+     band for whichever tile is currently focused, sized to its own content,
+     then a fixed 10vh solid-black margin at the very bottom so the band's
+     corners sit well clear of the curved bezel edge. See the
+     (orientation:landscape) and (pointer:coarse) media query in the CSS
+     below, and renderNotationStrip() in the script (same per-tile source it
+     already feeds the portrait strip on the focus square). Deliberately
+     independent of the manuscriptBtn toggle/manuscriptOn — this shows
+     regardless of whether notation is switched on in portrait. pointer:coarse
+     (not a screen-size guess) keeps this off on a desktop browser window
+     that's simply wide, matching how IS_DESKTOP itself is detected. -->
 <div id="landscapeNotation" class="landscape-notation" hidden>
-  <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
+  <div class="landscape-video-area">
+    <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
+  </div>
   <!-- landscapeNotationImg is a hidden LOADER only, never shown directly —
        trimNotationWhitespace() (see script) reads its pixels once loaded and
        draws the content-only crop onto landscapeNotationCanvas, which is
        what's actually visible. See that function's comment for why. -->
   <div class="landscape-notation-band"><canvas id="landscapeNotationCanvas" class="landscape-notation-canvas"></canvas><img id="landscapeNotationImg" alt="" hidden></div>
+  <!-- Bezel clearance (Sep 2026): see .landscape-bottom-margin in the CSS —
+       a fixed-height black spacer below the band, not padding on the band
+       itself, so its corners never sit against the curved screen edge. -->
+  <div class="landscape-bottom-margin"></div>
   <div id="landscapeNotationLabel" class="landscape-notation-label"></div>
   <!-- Landscape metronome (Aug 31 2026): a second button, not a repositioned
        original — #metroBtn stays put inside .app (which this whole view
