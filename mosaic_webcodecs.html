@@ -366,6 +366,22 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
   .landscape-video-area{flex:1 1 auto;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
   .landscape-focus-canvas{height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block}
   .landscape-notation-band{flex:0 0 auto;width:100%;background:#fff;line-height:0}
+  /* Loading state (Sep 2026 bugfix): while the notation PNG for the newly
+     focused tile is still loading, landscapeNotationCanvas is left at
+     whatever size it last had (or its untouched browser default the very
+     first time). flex:0 0 auto sizes this band from that stale/default
+     canvas size, which is exactly what produced the "huge blank white bar"
+     bug — a brand-new canvas defaults to 300x150, and width:100% plus
+     height:auto stretches that 2:1 ratio to roughly half the viewport
+     width, easily taller than the video area has room for. Rather than
+     fighting that by picking some other "safe" placeholder size (any fixed
+     aspect ratio is wrong for *some* real notation image), this collapses
+     the band to a hard 0 via flex-basis regardless of the canvas's
+     intrinsic size — overflow:hidden clips it, so no stale/placeholder
+     pixels can show through — leaving the video area the full screen until
+     real content is ready. Toggled by renderNotationStrip()/
+     applyLandscapeNotationImage() in the script. */
+  .landscape-notation-band.is-loading{flex:0 0 0;overflow:hidden}
   .landscape-notation-canvas{width:100%;height:auto;display:block}
   /* Bezel clearance (Sep 2026): a plain black spacer, not extra padding on
      the band itself, so the band's own white background still ends with a
@@ -984,6 +1000,35 @@ metroBtnLandscape.addEventListener('click',()=>{
   metroBtn.click();
   syncLandscapeMetroBtn();
 });
+// Landscape swipe-to-change-focus (Sep 2026): there's no room for the
+// portrait grid's tap targets in the landscape view, so a horizontal swipe
+// anywhere on screen steps the focus square to the next/previous tile
+// instead. Goes through the same selectTile() the portrait tap handler
+// uses (see its comment) — that's what makes the choice carry over to
+// portrait automatically on rotating back, with no landscape-only state to
+// sync. Listens on #landscapeNotation itself (the fixed full-screen
+// overlay) rather than document, so it's naturally a no-op whenever the
+// view isn't displayed — a display:none element never receives touch
+// events, no orientation/media-query guard needed here.
+(function(){
+  let startX=0,startY=0,tracking=false;
+  const MIN_SWIPE_PX=40; // minimum horizontal travel before it counts as an intentional swipe rather than a tap or a shaky finger
+  const MAX_OFF_AXIS_PX=60; // too much vertical drift means this wasn't meant as a horizontal swipe at all
+  landscapeNotation.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1){tracking=false;return;} // ignore pinch/multi-touch
+    tracking=true;startX=e.touches[0].clientX;startY=e.touches[0].clientY;
+  },{passive:true});
+  landscapeNotation.addEventListener('touchend',e=>{
+    if(!tracking)return;
+    tracking=false;
+    const t=e.changedTouches[0];
+    if(!t)return;
+    const dx=t.clientX-startX,dy=t.clientY-startY;
+    if(Math.abs(dx)<MIN_SWIPE_PX||Math.abs(dy)>MAX_OFF_AXIS_PX)return;
+    selectTile(selected+(dx<0?1:-1)); // swipe left = next tile, swipe right = previous tile
+  },{passive:true});
+  landscapeNotation.addEventListener('touchcancel',()=>{tracking=false;},{passive:true});
+})();
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
 // renderNotationStrip() already applies (a piece with no notationStrip
@@ -1619,6 +1664,19 @@ function drawPoster(){
     drawOneTile(gctx,i,w,h,dx,dy,S,Sh,anySolo);
   }
 }
+// Single source of truth for "pick this tile as the focus square" — used by
+// the portrait tile-tap handler AND the landscape swipe gesture (see below).
+// Sharing this function is what makes a swipe in landscape "carry over" to
+// portrait on rotation back: both paths update the exact same `selected`
+// variable, the exact same .tile.is-selected DOM state the portrait grid
+// reads, and call updateFocusUI() the exact same way — there's no separate
+// landscape-only state to reconcile. Wraps the index (rather than clamping)
+// so swiping past either end cycles round instead of getting stuck.
+function selectTile(i){
+  selected=((i%TILE_COUNT)+TILE_COUNT)%TILE_COUNT;
+  document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));
+  updateFocusUI();
+}
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
   landscapeNotationLabel.textContent=NAMES[selected]; // rule (Aug 31 2026): landscape notation view always carries the instrument name, bottom-left, same NAMES[selected] source as focusLabel above
@@ -1675,7 +1733,7 @@ function buildControls(){
     // near .focus-column for why controlsLeft/controlsRight are unused.
     controls.appendChild(t);
     tileEls.push(t);muteBtns.push(mute);soloBtns.push(solo);
-    tap.addEventListener('click',()=>{selected=i;document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));updateFocusUI();});
+    tap.addEventListener('click',()=>selectTile(i));
     if(solo)solo.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();soloed[i]=!soloed[i];solo.setAttribute('aria-label',(soloed[i]?'Unsolo ':'Solo ')+name);refreshSoloMuteState();});
     mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);refreshSoloMuteState();});
   });
@@ -1864,7 +1922,33 @@ function renderNotationStrip(){
     // onload is (re)assigned every call rather than once at startup since it
     // needs to close over this call's own `src`/cfg.label for the fallback
     // untrimmed draw below.
-    landscapeNotationImg.onload=()=>{
+    //
+    // Bug fixed Sep 2026: rotating to landscape immediately on page load (or
+    // right after a piece switch) used to show a huge blank white bar
+    // instead of notation. Cause: renderNotationStrip() fires at page load
+    // while the notation PNG is still an in-flight network fetch (it's a
+    // low-priority image competing with the video/audio the player
+    // prioritizes), so landscapeNotationCanvas was still sitting at its
+    // browser-default 300x150 (or, if a piece switch, whatever the PREVIOUS
+    // tile's trimmed size happened to be) — .landscape-notation-band sizes
+    // itself from the canvas's intrinsic width/height (width:100%;
+    // height:auto), so that stale/default aspect ratio renders as a huge
+    // (or wrong-shaped) white rectangle, squeezing the video area to
+    // near-nothing. It only looked "fixed" by picking a new focus square
+    // because enough time had passed by then for the fetch to finish — not
+    // because anything was actually resolved. True fix: put the band into
+    // an explicit "loading" state (see .landscape-notation-band.is-loading
+    // in the CSS) that hard-collapses it via flex-basis regardless of
+    // whatever the canvas's current intrinsic size is, so the video area
+    // keeps the full screen until real content is ready — no dependence on
+    // guessing a "safe" placeholder aspect ratio. Also covers BOTH cases
+    // where 'load' does the work (a fresh network fetch) and where it won't
+    // fire again at all (the image is already fully loaded/cached from a
+    // previous call with this exact same src — per spec, re-assigning an
+    // unchanged src is a no-op, no new 'load' event) by also checking
+    // img.complete synchronously right here.
+    landscapeNotationCanvas.parentElement.classList.add('is-loading');
+    const applyLandscapeNotationImage=()=>{
       if(!trimNotationWhitespace(landscapeNotationImg,landscapeNotationCanvas)){
         // No measurable margin, an already-tight image, or a pixel-read
         // failure — fall back to drawing it untouched at full size so the
@@ -1873,8 +1957,11 @@ function renderNotationStrip(){
         landscapeNotationCanvas.height=landscapeNotationImg.naturalHeight;
         landscapeNotationCanvas.getContext('2d').drawImage(landscapeNotationImg,0,0);
       }
+      landscapeNotationCanvas.parentElement.classList.remove('is-loading');
     };
+    landscapeNotationImg.onload=applyLandscapeNotationImage;
     landscapeNotationImg.src=src;landscapeNotationImg.alt=cfg.label+' notation';landscapeNotation.hidden=false;
+    if(landscapeNotationImg.complete&&landscapeNotationImg.naturalWidth)applyLandscapeNotationImage();
   }else{
     // No notationStrip configured for this piece at all — collapse for
     // real (the hidden attribute takes it fully out of layout), since
