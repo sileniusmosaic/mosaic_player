@@ -1,0 +1,9 @@
+# Tells wrangler's static-assets uploader which paths under this directory
+# are NOT site assets and should never be uploaded — without this it walks
+# literally everything on disk, including .git's pack files (100+ MiB,
+# over the 25 MiB per-asset limit) and the unrelated capacitor-app/ mobile
+# project and its node_modules.
+.git
+.wrangler
+capacitor-app
+.DS_Store
