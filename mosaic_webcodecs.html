@@ -361,7 +361,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
   .landscape-notation{position:fixed;inset:0;z-index:1000;background:#000;margin:0;padding:0}
   .landscape-focus-canvas{position:absolute;top:0;left:50%;transform:translateX(-50%);height:100%;width:auto;aspect-ratio:1/1;display:block}
   .landscape-notation-band{position:absolute;left:0;right:0;bottom:0;width:100%;background:#fff;line-height:0}
-  .landscape-notation-band img{width:100%;height:auto;display:block}
+  .landscape-notation-canvas{width:100%;height:auto;display:block}
 }
 /* Rule (Aug 31 2026, moved top-left Sep 2026): the landscape notation view
    always carries the instrument name. Originally bottom-left, back when the
@@ -407,7 +407,11 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      itself is detected. -->
 <div id="landscapeNotation" class="landscape-notation" hidden>
   <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
-  <div class="landscape-notation-band"><img id="landscapeNotationImg" alt=""></div>
+  <!-- landscapeNotationImg is a hidden LOADER only, never shown directly —
+       trimNotationWhitespace() (see script) reads its pixels once loaded and
+       draws the content-only crop onto landscapeNotationCanvas, which is
+       what's actually visible. See that function's comment for why. -->
+  <div class="landscape-notation-band"><canvas id="landscapeNotationCanvas" class="landscape-notation-canvas"></canvas><img id="landscapeNotationImg" alt="" hidden></div>
   <div id="landscapeNotationLabel" class="landscape-notation-label"></div>
   <!-- Landscape metronome (Aug 31 2026): a second button, not a repositioned
        original — #metroBtn stays put inside .app (which this whole view
@@ -842,7 +846,7 @@ function mirrorLandscapeFocus(){
   requestAnimationFrame(mirrorLandscapeFocus);
 }
 requestAnimationFrame(mirrorLandscapeFocus);
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -1771,6 +1775,53 @@ function preloadNotationStrips(){
 // toggle-independent view show when the phone is rotated to landscape (see
 // its own comment on the markup and the (orientation:landscape) media
 // query in the CSS) — same per-tile source, just displayed differently.
+// Landscape notation auto-trim (Sep 2026): the notationStrip PNGs carry a
+// fair amount of blank staff-paper margin above/below the actual staff —
+// barely noticeable in portrait, where the strip is a thin overlay on the
+// (much taller) focus square, but blown up to nearly the full screen WIDTH
+// in landscape, that same margin becomes a visually large "wasted" white
+// band (reported directly from a screenshot). Rather than guessing one
+// fixed crop ratio — different instruments' passages reach different
+// amounts of ledger-line/stem height, so a fixed crop could clip real
+// notation on a busy image while leaving margin on a sparse one — this
+// measures each image's OWN actual ink bounds once it loads (same idea as
+// autocropping a scanned page to its printed area) and draws just that
+// region, plus a little breathing room, onto landscapeNotationCanvas.
+// Portrait's own .notation-strip <img> is untouched by any of this.
+function trimNotationWhitespace(img,canvas){
+  const w=img.naturalWidth,h=img.naturalHeight;
+  if(!w||!h)return false;
+  const src=document.createElement('canvas');src.width=w;src.height=h;
+  const sctx=src.getContext('2d',{willReadFrequently:true});
+  sctx.drawImage(img,0,0);
+  let data;
+  try{data=sctx.getImageData(0,0,w,h).data;}
+  catch(e){console.warn('Landscape notation auto-trim: could not read image pixels, showing it untrimmed.',e);return false;}
+  // A row counts as real content only once enough of its width is
+  // meaningfully non-white — filters out stray anti-aliasing specks at the
+  // very top/bottom rows of an otherwise-blank margin.
+  const minDarkPx=Math.max(3,Math.round(w*0.004));
+  let top=0,bot=h-1;
+  const rowIsContent=y=>{
+    const rowStart=y*w*4;let dark=0;
+    for(let x=0;x<w;x++){
+      const i=rowStart+x*4;
+      if(data[i]<210||data[i+1]<210||data[i+2]<210){if(++dark>=minDarkPx)return true;}
+    }
+    return false;
+  };
+  while(top<h&&!rowIsContent(top))top++;
+  while(bot>top&&!rowIsContent(bot))bot--;
+  if(top>=bot)return false; // effectively blank image — nothing sensible to crop to
+  const contentH=bot-top+1;
+  const pad=Math.round(contentH*0.12); // small breathing room, like a printed margin
+  const cropTop=Math.max(0,top-pad),cropBot=Math.min(h-1,bot+pad);
+  const cropH=cropBot-cropTop+1;
+  if(cropH>=h*0.92)return false; // margin's already negligible — not worth cropping
+  canvas.width=w;canvas.height=cropH;
+  canvas.getContext('2d').drawImage(src,0,cropTop,w,cropH,0,0,w,cropH);
+  return true;
+}
 function renderNotationStrip(){
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[selected];
   const src=perTile||cfg.notationStrip;
@@ -1785,6 +1836,22 @@ function renderNotationStrip(){
     notationStrip.classList.toggle('is-off',!manuscriptOn);
     // Deliberately NOT gated on manuscriptOn — the landscape view is meant
     // to show regardless of whether notation is toggled on in portrait.
+    // landscapeNotationImg itself is never shown (see its markup comment) —
+    // it's only a loader; once it decodes, trimNotationWhitespace() draws
+    // the content-only crop onto landscapeNotationCanvas, which IS shown.
+    // onload is (re)assigned every call rather than once at startup since it
+    // needs to close over this call's own `src`/cfg.label for the fallback
+    // untrimmed draw below.
+    landscapeNotationImg.onload=()=>{
+      if(!trimNotationWhitespace(landscapeNotationImg,landscapeNotationCanvas)){
+        // No measurable margin, an already-tight image, or a pixel-read
+        // failure — fall back to drawing it untouched at full size so the
+        // notation is never simply missing.
+        landscapeNotationCanvas.width=landscapeNotationImg.naturalWidth;
+        landscapeNotationCanvas.height=landscapeNotationImg.naturalHeight;
+        landscapeNotationCanvas.getContext('2d').drawImage(landscapeNotationImg,0,0);
+      }
+    };
     landscapeNotationImg.src=src;landscapeNotationImg.alt=cfg.label+' notation';landscapeNotation.hidden=false;
   }else{
     // No notationStrip configured for this piece at all — collapse for
