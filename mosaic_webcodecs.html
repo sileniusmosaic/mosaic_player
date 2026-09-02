@@ -441,11 +441,16 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
   <div class="landscape-video-area">
     <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
   </div>
-  <!-- landscapeNotationImg is a hidden LOADER only, never shown directly —
-       trimNotationWhitespace() (see script) reads its pixels once loaded and
-       draws the content-only crop onto landscapeNotationCanvas, which is
-       what's actually visible. See that function's comment for why. -->
-  <div class="landscape-notation-band"><canvas id="landscapeNotationCanvas" class="landscape-notation-canvas"></canvas><img id="landscapeNotationImg" alt="" hidden></div>
+  <!-- Sep 2026: this used to also contain a hidden <img id="landscapeNotationImg">
+       as the loader for trimNotationWhitespace() to read pixels from. Removed —
+       it lived inside this whole view's display:none subtree until the phone
+       was actually rotated, and on real devices (unlike this file's desktop-
+       Chromium test harness) that meant the image's fetch itself didn't
+       reliably start until then, so it was still empty right at the moment
+       rotation revealed it. The loader is now a plain detached Image() in the
+       script (getNotationImage()) — never inserted into the DOM at all, so no
+       ancestor's display:none can affect when its fetch begins. -->
+  <div class="landscape-notation-band"><canvas id="landscapeNotationCanvas" class="landscape-notation-canvas"></canvas></div>
   <!-- Bezel clearance (Sep 2026): see .landscape-bottom-margin in the CSS —
        a fixed-height black spacer below the band, not padding on the band
        itself, so its corners never sit against the curved screen edge. -->
@@ -884,7 +889,7 @@ function mirrorLandscapeFocus(){
   requestAnimationFrame(mirrorLandscapeFocus);
 }
 requestAnimationFrame(mirrorLandscapeFocus);
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -1838,9 +1843,13 @@ function preloadNotationStrips(){
   if(cfg.notationStrip)srcs.add(cfg.notationStrip);
   if(cfg.notationStripByIndex)Object.values(cfg.notationStripByIndex).forEach(s=>srcs.add(s));
   srcs.forEach(src=>{
-    const img=new Image();
-    img.src=src;
-    if(img.decode)img.decode().catch(()=>{}); // best-effort — a slow/failed decode here just means the old fetch-on-demand behavior for that one image, nothing worse
+    // Sep 2026: routed through getNotationImage() (defined below — function
+    // declarations are hoisted, so this earlier call site is fine) rather
+    // than a throwaway Image(), so this warms the exact same cache
+    // renderNotationStrip()'s landscape loader reads from — no duplicate
+    // fetch for whichever tile is already selected.
+    const entry=getNotationImage(src);
+    if(entry.img.decode)entry.img.decode().catch(()=>{}); // best-effort — a slow/failed decode here just means the old fetch-on-demand behavior for that one image, nothing worse
   });
 }
 // The always-visible single-line strip under the focus square (cfg.notationStrip)
@@ -1902,6 +1911,41 @@ function trimNotationWhitespace(img,canvas){
   canvas.getContext('2d').drawImage(src,0,cropTop,w,cropH,0,0,w,cropH);
   return true;
 }
+// Bug fixed Sep 2026 (second attempt): rotating to landscape right on page
+// load — before ever pressing Play — showed a huge blank white bar instead
+// of notation, on real phones specifically. First attempt (the
+// .landscape-notation-band.is-loading collapse below) fixed the *visible
+// symptom* of a slow-loading image, verified against a desktop-Chromium
+// test harness — but the real cause on a real device turned out to be
+// deeper: the loader used to be a real <img> living inside this whole
+// view's display:none subtree (invisible until the phone is actually
+// rotated), and on real mobile browsers — unlike desktop Chromium, which
+// happily fetches regardless of visibility — an image inside a
+// display:none ancestor can have its fetch itself deferred until it
+// becomes visible. So the fetch may not even START until the moment of
+// rotation, which is also the moment layout needs an answer. The
+// is-loading collapse still matters as a safety net for genuinely slow
+// connections, but the real fix is to stop loading through a DOM element
+// that visibility can gate at all: getNotationImage() below uses a plain
+// detached Image() — never inserted into the document — so no ancestor's
+// display:none can affect when its fetch begins; it can start fetching
+// immediately at page load regardless of orientation. Cached by src so
+// repeat selections of the same tile don't re-fetch.
+const notationImageCache=new Map();
+function getNotationImage(src){
+  let entry=notationImageCache.get(src);
+  if(!entry){
+    entry={img:new Image(),ready:false};
+    entry.img.onload=()=>{entry.ready=true;};
+    entry.img.src=src;
+    notationImageCache.set(src,entry);
+  }
+  return entry;
+}
+// Guards against a stale, still-in-flight image load finishing AFTER the
+// user has already switched to a different tile and overwriting the
+// canvas with the wrong (no-longer-selected) notation.
+let currentLandscapeNotationSrc=null;
 function renderNotationStrip(){
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[selected];
   const src=perTile||cfg.notationStrip;
@@ -1916,52 +1960,30 @@ function renderNotationStrip(){
     notationStrip.classList.toggle('is-off',!manuscriptOn);
     // Deliberately NOT gated on manuscriptOn — the landscape view is meant
     // to show regardless of whether notation is toggled on in portrait.
-    // landscapeNotationImg itself is never shown (see its markup comment) —
-    // it's only a loader; once it decodes, trimNotationWhitespace() draws
-    // the content-only crop onto landscapeNotationCanvas, which IS shown.
-    // onload is (re)assigned every call rather than once at startup since it
-    // needs to close over this call's own `src`/cfg.label for the fallback
-    // untrimmed draw below.
-    //
-    // Bug fixed Sep 2026: rotating to landscape immediately on page load (or
-    // right after a piece switch) used to show a huge blank white bar
-    // instead of notation. Cause: renderNotationStrip() fires at page load
-    // while the notation PNG is still an in-flight network fetch (it's a
-    // low-priority image competing with the video/audio the player
-    // prioritizes), so landscapeNotationCanvas was still sitting at its
-    // browser-default 300x150 (or, if a piece switch, whatever the PREVIOUS
-    // tile's trimmed size happened to be) — .landscape-notation-band sizes
-    // itself from the canvas's intrinsic width/height (width:100%;
-    // height:auto), so that stale/default aspect ratio renders as a huge
-    // (or wrong-shaped) white rectangle, squeezing the video area to
-    // near-nothing. It only looked "fixed" by picking a new focus square
-    // because enough time had passed by then for the fetch to finish — not
-    // because anything was actually resolved. True fix: put the band into
-    // an explicit "loading" state (see .landscape-notation-band.is-loading
-    // in the CSS) that hard-collapses it via flex-basis regardless of
-    // whatever the canvas's current intrinsic size is, so the video area
-    // keeps the full screen until real content is ready — no dependence on
-    // guessing a "safe" placeholder aspect ratio. Also covers BOTH cases
-    // where 'load' does the work (a fresh network fetch) and where it won't
-    // fire again at all (the image is already fully loaded/cached from a
-    // previous call with this exact same src — per spec, re-assigning an
-    // unchanged src is a no-op, no new 'load' event) by also checking
-    // img.complete synchronously right here.
+    // See getNotationImage()'s comment above for why this loads through a
+    // detached Image() rather than a DOM <img>. The is-loading class (see
+    // .landscape-notation-band.is-loading in the CSS) hard-collapses the
+    // band via flex-basis while we wait, regardless of whatever size the
+    // canvas happens to still be from a previous tile — so the video area
+    // keeps the full screen rather than showing a stale or oversized band.
+    currentLandscapeNotationSrc=src;
     landscapeNotationCanvas.parentElement.classList.add('is-loading');
+    const entry=getNotationImage(src);
     const applyLandscapeNotationImage=()=>{
-      if(!trimNotationWhitespace(landscapeNotationImg,landscapeNotationCanvas)){
+      if(currentLandscapeNotationSrc!==src)return; // superseded by a newer selection already — don't draw stale content
+      if(!trimNotationWhitespace(entry.img,landscapeNotationCanvas)){
         // No measurable margin, an already-tight image, or a pixel-read
         // failure — fall back to drawing it untouched at full size so the
         // notation is never simply missing.
-        landscapeNotationCanvas.width=landscapeNotationImg.naturalWidth;
-        landscapeNotationCanvas.height=landscapeNotationImg.naturalHeight;
-        landscapeNotationCanvas.getContext('2d').drawImage(landscapeNotationImg,0,0);
+        landscapeNotationCanvas.width=entry.img.naturalWidth;
+        landscapeNotationCanvas.height=entry.img.naturalHeight;
+        landscapeNotationCanvas.getContext('2d').drawImage(entry.img,0,0);
       }
       landscapeNotationCanvas.parentElement.classList.remove('is-loading');
     };
-    landscapeNotationImg.onload=applyLandscapeNotationImage;
-    landscapeNotationImg.src=src;landscapeNotationImg.alt=cfg.label+' notation';landscapeNotation.hidden=false;
-    if(landscapeNotationImg.complete&&landscapeNotationImg.naturalWidth)applyLandscapeNotationImage();
+    if(entry.ready)applyLandscapeNotationImage();
+    else entry.img.addEventListener('load',applyLandscapeNotationImage,{once:true});
+    landscapeNotation.hidden=false;
   }else{
     // No notationStrip configured for this piece at all — collapse for
     // real (the hidden attribute takes it fully out of layout), since
@@ -1969,7 +1991,8 @@ function renderNotationStrip(){
     // ships a notationStrip (see MOSAICS), so this branch is unreachable
     // in practice today.
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
-    landscapeNotation.hidden=true;landscapeNotationImg.removeAttribute('src');
+    currentLandscapeNotationSrc=null;
+    landscapeNotation.hidden=true;
   }
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
