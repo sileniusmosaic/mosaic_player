@@ -202,16 +202,22 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .tempo-buttons button#play.active{background:var(--accent-purple-dim);color:#fff}
 /* Play/pause icon (Aug 30 2026, now the button's ONLY content — no visible
    label): a triangle that swaps to two vertical bars while playing. Both
-   shapes live in one SVG, toggled via #play's own is-playing class (set by
-   setPlayBtnLabel(), the single place that now touches the button's
+   shapes live in one SVG, toggled via the button's own is-playing class (set
+   by setPlayBtnLabel(), the single place that now touches the REAL button's
    accessible label — see below and its comment for why that centralization
    matters). currentColor picks up the button's own white color
    automatically in both its normal and .is-loading states, no separate
    color rule needed. Sizing/fill shared with the reset and settings icons
-   — see .play-icon,.reset-icon,.settings-icon near .transport above. */
+   — see .play-icon,.reset-icon,.settings-icon near .transport above.
+   .transportPlayBtn (Sep 2026, was #play-only): broadened from an ID
+   selector to a class shared with #playBtnLandscape (see .landscape-transport
+   below) — the landscape transport's Play/Pause button mirrors the real
+   one's classes via syncLandscapePlayBtn() rather than being the same DOM
+   node (a node can only live in one place), so it needs the same class-driven
+   icon toggle to work the same way. */
 .play-icon .icon-pause{display:none}
-#play.is-playing .play-icon .icon-play{display:none}
-#play.is-playing .play-icon .icon-pause{display:inline}
+.transportPlayBtn.is-playing .play-icon .icon-play{display:none}
+.transportPlayBtn.is-playing .play-icon .icon-pause{display:inline}
 /* Play/Pause doubles as a loading indicator whenever audio/video is being
    fetched or decoded (first-ever prepare in ensurePrepared(), or a live
    tempo switch in changeTempo()): its own label always reads "Loading…" for
@@ -411,6 +417,50 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    The compound selector beats the plain .dawBtn/.metroBtn rules on
    specificity regardless of source order. */
 .metroBtn.metroBtn-landscape{top:max(20px,calc(env(safe-area-inset-top) + 14px));right:max(20px,calc(env(safe-area-inset-right) + 14px))}
+/* Mute (Sep 2026) — see the markup comment on #muteBtnLandscape. Stacked
+   directly under the metronome button rather than given its own corner: same
+   right edge, top offset pushed down by one button's height (26px) plus a
+   10px gap. calc() nesting a max() the same way metroBtn-landscape's own top
+   does, so both stay aligned to the same safe-area-aware baseline. */
+.muteBtn.muteBtn-landscape{top:calc(max(20px,calc(env(safe-area-inset-top) + 14px)) + 36px);right:max(20px,calc(env(safe-area-inset-right) + 14px))}
+/* Landscape square-navigation arrows (Sep 2026) — see the markup comment on
+   #landscapeArrowLeft/Right. Flank the focus square, vertically centered on
+   the video area (which .landscape-video-area's own position:relative makes
+   the containing block for). Sized and styled independently of .dawBtn
+   (metro/mute) rather than sharing it — those are pinned to fixed screen
+   corners regardless of content, these need to sit close to the square
+   itself, which moves/resizes with it (a different anchor point entirely),
+   so sharing the class would mean fighting its top/positioning assumptions
+   more than it would save. [hidden] (the syncLandscapeArrows() toggle, not a
+   CSS class) removes whichever end has nowhere further to go. */
+.landscapeArrow{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:2px solid var(--text);background:rgba(12,9,6,.72);color:var(--text);display:grid;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;z-index:5}
+.landscapeArrow[hidden]{display:none}
+.landscapeArrow svg{width:20px;height:20px}
+.landscapeArrowLeft{left:12px}
+.landscapeArrowRight{right:12px}
+/* Landscape transport (Sep 2026) — see the markup comment on
+   #landscapeTransport. Deliberately its own small button style rather than
+   reusing .tempo-buttons directly: that class assumes it can stretch to fill
+   a full-width container (repeat(4,1fr) over the whole phone width), while
+   this one has to fit inside whatever black space is left beside the square
+   — usually much narrower — so every dimension here is scaled down to suit.
+   left/width are set from the script (positionLandscapeTransport()), not
+   here — see that function's comment for why a fixed CSS value can't work
+   for either. */
+.landscape-transport{position:absolute;bottom:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;z-index:5}
+.landscape-transport button{font:inherit;border:2px solid var(--window-border);border-radius:6px;padding:5px 2px;background:var(--panel2);color:var(--text);font-size:10.5px;font-weight:700;min-height:30px;display:flex;align-items:center;justify-content:center;gap:3px}
+.landscape-transport button.active{background:var(--accent-purple);color:#fff;border-color:var(--window-border)}
+.landscape-transport button:disabled{opacity:.4}
+.landscape-transport .play-icon{width:15px;height:15px}
+/* Same loading-fill/is-loading/reset-instant treatment as the real #play
+   button (see .tempo-buttons button#play and its neighbors above) —
+   duplicated here rather than shared because those rules are scoped to
+   #play's id specifically (only one element may ever have that id), so they
+   never reach this separate button no matter what classes it carries. */
+.landscape-transport .transportPlayBtn{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750;position:relative;overflow:hidden;--play-progress:0}
+.landscape-transport .transportPlayBtn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
+.landscape-transport .transportPlayBtn.is-loading{background:var(--accent-purple-dim)}
+.landscape-transport .transportPlayBtn.reset-instant::before{transition:none!important}
 </style>
 </head>
 <body>
@@ -436,10 +486,54 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      independent of the manuscriptBtn toggle/manuscriptOn — this shows
      regardless of whether notation is switched on in portrait. pointer:coarse
      (not a screen-size guess) keeps this off on a desktop browser window
-     that's simply wide, matching how IS_DESKTOP itself is detected. -->
+     that's simply wide, matching how IS_DESKTOP itself is detected.
+
+     Controls added Sep 2026 so nothing here requires rotating back to
+     portrait: a swipe left/right anywhere in this view (script, near
+     selectTile()) or the on-screen left/right arrows flanking the square
+     change which tile is focused; a mute button (top-right, under the
+     metronome) mutes whichever tile is currently focused; and a Play/Pause
+     + 50/75/100% tempo row sits in the black space beside the square. Every
+     one of these forwards to (or directly calls) the exact same function/
+     button the portrait UI uses — see each element's own comment — so
+     there's never a second, landscape-only copy of any actual state. -->
+
 <div id="landscapeNotation" class="landscape-notation" hidden>
   <div class="landscape-video-area">
     <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
+    <!-- Square-to-square navigation (Sep 2026): swiping anywhere in this view
+         (see the touch handler in the script) already changes focus, but a
+         visible, tappable way to do the same thing matters on a device
+         someone hands to a kid/student without explaining the swipe. Left/
+         right chevrons flank the focus square; selectTile() clamps at either
+         end (no wraparound) rather than cycling past the last/first square,
+         so the arrow at whichever end is already reached is simply hidden
+         (see syncLandscapeArrows() in the script) instead of being shown
+         disabled — nothing to tap there, so nothing shown to tap. -->
+    <button id="landscapeArrowLeft" type="button" class="landscapeArrow landscapeArrowLeft" aria-label="Previous square" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    </button>
+    <button id="landscapeArrowRight" type="button" class="landscapeArrow landscapeArrowRight" aria-label="Next square">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    </button>
+    <!-- Transport (Sep 2026): Play/Pause + the same 50/75/100% tempo presets
+         as the portrait transport row, so tempo can be changed without
+         rotating back. Sits in the black letterboxed space to the left of
+         the focus square, positioned/sized by positionLandscapeTransport()
+         in the script (not pure CSS) because that space's actual width
+         depends on the square's rendered size, which itself depends on the
+         notation band's height for whichever tile is focused — there's no
+         way to express "centered in the leftover space next to a
+         same-height-as-container square" in CSS alone. #playBtnLandscape is
+         a separate button (not a repositioned original, same reasoning as
+         #metroBtnLandscape below) mirrored via syncLandscapePlayBtn() in the
+         script; the tempo preset buttons are built alongside the real ones
+         in buildTempoButtons() and call the exact same changeTempo(). -->
+    <div id="landscapeTransport" class="landscape-transport" aria-label="Playback controls">
+      <button id="playBtnLandscape" type="button" class="transportPlayBtn" aria-label="Play">
+        <svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg>
+      </button>
+    </div>
   </div>
   <!-- Sep 2026: this used to also contain a hidden <img id="landscapeNotationImg">
        as the loader for trimNotationWhitespace() to read pixels from. Removed —
@@ -484,6 +578,19 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     </svg>
     <span id="metroNumLandscape" class="metro-num"></span>
   </button>
+  <!-- Mute (Sep 2026): unlike the metronome (one shared piece-wide toggle)
+       or the tempo/play transport (also piece-wide), mute is PER TILE — but
+       landscape only ever shows one focus square at a time, so there's one
+       button here that always acts on whichever tile is currently focused,
+       stacked directly below the metronome button (same right edge, top-
+       right corner) rather than needing its own corner. Forwards to that
+       tile's real mute button in the (hidden) portrait grid — muteBtns[selected]
+       — the same single-source-of-truth forwarding pattern as the metronome
+       and transport buttons, so muting here is exactly the mute the user
+       sees reflected on that tile when they rotate back to portrait.
+       syncLandscapeMuteBtn() (see script) keeps its is-muted look and
+       aria-label matched to whichever tile is currently focused. -->
+  <button id="muteBtnLandscape" type="button" class="dawBtn muteBtn muteBtn-landscape" aria-label="Mute">M</button>
 </div>
 <main class="app">
   <input type="checkbox" id="menuToggle">
@@ -569,7 +676,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     </div>
     <div class="grid-stage-side grid-stage-right"><canvas id="gridRight" width="480" height="1920"></canvas><div id="gridControlsRight" class="grid-controls-vert"></div></div>
   </div>
-  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary" type="button"><svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg><span id="playLabel" class="visually-hidden">Play</span></button></div></div>
+  <div class="tempo-strip"><div id="tempoButtons" class="tempo-buttons" aria-label="Playback controls"><button id="play" class="primary transportPlayBtn" type="button"><svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg><span id="playLabel" class="visually-hidden">Play</span></button></div></div>
   <section class="panel">
     <div class="transport">
       <!-- Icon-only (Aug 30 2026) — a circular-arrow "restart" glyph, same
@@ -889,7 +996,7 @@ function mirrorLandscapeFocus(){
   requestAnimationFrame(mirrorLandscapeFocus);
 }
 requestAnimationFrame(mirrorLandscapeFocus);
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -1034,6 +1141,54 @@ metroBtnLandscape.addEventListener('click',()=>{
   },{passive:true});
   landscapeNotation.addEventListener('touchcancel',()=>{tracking=false;},{passive:true});
 })();
+// Landscape square-navigation arrows (Sep 2026) — same selectTile() as the
+// swipe handler and the portrait tap handler, so all three ways of changing
+// focus (tap a portrait tile, swipe in landscape, tap an arrow in landscape)
+// are really just three inputs into one function. No need to guard against
+// clicking a hidden arrow — selectTile() clamps regardless — but they're
+// hidden anyway once there's nowhere left to go (syncLandscapeArrows()).
+landscapeArrowLeft.addEventListener('click',()=>selectTile(selected-1));
+landscapeArrowRight.addEventListener('click',()=>selectTile(selected+1));
+// Landscape mute (Sep 2026) — forwards to whichever tile is currently
+// focused's real mute button in the portrait grid, same single-source-of-
+// truth forwarding as the metronome above. muteBtns[selected] always exists
+// once buildControls() has run (which happens before this can ever be
+// clicked, since the button is inside the initially-hidden landscape view).
+muteBtnLandscape.addEventListener('click',()=>{
+  if(muteBtns[selected])muteBtns[selected].click();
+});
+// Landscape transport (Sep 2026): Play/Pause forwards to the real button —
+// same reasoning as the metronome/mute forwarding above, since
+// toggleFromGesture()'s prepare/play/pause state machine has exactly one
+// place it should live. Its visual state (icon, loading fill, disabled) is
+// NOT pushed from those call sites, though — there are a dozen of them
+// scattered across ensurePrepared()/changeTempo()/playFromGesture()/pause(),
+// unlike the single-click-handler metronome — so rather than hunting down and
+// duplicating every one, a MutationObserver mirrors whatever the real
+// button's class/style/disabled end up being, automatically, from wherever
+// they're set. playLabel's text is observed the same way and copied onto
+// this button's aria-label (its own accessible name — the real button uses a
+// visually-hidden span for this, which would be redundant to duplicate here
+// since this button has no visible label to preserve room for either).
+function syncLandscapePlayBtn(){
+  playBtnLandscape.classList.toggle('is-playing',playBtn.classList.contains('is-playing'));
+  playBtnLandscape.classList.toggle('is-loading',playBtn.classList.contains('is-loading'));
+  playBtnLandscape.classList.toggle('reset-instant',playBtn.classList.contains('reset-instant'));
+  playBtnLandscape.disabled=playBtn.disabled;
+  playBtnLandscape.style.setProperty('--play-progress',playBtn.style.getPropertyValue('--play-progress')||'0');
+  playBtnLandscape.setAttribute('aria-label',playLabel.textContent||'Play');
+}
+new MutationObserver(syncLandscapePlayBtn).observe(playBtn,{attributes:true,attributeFilter:['class','style','disabled']});
+new MutationObserver(syncLandscapePlayBtn).observe(playLabel,{characterData:true,childList:true,subtree:true});
+playBtnLandscape.addEventListener('click',()=>playBtn.click());
+syncLandscapePlayBtn(); // initial state, before anything has changed to trigger the observers
+// Keeps the transport row centered against the square's actual current
+// position/size (see positionLandscapeTransport()'s own comment) across an
+// orientation change — the one case that changes the square's geometry
+// without going through updateFocusUI() (which calls it directly for every
+// other case: a tile switch, a piece switch, a notation image finishing).
+window.addEventListener('resize',positionLandscapeTransport);
+positionLandscapeTransport();
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
 // renderNotationStrip() already applies (a piece with no notationStrip
@@ -1178,7 +1333,7 @@ async function abandonCurrentLoad(reason){
     console.warn(reason+': the in-flight load did not wind down within '+ABANDON_WAIT_MS+'ms (likely stuck in decodeAudioData()/engine.loadTempo(), which cannot be cancelled) — forcing it to be treated as abandoned so the app can continue.');
     loadGeneration++; // any late arrival from `promise` now sees a mismatch and no-ops
     preparing=false;bankBusy=false;
-    tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
+    setTempoButtonsDisabled(false);
     playBtnLoadingDone();
   }
   if(currentLoad===tracker){currentLoad=null;currentLoadPromise=null;}
@@ -1678,7 +1833,17 @@ function drawPoster(){
 // landscape-only state to reconcile. Wraps the index (rather than clamping)
 // so swiping past either end cycles round instead of getting stuck.
 function selectTile(i){
-  selected=((i%TILE_COUNT)+TILE_COUNT)%TILE_COUNT;
+  // Clamp, don't wrap (Sep 2026 — was modulo wraparound): the landscape
+  // arrows only ever show a direction that actually leads somewhere (see
+  // syncLandscapeArrows()/the markup comment on #landscapeArrowLeft), so
+  // swiping needs the same no-wrap behavior for the two to agree — swiping
+  // past the last square should feel like hitting an edge, not looping back
+  // to the first. The equality check is a cheap early-out for exactly that
+  // hit-the-edge case (swiping/pressing an arrow past either end), skipping
+  // a full notation/video re-render for a selection that isn't changing.
+  const clamped=Math.max(0,Math.min(TILE_COUNT-1,i));
+  if(clamped===selected)return;
+  selected=clamped;
   document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));
   updateFocusUI();
 }
@@ -1689,6 +1854,9 @@ function updateFocusUI(){
   const anySolo=soloed.some(Boolean);
   focusWrap.classList.toggle('is-muted',muted[selected]);
   focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
+  syncLandscapeMuteBtn(); // landscape's one mute button always tracks whichever tile is now focused
+  syncLandscapeArrows(); // may have just reached (or left) either end
+  positionLandscapeTransport(); // the square's rendered size can change with the tile (different notation image height), so its left edge — what the transport centers against — can too
   engine.selected=selected;
   if(engine.decodedFrameCount>0)engine.render(currentPos());
   else drawPoster();
@@ -1712,6 +1880,43 @@ function refreshSoloMuteState(){
   engine.muted=muted;
   engine.soloDim=soloed.map(s=>anySolo&&!s);
   updateFocusUI();
+}
+// Landscape's single mute button always acts on whichever tile is currently
+// focused (see the markup comment on #muteBtnLandscape) — called from
+// updateFocusUI() so it tracks BOTH a focus change (different tile, possibly
+// different muted state) and a mute toggle on the already-focused tile
+// (refreshSoloMuteState(), which the real mute button's click handler calls,
+// itself ends with updateFocusUI() — see above — so this always runs after
+// either).
+function syncLandscapeMuteBtn(){
+  const isMuted=muted[selected];
+  muteBtnLandscape.classList.toggle('is-muted',isMuted);
+  muteBtnLandscape.setAttribute('aria-label',(isMuted?'Unmute ':'Mute ')+NAMES[selected]);
+}
+// Shows only whichever direction actually leads to another square — see the
+// markup comment on #landscapeArrowLeft for why a disabled-but-visible arrow
+// at either end was rejected in favor of just not showing it.
+function syncLandscapeArrows(){
+  landscapeArrowLeft.hidden=selected<=0;
+  landscapeArrowRight.hidden=selected>=TILE_COUNT-1;
+}
+// The transport row lives in the black letterboxed space to the LEFT of the
+// focus square (see the markup comment on #landscapeTransport) — a space
+// whose width is (viewport width − square width) / 2, and the square's width
+// itself is set by CSS from the square's HEIGHT (aspect-ratio:1/1,
+// height:100% of .landscape-video-area), which varies with how tall the
+// current tile's notation band is. None of that is expressible as a plain
+// CSS value, so this reads the square's actual rendered position and sizes/
+// centers the transport row against it directly. getBoundingClientRect()
+// forces a synchronous layout, so this always sees the CURRENT geometry
+// (including any change just made moments earlier in this same tick, e.g. a
+// canvas resize from applyLandscapeNotationImage()) rather than a stale one.
+function positionLandscapeTransport(){
+  const squareLeft=landscapeFocusCanvas.getBoundingClientRect().left;
+  const maxW=Math.max(80,squareLeft-16); // 80: below this it's not worth trying to show all four buttons legibly
+  const w=Math.min(190,maxW);
+  landscapeTransport.style.width=w+'px';
+  landscapeTransport.style.left=Math.max(8,(squareLeft-w)/2)+'px';
 }
 // Reverted (Sep 2026): every tile lives in the single #gridControls grid on
 // both mobile and desktop now — see the CSS/markup comments near
@@ -2519,14 +2724,36 @@ function buildTempoButtons(){
   tempoButtons.appendChild(playBtn); // Play + 50/75/100 share one row, in that order
   TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));tempoButtons.appendChild(b)});updateTempoUI();
 }
-function updateTempoUI(){tempoButtons.querySelectorAll('button').forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
+// Landscape transport's tempo presets (Sep 2026): #playBtnLandscape is
+// already in the markup (a real button, mirrored via syncLandscapePlayBtn()
+// — see its comment for why that's a separate mechanism from this), so this
+// only needs to add the 3 preset buttons after it — same TEMPO_PRESETS list,
+// same changeTempo(p) call the real ones make directly (there's no separate
+// "landscape tempo" concept to keep in sync, just another button invoking
+// the one real function).
+function buildLandscapeTransport(){
+  TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));landscapeTransport.appendChild(b)});
+}
+// Covers both rows in one pass — a button with no data-p (#play/
+// #playBtnLandscape) always fails +undefined===tempoPercent, so this never
+// mis-marks either Play button "active" any more than the portrait-only
+// version used to.
+function updateTempoUI(){[...tempoButtons.querySelectorAll('button'),...landscapeTransport.querySelectorAll('button')].forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
+// Replaces 5 identical `tempoButtons.querySelectorAll('button').forEach(b=>
+// b.disabled=...)` call sites scattered through the tempo/prepare/switch
+// flow (Sep 2026) — each now also needs to reach the landscape transport's
+// buttons (including playBtnLandscape, which lives in that same container),
+// and duplicating that at every call site would be easy to miss one of.
+function setTempoButtonsDisabled(disabled){
+  [tempoButtons,landscapeTransport].forEach(container=>container.querySelectorAll('button').forEach(b=>b.disabled=disabled));
+}
 // Thin wrapper, same reasoning as ensurePrepared() above: registers this load
 // as the one Reset/switchMosaic() can cancel, then delegates to the real
 // logic in changeTempoImpl().
 async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
-  bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+  bankBusy=true;setTempoButtonsDisabled(true);
   // Free up whatever bandwidth a background prefetch is still using for some
   // OTHER tempo of THIS SAME piece (Aug 29 2026) — switchMosaic() already did
   // this for piece switches (see currentPrefetchTracker's own comment for the
@@ -2655,7 +2882,7 @@ async function changeTempoImpl(percent,tracker,myGen){
       else{console.error(err);setStatus(percent+'% failed to load — still playing at '+tempoPercent+'%. '+(err?.message||err),'error');}
     }
   }finally{
-    if(myGen===loadGeneration){bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);playBtnLoadingDone();}
+    if(myGen===loadGeneration){bankBusy=false;setTempoButtonsDisabled(false);playBtnLoadingDone();}
   }
 }
 function prefetchTempoBanks(){
@@ -3019,7 +3246,7 @@ async function reset(){
       const ok=await ensurePrepared();
       if(!ok)throw new Error('Audio setup failed');
     }else if(tempoPercent!==100){
-      bankBusy=true;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=true);
+      bankBusy=true;setTempoButtonsDisabled(true);
       // Tracked (Aug 2026) the same way ensurePrepared()/changeTempo() are,
       // purely so this reload shows up in the load log too — Reset is one of
       // the main actions used while testing a flaky connection, and it was
@@ -3041,7 +3268,7 @@ async function reset(){
         setStatus('Reset: 100% reload failed — '+(err?.message||err),'error');
         throw err; // outer catch still owns disabling/re-enabling + the user-facing message
       }finally{playBtnLoadingDone();}
-      bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
+      bankBusy=false;setTempoButtonsDisabled(false);
     }else if(engine.info){
       engine.seekTo(0);
     }
@@ -3055,7 +3282,7 @@ async function reset(){
     playing=false;
     setPlayBtnLabel('Play');
     setStatus('Reset failed: '+(err?.message||err),'error');
-    bankBusy=false;tempoButtons.querySelectorAll('button').forEach(b=>b.disabled=false);
+    bankBusy=false;setTempoButtonsDisabled(false);
   }finally{
     resetBtn.disabled=false;
   }
@@ -3290,7 +3517,7 @@ metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
 syncLandscapeMetroBtn();
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
-buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
+buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play to begin.');
