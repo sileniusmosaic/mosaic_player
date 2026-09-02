@@ -348,24 +348,36 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .landscape-notation{display:none}
 @media (orientation:landscape) and (pointer:coarse){
   .app{display:none}
-  .landscape-notation:not([hidden]){display:flex}
-  .landscape-notation{position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:#fff;margin:0;padding:0}
-  .landscape-notation img{width:100%;height:auto;display:block}
+  .landscape-notation:not([hidden]){display:block}
+  /* Sep 2026 (was: a full-screen white sheet showing just the notation,
+     vertically centered, with the whole player — including the video —
+     hidden behind it). Now the live focus square stays visible, fit to the
+     screen's full height with black bars either side (.landscape-focus-
+     canvas below — mirrored from #mosaicFocus every frame regardless of
+     which code path last painted it; see mirrorLandscapeFocus() in the
+     script), and the notation becomes a white band anchored to the BOTTOM
+     of the screen, as wide as the screen, superimposed on top of the video
+     (later in DOM order = stacked above it) rather than replacing it. */
+  .landscape-notation{position:fixed;inset:0;z-index:1000;background:#000;margin:0;padding:0}
+  .landscape-focus-canvas{position:absolute;top:0;left:50%;transform:translateX(-50%);height:100%;width:auto;aspect-ratio:1/1;display:block}
+  .landscape-notation-band{position:absolute;left:0;right:0;bottom:0;width:100%;background:#fff;line-height:0}
+  .landscape-notation-band img{width:100%;height:auto;display:block}
 }
-/* Rule (Aug 31 2026): the landscape notation view always carries the
-   instrument name, bottom-left of the screen — not overlapping the
-   notation image itself, which is only vertically centered (not
-   stretched to full height), so the corner below/beside it is always
-   clear. Same dark-badge look as .focus-label/.tile-name elsewhere in the
-   app for visual consistency. position:fixed on the parent already
-   establishes the containing block this positions against.
-   Bumped further in from the corner (Aug 31 2026 — was 14px/12px, sat
-   right on the physical edge/rounded corner of an iPhone in landscape):
-   max() keeps a real 24px/20px of breathing room on any device, but grows
-   past that using env(safe-area-inset-*) (viewport-fit=cover is set on
-   the viewport meta tag above) so it also clears the notch/home-indicator
-   safe area on a phone that has one. */
-.landscape-notation-label{position:absolute;left:max(24px,calc(env(safe-area-inset-left) + 16px));bottom:max(20px,calc(env(safe-area-inset-bottom) + 16px));background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);pointer-events:none}
+/* Rule (Aug 31 2026, moved top-left Sep 2026): the landscape notation view
+   always carries the instrument name. Originally bottom-left, back when the
+   notation image was only vertically centered inside a full-screen white
+   sheet, leaving that corner clear; now that the notation is a white band
+   anchored to the bottom edge (see .landscape-notation-band above), a
+   bottom-left badge would sit on top of the notation itself, so this now
+   pins to the top-left corner instead — over the video/black area, clear of
+   both the band and the metronome button (top-right). Same dark-badge look
+   as .focus-label/.tile-name elsewhere in the app for visual consistency.
+   position:fixed on the parent already establishes the containing block
+   this positions against. max() keeps a real 24px/20px of breathing room on
+   any device, but grows past that using env(safe-area-inset-*) (viewport-
+   fit=cover is set on the viewport meta tag above) so it also clears the
+   notch/home-indicator safe area on a phone that has one. */
+.landscape-notation-label{position:absolute;left:max(24px,calc(env(safe-area-inset-left) + 16px));top:max(20px,calc(env(safe-area-inset-top) + 16px));background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);pointer-events:none}
 /* Landscape metronome (Aug 31 2026) — see the markup comment on
    #metroBtnLandscape. Only top/right are overridden (same safe-area-aware
    treatment as the label above, mirrored to the opposite corner); every
@@ -377,19 +389,25 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 </style>
 </head>
 <body>
-<!-- Landscape-only full-notation view (Aug 31 2026): rotating the phone to
-     landscape hides the whole player and shows just the notation for
-     whichever tile is currently focused, stretched to the full width of
-     the screen and vertically centered — see the (orientation:landscape)
-     and (pointer:coarse) media query in the CSS below, and
-     renderNotationStrip() in the script (same per-tile source it already
-     feeds the portrait strip on the focus square). Deliberately
-     independent of the manuscriptBtn toggle/manuscriptOn — this shows
-     regardless of whether notation is switched on in portrait. pointer:coarse
-     (not a screen-size guess) keeps this off on a desktop browser window
-     that's simply wide, matching how IS_DESKTOP itself is detected. -->
+<!-- Landscape-only full-notation view (Aug 31 2026; reworked Sep 2026):
+     rotating the phone to landscape hides the whole normal player UI and
+     shows this instead — the live focus square (mirrored from #mosaicFocus
+     every frame via mirrorLandscapeFocus() in the script, since #mosaicFocus
+     itself is inside .app which this view hides) fit to the full height of
+     the screen with black bars either side, and the notation for whichever
+     tile is currently focused as a white band spanning the full width,
+     anchored to the bottom of the screen and superimposed on top of the
+     video — see the (orientation:landscape) and (pointer:coarse) media
+     query in the CSS below, and renderNotationStrip() in the script (same
+     per-tile source it already feeds the portrait strip on the focus
+     square). Deliberately independent of the manuscriptBtn toggle/
+     manuscriptOn — this shows regardless of whether notation is switched on
+     in portrait. pointer:coarse (not a screen-size guess) keeps this off on
+     a desktop browser window that's simply wide, matching how IS_DESKTOP
+     itself is detected. -->
 <div id="landscapeNotation" class="landscape-notation" hidden>
-  <img id="landscapeNotationImg" alt="">
+  <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
+  <div class="landscape-notation-band"><img id="landscapeNotationImg" alt=""></div>
   <div id="landscapeNotationLabel" class="landscape-notation-label"></div>
   <!-- Landscape metronome (Aug 31 2026): a second button, not a repositioned
        original — #metroBtn stays put inside .app (which this whole view
@@ -808,6 +826,22 @@ applyGridCanvasSize();
 const gridLeft=$('#gridLeft'), gctxLeft=gridLeft.getContext('2d',{alpha:false}), gridRight=$('#gridRight'), gctxRight=gridRight.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
+// Landscape-mode video mirror (Sep 2026) — see the markup/CSS comments on
+// #landscapeNotation. #mosaicFocus lives inside .app, which the phone-
+// landscape view hides outright, so it can't just be reused in place; a
+// second small canvas here gets a copy of whatever's currently on
+// #mosaicFocus every animation frame (mirrorLandscapeFocus() below), kept
+// deliberately independent of any single "paint the focus square" call site
+// (video frames, the poster placeholder, a piece switch) so it's always
+// correct regardless of which of those last drew — one small canvas-to-
+// canvas drawImage per frame is negligible cost, and it's invisible/inert
+// via [hidden] whenever the media query isn't active anyway.
+const landscapeFocusCanvas=$('#landscapeFocusCanvas'), landscapeFocusCtx=landscapeFocusCanvas.getContext('2d',{alpha:false});
+function mirrorLandscapeFocus(){
+  landscapeFocusCtx.drawImage(focusCanvas,0,0,landscapeFocusCanvas.width,landscapeFocusCanvas.height);
+  requestAnimationFrame(mirrorLandscapeFocus);
+}
+requestAnimationFrame(mirrorLandscapeFocus);
 const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationImg=$('#landscapeNotationImg'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
@@ -1250,6 +1284,9 @@ function sizeFocusCanvas(){
   const cssPx=IS_DESKTOP?520:480;
   const px=Math.round(cssPx*dpr);
   if(focusCanvas.width!==px){focusCanvas.width=px;focusCanvas.height=px;}
+  // Keep the landscape mirror canvas at the same resolution as the real one
+  // it's copying — mirrorLandscapeFocus() above assumes matching dimensions.
+  if(landscapeFocusCanvas.width!==px){landscapeFocusCanvas.width=px;landscapeFocusCanvas.height=px;}
 }
 window.addEventListener('resize',sizeFocusCanvas);
 
