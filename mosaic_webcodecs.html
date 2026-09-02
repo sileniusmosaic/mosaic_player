@@ -98,6 +98,13 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
+/* Desktop override (Sep 2026): same buttons, same DOM order (tile 0..N-1 —
+   see buildControls()), just reflowed into 2 columns of 4 via
+   grid-auto-flow:column so tile 0-3 fill column 1 top-to-bottom and tile 4+
+   fill column 2 — matching the canvas's own column-major redraw below,
+   cell-for-cell, so the invisible mute/solo hit-areas stay aligned with
+   what's actually drawn underneath them. */
+.is-desktop .grid-controls{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr);grid-auto-flow:column}
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
 .focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
 .dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 13.2px -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;line-height:1}
@@ -271,7 +278,16 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .focus-column{display:flex;flex-direction:column;gap:8px}
 .is-desktop .focus-column{flex:0 1 900px;flex-direction:row;align-items:flex-start;gap:16px}
 .is-desktop .focus-wrap{width:520px;flex:0 0 520px}
-.is-desktop #gridStageMobile{flex:0 0 340px;margin-top:0}
+/* Sep 2026: desktop's tile grid reads as 2 columns (top-to-bottom, left-to-
+   right) instead of mobile's 4-across arrangement — narrower and taller
+   rather than wide and short. Swapping the aspect ratio to 1/2 and halving
+   the flex-basis (340px -> 170px) keeps each tile the same physical size as
+   before (same total width*height area, just rotated 90°) rather than
+   making tiles bigger or the grid area far taller than the focus square.
+   See gridDestShape()/applyGridCanvasSize() in the script for the matching
+   canvas-resolution and draw-order changes, and .is-desktop .grid-controls
+   below for the matching mute/solo overlay reflow. */
+.is-desktop #gridStageMobile{flex:0 0 170px;margin-top:0;aspect-ratio:1/2}
 /* The old two-side-column layout is retired but its markup stays in the DOM
    (see comment above) — keep it hidden on both mobile and desktop. */
 .grid-stage-side{display:none}
@@ -758,6 +774,34 @@ let LOOP_END=cfg.loopEnd, NAMES=cfg.names, TILE_COLS=cfg.cols, TILE_ROWS=cfg.row
 let VIDEO_SOURCES=videoSourcesFor(cfg), STEM_URLS=cfg.stemFiles;
 const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
+// Desktop tile-grid reflow (Sep 2026): mobile draws the grid in the SOURCE
+// video's own native shape (TILE_COLS wide x TILE_ROWS tall, row-major —
+// tile 0..3 across the top, 4..7 across the bottom). Desktop instead reads
+// as 2 columns, filled top-to-bottom then left-to-right (tile 0-3 down
+// column 1, tile 4+ down column 2) — see the CSS comment on
+// .is-desktop .grid-controls for why the button overlay needs no JS change
+// to match. This only ever changes DESTINATION placement — tileSource(i,..)
+// below, which crops each tile out of the source video/poster, always uses
+// the real TILE_COLS/TILE_ROWS since that's physically baked into the video.
+const GRID_DEST_COLS_DESKTOP=2;
+function gridDestShape(){
+  if(!IS_DESKTOP)return {cols:TILE_COLS,rows:TILE_ROWS,columnMajor:false};
+  return {cols:GRID_DEST_COLS_DESKTOP,rows:Math.ceil((TILE_COLS*TILE_ROWS)/GRID_DEST_COLS_DESKTOP),columnMajor:true};
+}
+// Same per-tile pixel resolution as the original 960x480 (4 cols x 2 rows of
+// 240x240) canvas, just reshaped to the desktop destination's column/row
+// count — e.g. 2 cols x 4 rows of the same 240x240 cells, 480x960 overall.
+// Mobile is left at its native TILE_COLS x TILE_ROWS resolution untouched.
+// Called at load and again on every switchMosaic(), even though today all
+// three pieces share the same 4x2 source shape, so a future piece with a
+// different one stays correct.
+const GRID_CELL_PX=grid.width/TILE_COLS; // 240 — same on both axes since source tiles are square
+function applyGridCanvasSize(){
+  if(!IS_DESKTOP)return;
+  const {cols:destCols,rows:destRows}=gridDestShape();
+  grid.width=destCols*GRID_CELL_PX; grid.height=destRows*GRID_CELL_PX;
+}
+applyGridCanvasSize();
 // Retired split-grid canvases (see the CSS/markup for .grid-stage-side) —
 // kept looked-up here since the elements still exist in the DOM, but never
 // passed to the engine or drawn into any more (reverted Sep 2026).
@@ -1185,6 +1229,10 @@ const engine=new WebCodecsVideoEngine({
   gridCanvasLeft:undefined, gridCanvasRight:undefined,
   focusCanvas:focusCanvas,
   cols:TILE_COLS, rows:TILE_ROWS, tileCount:TILE_COUNT,
+  // Desktop-only column-major grid reflow (Sep 2026) — see gridDestShape()
+  // above and the matching CSS on .is-desktop .grid-controls. false on
+  // mobile reproduces the engine's original row-major behavior exactly.
+  gridColumnMajor:IS_DESKTOP, gridDestCols:GRID_DEST_COLS_DESKTOP,
   onStatus:(msg,cls)=>setStatus(msg,cls),
   onError:(err)=>{
     const now=performance.now();
@@ -1494,9 +1542,19 @@ function drawPoster(){
   drawFocusPoster();
   // Reverted (Sep 2026) to always drawing the single mobile-style grid, on
   // both mobile and desktop — see the engine-construction comment above for
-  // why gctxLeft/gctxRight are never used any more.
-  const S=grid.width/TILE_COLS,Sh=grid.height/TILE_ROWS;
-  for(let i=0;i<TILE_COUNT;i++)drawOneTile(gctx,i,w,h,(i%TILE_COLS)*S,Math.floor(i/TILE_COLS)*Sh,S,Sh,anySolo);
+  // why gctxLeft/gctxRight are never used any more. Destination placement
+  // (dx/dy) follows gridDestShape() — mobile stays row-major in the source's
+  // own TILE_COLS x TILE_ROWS shape, desktop reflows column-major into 2
+  // columns (see the comment on gridDestShape() itself). tileSource() below
+  // (called inside drawOneTile) always crops from the real TILE_COLS/
+  // TILE_ROWS regardless, since that's the source video/poster's actual shape.
+  const {cols:destCols,rows:destRows,columnMajor}=gridDestShape();
+  const S=grid.width/destCols,Sh=grid.height/destRows;
+  for(let i=0;i<TILE_COUNT;i++){
+    const dx=columnMajor?Math.floor(i/destRows)*S:(i%destCols)*S;
+    const dy=columnMajor?(i%destRows)*Sh:Math.floor(i/destCols)*Sh;
+    drawOneTile(gctx,i,w,h,dx,dy,S,Sh,anySolo);
+  }
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
@@ -2474,6 +2532,7 @@ async function switchMosaic(id){
     muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
     soloed=Array(TILE_COUNT).fill(false);engine.soloDim=soloed.map(()=>false);
     engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
+    applyGridCanvasSize(); // no-op on mobile; keeps desktop's canvas resolution matching TILE_COLS/TILE_ROWS if a future piece's source shape ever differs
     prepared=false;fallbackMode=false;buffers=[];prefetchScheduled=false;
     // Tempo (and the loop-boundary resync tracker) must not carry over from the
     // previous piece: the video we're about to load below is always the 100%

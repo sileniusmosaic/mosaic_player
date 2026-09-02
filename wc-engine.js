@@ -26,13 +26,21 @@ class WebCodecsVideoEngine {
   // half the tiles (desktop's "tiles flank the focus square" layout) — pass
   // whichever pair matches the layout actually in the DOM; the other stays
   // null and _draw() simply skips it.
-  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8 }) {
+  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8, gridColumnMajor = false, gridDestCols }) {
     this.gridCtx = gridCanvas ? gridCanvas.getContext('2d', { alpha: false }) : null;
     this.gridLeftCtx = gridCanvasLeft ? gridCanvasLeft.getContext('2d', { alpha: false }) : null;
     this.gridRightCtx = gridCanvasRight ? gridCanvasRight.getContext('2d', { alpha: false }) : null;
     this.focusCtx = focusCanvas.getContext('2d', { alpha: false });
     this.onStatus = onStatus || (() => {});
     this.onError = onError || (() => {});
+    // Desktop-only column-major grid reflow (Sep 2026): tiles read as
+    // `gridDestCols` columns filled top-to-bottom, left-to-right, instead of
+    // the source's own row-major cols x rows shape. false/undefined (mobile,
+    // and every caller before this option existed) reproduces the original
+    // row-major destination math in drawGridFromSource() exactly.
+    this.gridColumnMajor = gridColumnMajor;
+    this.gridDestCols = gridColumnMajor ? (gridDestCols || cols) : cols;
+    this.gridDestRows = gridColumnMajor ? Math.ceil((cols * rows) / this.gridDestCols) : rows;
     this.decoder = null;
     this._loader = null;       // set only during a progressive load (loadTempoProgressive()) — see _pump()
     // Bumped at the START of every loadTempo()/loadTempoProgressive() call and
@@ -73,6 +81,12 @@ class WebCodecsVideoEngine {
   // already being shared by reference.
   setLayout(cols, rows, tileCount) {
     this.cols = cols; this.rows = rows; this.tileCount = tileCount;
+    // Keep the destination shape in sync with any change to the source
+    // shape — irrelevant today since every piece shares the same 4x2 source,
+    // but keeps a future piece with a different one correct without needing
+    // its own special-casing here.
+    if (this.gridColumnMajor) this.gridDestRows = Math.ceil((cols * rows) / this.gridDestCols);
+    else { this.gridDestCols = cols; this.gridDestRows = rows; }
     if (this.selected >= tileCount) this.selected = 0;
   }
 
@@ -366,7 +380,7 @@ class WebCodecsVideoEngine {
     }
     this._offscreenCtx.drawImage(frame, 0, 0, w, h); // full-frame blit — no cropping here, universally safe
     if (this.gridCtx) {
-      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim);
+      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.gridDestCols, this.gridDestRows, this.gridColumnMajor);
     }
     if (this.gridLeftCtx || this.gridRightCtx) {
       // Split layout: first half of the flat tile index list (reading order —
@@ -392,11 +406,18 @@ function tileRect(i, w, h, cols = 4, rows = 2) {
 // tileCount = how many of cols*rows cells are actually populated for this
 // mosaic (a piece with fewer tiles than cols*rows just never draws/selects
 // the remaining cell(s), which are left blank in the source video itself).
-function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim) {
-  const S = ctx.canvas.width / cols, Sh = ctx.canvas.height / rows;
+// destCols/destRows describe the DESTINATION grid shape on screen — defaults
+// to cols/rows (mobile: destination shape matches the source's own shape,
+// row-major). Desktop passes a narrower destCols (e.g. 2) and columnMajor
+// true, filling each destination column top-to-bottom before moving to the
+// next, while `tileRect` above still always crops from the tile's real
+// position in the SOURCE composite (cols/rows), which never changes.
+function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, destCols = cols, destRows = rows, columnMajor = false) {
+  const S = ctx.canvas.width / destCols, Sh = ctx.canvas.height / destRows;
   for (let i = 0; i < tileCount; i++) {
     const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
-    const dx = (i % cols) * S, dy = Math.floor(i / cols) * Sh;
+    const dx = columnMajor ? Math.floor(i / destRows) * S : (i % destCols) * S;
+    const dy = columnMajor ? (i % destRows) * Sh : Math.floor(i / destCols) * Sh;
     ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
     // Explicit mute always wins the visual (black); a tile silenced only
     // because something ELSE is soloed gets the lighter grey "dimmed" wash.
