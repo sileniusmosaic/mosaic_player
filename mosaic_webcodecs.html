@@ -369,25 +369,40 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      sized by its flex box, not by the full viewport height, so it
      automatically shrinks to leave room for the band below it. */
   .landscape-notation{position:fixed;inset:0;z-index:1000;background:#000;margin:0;padding:0;flex-direction:column}
-  .landscape-video-area{flex:1 1 auto;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
-  .landscape-focus-canvas{height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block}
+  /* Sep 2026: was display:flex;align-items/justify-content:center — switched
+     to grid;place-items:center so the focus canvas and its new mute-dim
+     overlay (see #landscapeFocusDim) can be stacked exactly on top of each
+     other via grid-area:1/1 instead of needing separate absolute-positioning
+     math to match the canvas's own centered/letterboxed box. The arrows and
+     transport row are position:absolute regardless (out of flow either way),
+     so this swap doesn't move them. grid-template-columns/rows:1fr is
+     required, not cosmetic: a plain "1fr" track still has an implicit min
+     sizing function of auto — which for a grid item defaults to its
+     min-content size, and a replaced element's (the canvas's) min-content
+     size is its own intrinsic/attribute size (e.g. a 480×480 backing
+     store) — so the row was still growing to fit the canvas at full size
+     regardless of the fr share, then height:100% on the canvas just
+     matched that same self-inflated row, overflowing into the notation
+     band below (caught by verify_landscape_bezel_fix.py after this switch
+     first landed). minmax(0,1fr) pins the track's min to 0 instead (the
+     grid equivalent of flexbox's own well-known min-height:0 fix), so the
+     row is free to actually shrink to the space .landscape-video-area (a
+     flex item with a real, flex-derived height) has available, and
+     height:100% on the canvas then resolves against that real number. */
+  .landscape-video-area{flex:1 1 auto;min-height:0;position:relative;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);place-items:center}
+  .landscape-focus-canvas{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block}
+  /* Mute dim (Sep 2026) — same idea as .focus-dim over the portrait focus
+     square (see that rule and focusWrap.classList.toggle('is-muted',...)),
+     just without a shared parent class to hang off of: this view's mute
+     button is a single global toggle for "whichever tile is focused" (see
+     #muteBtnLandscape), not per-tile DOM like the portrait grid, so its own
+     is-visible class (set by syncLandscapeMuteBtn()) is simpler than trying
+     to reuse .focus-wrap/.focus-dim's tile-indexed structure here. Same
+     grid-area as the canvas above so it always covers exactly the square,
+     whatever size that currently is. */
+  .landscape-focus-dim{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;background:rgba(0,0,0,.55);pointer-events:none;display:none}
+  .landscape-focus-dim.is-visible{display:block}
   .landscape-notation-band{flex:0 0 auto;width:100%;background:#fff;line-height:0}
-  /* Loading state (Sep 2026 bugfix): while the notation PNG for the newly
-     focused tile is still loading, landscapeNotationCanvas is left at
-     whatever size it last had (or its untouched browser default the very
-     first time). flex:0 0 auto sizes this band from that stale/default
-     canvas size, which is exactly what produced the "huge blank white bar"
-     bug — a brand-new canvas defaults to 300x150, and width:100% plus
-     height:auto stretches that 2:1 ratio to roughly half the viewport
-     width, easily taller than the video area has room for. Rather than
-     fighting that by picking some other "safe" placeholder size (any fixed
-     aspect ratio is wrong for *some* real notation image), this collapses
-     the band to a hard 0 via flex-basis regardless of the canvas's
-     intrinsic size — overflow:hidden clips it, so no stale/placeholder
-     pixels can show through — leaving the video area the full screen until
-     real content is ready. Toggled by renderNotationStrip()/
-     applyLandscapeNotationImage() in the script. */
-  .landscape-notation-band.is-loading{flex:0 0 0;overflow:hidden}
   .landscape-notation-canvas{width:100%;height:auto;display:block}
   /* Bezel clearance (Sep 2026): a plain black spacer, not extra padding on
      the band itself, so the band's own white background still ends with a
@@ -417,41 +432,68 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    The compound selector beats the plain .dawBtn/.metroBtn rules on
    specificity regardless of source order. */
 .metroBtn.metroBtn-landscape{top:max(20px,calc(env(safe-area-inset-top) + 14px));right:max(20px,calc(env(safe-area-inset-right) + 14px))}
-/* Mute (Sep 2026) — see the markup comment on #muteBtnLandscape. Stacked
-   directly under the metronome button rather than given its own corner: same
-   right edge, top offset pushed down by one button's height (26px) plus a
-   10px gap. calc() nesting a max() the same way metroBtn-landscape's own top
-   does, so both stay aligned to the same safe-area-aware baseline. */
-.muteBtn.muteBtn-landscape{top:calc(max(20px,calc(env(safe-area-inset-top) + 14px)) + 36px);right:max(20px,calc(env(safe-area-inset-right) + 14px))}
+/* Mute (Sep 2026, offset corrected) — see the markup comment on
+   #muteBtnLandscape. Its own circle, stacked directly under the metronome:
+   same right edge, top pushed down by one button's height plus a 10px gap
+   — written as its own flat max(px, calc(env+px)) rather than nesting a
+   calc() around metroBtn-landscape's whole expression (an earlier version
+   did that; not wrong, just needlessly fragile to reason about/debug).
+   That button's height is METRO'S own rendered size, though, not mute's —
+   #metroBtnLandscape shares the plain portrait .metroBtn class, which sets
+   its own 55px width/height (overriding .dawBtn's 26px default the mute/
+   reset buttons actually use), so the gap folded in below is 55+10=65
+   (20+65=85, 14+65=79), not 26+10=36 — an earlier version used the smaller
+   number, which visibly overlapped the real (bigger) metronome button. */
+.muteBtn.muteBtn-landscape{top:max(85px,calc(env(safe-area-inset-top) + 79px));right:max(20px,calc(env(safe-area-inset-right) + 14px))}
+/* Reset (Sep 2026, offset corrected) — see the markup comment on
+   #resetBtnLandscape. The real #reset button has no shared class of its
+   own to hook into (unlike mute/metro), so this is .dawBtn (the plain
+   round-button look) plus its own positioning class rather than a
+   compound .resetBtn.resetBtn-landscape. Its own circle, left of the
+   metronome on the same row: same top as metro, its right offset is
+   metro's own (20px / env+14px) plus metro's ACTUAL rendered width (55px,
+   not .dawBtn's 26px default — see the mute comment above for why) plus a
+   10px gap, folded the same flat way as the mute button above
+   (20+65=85, 14+65=79). */
+.dawBtn.resetBtn-landscape{top:max(20px,calc(env(safe-area-inset-top) + 14px));right:max(85px,calc(env(safe-area-inset-right) + 79px))}
 /* Landscape square-navigation arrows (Sep 2026) — see the markup comment on
-   #landscapeArrowLeft/Right. Flank the focus square, vertically centered on
-   the video area (which .landscape-video-area's own position:relative makes
-   the containing block for). Sized and styled independently of .dawBtn
-   (metro/mute) rather than sharing it — those are pinned to fixed screen
-   corners regardless of content, these need to sit close to the square
-   itself, which moves/resizes with it (a different anchor point entirely),
-   so sharing the class would mean fighting its top/positioning assumptions
-   more than it would save. [hidden] (the syncLandscapeArrows() toggle, not a
-   CSS class) removes whichever end has nowhere further to go. */
+   #landscapeArrowLeft/Right. Flank the focus square. top is set from the
+   script (positionLandscapeArrows()) as a frozen pixel value rather than a
+   plain top:50% of .landscape-video-area, which is what these used to use —
+   that area's height (and so its 50% midpoint) shifts with every tile switch
+   whenever the newly-focused tile's notation band is a different height,
+   which read as the arrows visibly jumping up and down each time (reported
+   directly). top:50% below is only a same-frame fallback until that first
+   script-driven measurement lands; transform stays a plain CSS rule since
+   centering on a point by the element's own height never needs to change.
+   Sized and styled independently of .dawBtn (metro/mute/reset) rather than
+   sharing it — those are pinned to fixed screen corners regardless of
+   content, these need to sit close to the square itself, a different anchor
+   point entirely, so sharing the class would mean fighting its positioning
+   assumptions more than it would save. [hidden] (the syncLandscapeArrows()
+   toggle, not a CSS class) removes whichever end has nowhere further to go. */
 .landscapeArrow{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:2px solid var(--text);background:rgba(12,9,6,.72);color:var(--text);display:grid;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;z-index:5}
 .landscapeArrow[hidden]{display:none}
 .landscapeArrow svg{width:20px;height:20px}
 .landscapeArrowLeft{left:12px}
 .landscapeArrowRight{right:12px}
-/* Landscape transport (Sep 2026) — see the markup comment on
-   #landscapeTransport. Deliberately its own small button style rather than
-   reusing .tempo-buttons directly: that class assumes it can stretch to fill
-   a full-width container (repeat(4,1fr) over the whole phone width), while
-   this one has to fit inside whatever black space is left beside the square
-   — usually much narrower — so every dimension here is scaled down to suit.
-   left/width are set from the script (positionLandscapeTransport()), not
+/* Landscape transport (Sep 2026, enlarged/repositioned) — see the markup
+   comment on #landscapeTransport. Deliberately its own button style rather
+   than reusing .tempo-buttons directly: that class assumes it can stretch to
+   fill a full-width container (repeat(4,1fr) over the whole phone width),
+   while this one has to fit inside whatever black space is left beside the
+   square — usually narrower — so every dimension here is tuned to suit
+   (bigger than the first landscape version, per feedback that it read as too
+   small, but still its own scale rather than a straight copy of portrait's).
+   top/left/width are set from the script (positionLandscapeTransport()), not
    here — see that function's comment for why a fixed CSS value can't work
-   for either. */
-.landscape-transport{position:absolute;bottom:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;z-index:5}
-.landscape-transport button{font:inherit;border:2px solid var(--window-border);border-radius:6px;padding:5px 2px;background:var(--panel2);color:var(--text);font-size:10.5px;font-weight:700;min-height:30px;display:flex;align-items:center;justify-content:center;gap:3px}
+   for any of them (it now anchors below the arrows' own frozen position,
+   plus has to stay clear of a notched/Dynamic-Island phone's safe area). */
+.landscape-transport{position:absolute;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;z-index:5}
+.landscape-transport button{font:inherit;border:2px solid var(--window-border);border-radius:8px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:13px;font-weight:700;min-height:42px;display:flex;align-items:center;justify-content:center;gap:4px}
 .landscape-transport button.active{background:var(--accent-purple);color:#fff;border-color:var(--window-border)}
 .landscape-transport button:disabled{opacity:.4}
-.landscape-transport .play-icon{width:15px;height:15px}
+.landscape-transport .play-icon{width:19px;height:19px}
 /* Same loading-fill/is-loading/reset-instant treatment as the real #play
    button (see .tempo-buttons button#play and its neighbors above) —
    duplicated here rather than shared because those rules are scoped to
@@ -491,16 +533,27 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      Controls added Sep 2026 so nothing here requires rotating back to
      portrait: a swipe left/right anywhere in this view (script, near
      selectTile()) or the on-screen left/right arrows flanking the square
-     change which tile is focused; a mute button (top-right, under the
-     metronome) mutes whichever tile is currently focused; and a Play/Pause
-     + 50/75/100% tempo row sits in the black space beside the square. Every
-     one of these forwards to (or directly calls) the exact same function/
-     button the portrait UI uses — see each element's own comment — so
-     there's never a second, landscape-only copy of any actual state. -->
+     change which tile is focused (arrows sit at a frozen vertical position —
+     see positionLandscapeArrows() — so they don't jump around as a
+     differently-shaped notation image changes the video area's height); a
+     mute button (top-right, under the metronome) mutes whichever tile is
+     currently focused and dims the square while it's muted, same idea as
+     portrait's own dimming (see #landscapeFocusDim); a reset button sits
+     left of the metronome on that same row; and a Play/Pause + 50/75/100%
+     tempo row sits below the arrows, in the black space beside the square.
+     Every one of these forwards to (or directly calls) the exact same
+     function/button the portrait UI uses — see each element's own comment —
+     so there's never a second, landscape-only copy of any actual state. -->
 
 <div id="landscapeNotation" class="landscape-notation" hidden>
   <div class="landscape-video-area">
     <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
+    <!-- Mute dim (Sep 2026): same idea as the portrait focus square's own
+         dimming overlay when muted (.focus-dim/.focus-wrap.is-muted) — see
+         the CSS comment on .landscape-focus-dim for why this is a separate
+         element/class rather than reusing that one directly. Toggled by
+         syncLandscapeMuteBtn() alongside the mute button's own look. -->
+    <div id="landscapeFocusDim" class="landscape-focus-dim"></div>
     <!-- Square-to-square navigation (Sep 2026): swiping anywhere in this view
          (see the touch handler in the script) already changes focus, but a
          visible, tappable way to do the same thing matters on a device
@@ -516,19 +569,22 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     <button id="landscapeArrowRight" type="button" class="landscapeArrow landscapeArrowRight" aria-label="Next square">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
     </button>
-    <!-- Transport (Sep 2026): Play/Pause + the same 50/75/100% tempo presets
-         as the portrait transport row, so tempo can be changed without
-         rotating back. Sits in the black letterboxed space to the left of
-         the focus square, positioned/sized by positionLandscapeTransport()
-         in the script (not pure CSS) because that space's actual width
-         depends on the square's rendered size, which itself depends on the
-         notation band's height for whichever tile is focused — there's no
-         way to express "centered in the leftover space next to a
-         same-height-as-container square" in CSS alone. #playBtnLandscape is
-         a separate button (not a repositioned original, same reasoning as
-         #metroBtnLandscape below) mirrored via syncLandscapePlayBtn() in the
-         script; the tempo preset buttons are built alongside the real ones
-         in buildTempoButtons() and call the exact same changeTempo(). -->
+    <!-- Transport (Sep 2026, repositioned/enlarged): Play/Pause + the same
+         50/75/100% tempo presets as the portrait transport row, so tempo can
+         be changed without rotating back. Anchored just below the left
+         arrow's own frozen position (not the video area's dynamic bottom
+         edge — an earlier version was) and horizontally centered in the
+         black letterboxed space beside the focus square — both set by
+         positionLandscapeTransport() in the script (not pure CSS), since
+         that space's actual width depends on the square's rendered size,
+         which itself depends on the notation band's height for whichever
+         tile is focused, and the row also has to stay clear of a notched/
+         Dynamic-Island phone's safe area — none of that is expressible as a
+         fixed CSS value. #playBtnLandscape is a separate button (not a
+         repositioned original, same reasoning as #metroBtnLandscape below)
+         mirrored via syncLandscapePlayBtn() in the script; the tempo preset
+         buttons are built alongside the real ones in buildTempoButtons() and
+         call the exact same changeTempo(). -->
     <div id="landscapeTransport" class="landscape-transport" aria-label="Playback controls">
       <button id="playBtnLandscape" type="button" class="transportPlayBtn" aria-label="Play">
         <svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg>
@@ -550,6 +606,24 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
        itself, so its corners never sit against the curved screen edge. -->
   <div class="landscape-bottom-margin"></div>
   <div id="landscapeNotationLabel" class="landscape-notation-label"></div>
+  <!-- Landscape reset (Sep 2026): its own circle to the left of the
+       metronome, same top-right row. #reset has no shared class of its own
+       (see the CSS comment on .dawBtn.resetBtn-landscape), so this only
+       needs .dawBtn for the round-button look plus its own SVG (identical
+       markup to #reset's own icon, so it reads the same). Forwards to
+       #reset's own click() — same single-source-of-truth pattern as every
+       other button here — so a landscape reset is exactly the same reset
+       (stops playback, rewinds, re-preps) as the portrait one. No visual
+       state to mirror back beyond disabled, which resetBtnLandscape picks up
+       via a MutationObserver in the script (same reasoning as the play
+       button's — reset()'s own disabled=true/false calls are the only state
+       change it ever makes to itself, but a MutationObserver still costs
+       less than hunting down and confirming that's really the only one). -->
+  <button id="resetBtnLandscape" type="button" class="dawBtn resetBtn-landscape" aria-label="Reset">
+    <svg class="reset-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path>
+    </svg>
+  </button>
   <!-- Landscape metronome (Aug 31 2026): a second button, not a repositioned
        original — #metroBtn stays put inside .app (which this whole view
        hides), so a live mirror is needed here instead. Same markup/classes
@@ -996,7 +1070,7 @@ function mirrorLandscapeFocus(){
   requestAnimationFrame(mirrorLandscapeFocus);
 }
 requestAnimationFrame(mirrorLandscapeFocus);
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), resetBtnLandscape=$('#resetBtnLandscape'), landscapeFocusDim=$('#landscapeFocusDim'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -1157,6 +1231,17 @@ landscapeArrowRight.addEventListener('click',()=>selectTile(selected+1));
 muteBtnLandscape.addEventListener('click',()=>{
   if(muteBtns[selected])muteBtns[selected].click();
 });
+// Landscape reset (Sep 2026) — see the markup comment on #resetBtnLandscape:
+// forwards to the real #reset button, same single-source-of-truth pattern,
+// and mirrors its disabled state back via a MutationObserver (reset()'s own
+// disabled=true/false calls are its only self-mutation, but a
+// MutationObserver costs less than hunting down and confirming that).
+resetBtnLandscape.addEventListener('click',()=>resetBtn.click());
+function syncLandscapeResetBtn(){
+  resetBtnLandscape.disabled=resetBtn.disabled;
+}
+new MutationObserver(syncLandscapeResetBtn).observe(resetBtn,{attributes:true,attributeFilter:['disabled']});
+syncLandscapeResetBtn();
 // Landscape transport (Sep 2026): Play/Pause forwards to the real button —
 // same reasoning as the metronome/mute forwarding above, since
 // toggleFromGesture()'s prepare/play/pause state machine has exactly one
@@ -1187,7 +1272,16 @@ syncLandscapePlayBtn(); // initial state, before anything has changed to trigger
 // orientation change — the one case that changes the square's geometry
 // without going through updateFocusUI() (which calls it directly for every
 // other case: a tile switch, a piece switch, a notation image finishing).
-window.addEventListener('resize',positionLandscapeTransport);
+// Rotation is the one case that genuinely changes the video area's height
+// (and so the arrows' frozen center — see positionLandscapeArrows(), defined
+// further down alongside syncLandscapeArrows() — landscapeArrowTop itself is
+// declared here, though, so every earlier reference in this file — this
+// listener included — sees it as already-initialized rather than tripping
+// the temporal-dead-zone error a `let` declared only down there would cause
+// for code that runs before the script reaches that line).
+let landscapeArrowTop=null;
+window.addEventListener('resize',()=>{positionLandscapeArrows(true);positionLandscapeTransport();});
+positionLandscapeArrows();
 positionLandscapeTransport();
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
@@ -1856,6 +1950,7 @@ function updateFocusUI(){
   focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
   syncLandscapeMuteBtn(); // landscape's one mute button always tracks whichever tile is now focused
   syncLandscapeArrows(); // may have just reached (or left) either end
+  positionLandscapeArrows(); // no-op on the frozen value unless this is the very first call (see that function's own comment) — cheap to call unconditionally here
   positionLandscapeTransport(); // the square's rendered size can change with the tile (different notation image height), so its left edge — what the transport centers against — can too
   engine.selected=selected;
   if(engine.decodedFrameCount>0)engine.render(currentPos());
@@ -1892,6 +1987,11 @@ function syncLandscapeMuteBtn(){
   const isMuted=muted[selected];
   muteBtnLandscape.classList.toggle('is-muted',isMuted);
   muteBtnLandscape.setAttribute('aria-label',(isMuted?'Unmute ':'Mute ')+NAMES[selected]);
+  // Dim the focus square itself when its tile is muted (Sep 2026) — same
+  // idea as portrait's .focus-dim/focusWrap.is-muted, just against
+  // #landscapeFocusDim (see its CSS comment) since landscape has no per-tile
+  // DOM to hang a class off of.
+  landscapeFocusDim.classList.toggle('is-visible',isMuted);
 }
 // Shows only whichever direction actually leads to another square — see the
 // markup comment on #landscapeArrowLeft for why a disabled-but-visible arrow
@@ -1899,6 +1999,42 @@ function syncLandscapeMuteBtn(){
 function syncLandscapeArrows(){
   landscapeArrowLeft.hidden=selected<=0;
   landscapeArrowRight.hidden=selected>=TILE_COUNT-1;
+}
+// Freezes the arrows' vertical position (Sep 2026 — see the CSS comment on
+// .landscapeArrow: they used to sit at a plain top:50% of
+// .landscape-video-area, whose height — and so its own 50% midpoint — shifts
+// with every tile switch whenever the newly-focused tile's notation band is
+// a different height, which read as the arrows visibly jumping up and down
+// each time, reported directly). Computed once from the video area's
+// CURRENT center and cached in landscapeArrowTop; every later call (a tile
+// switch, via updateFocusUI()) just re-applies the cached value, so the
+// arrows never move again until an actual orientation change. force=true —
+// only ever passed from the resize listener (landscapeArrowTop's own
+// declaration, above) — discards the cache and recomputes from scratch,
+// since a rotation genuinely does change the video area's own height.
+function positionLandscapeArrows(force){
+  if(landscapeArrowTop===null||force){
+    const rect=document.querySelector('.landscape-video-area').getBoundingClientRect();
+    landscapeArrowTop=rect.top+rect.height/2;
+  }
+  landscapeArrowLeft.style.top=landscapeArrowTop+'px';
+  landscapeArrowRight.style.top=landscapeArrowTop+'px';
+}
+// Probe-element technique for reading env(safe-area-inset-*) as real pixel
+// numbers in script (Sep 2026) — CSS alone can bake these into a fixed
+// position, but positionLandscapeTransport() below needs to compare them
+// against measured geometry (the square's rendered left edge, the video
+// area's rendered bottom), so the inset itself has to come out as a number.
+// A temporary off-screen div's computed padding is the standard way to read
+// an env()/constant() value back out of CSS.
+function getSafeAreaInsets(){
+  const probe=document.createElement('div');
+  probe.style.cssText='position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.appendChild(probe);
+  const cs=getComputedStyle(probe);
+  const insets={top:parseFloat(cs.paddingTop)||0,right:parseFloat(cs.paddingRight)||0,bottom:parseFloat(cs.paddingBottom)||0,left:parseFloat(cs.paddingLeft)||0};
+  probe.remove();
+  return insets;
 }
 // The transport row lives in the black letterboxed space to the LEFT of the
 // focus square (see the markup comment on #landscapeTransport) — a space
@@ -1911,12 +2047,28 @@ function syncLandscapeArrows(){
 // forces a synchronous layout, so this always sees the CURRENT geometry
 // (including any change just made moments earlier in this same tick, e.g. a
 // canvas resize from applyLandscapeNotationImage()) rather than a stale one.
+// Anchored below the arrows' own frozen position (Sep 2026, was centered
+// beside the square) — positionLandscapeArrows() is called first so
+// landscapeArrowTop is guaranteed set (it's a cheap no-op once already
+// cached). The left edge and top are both clamped against
+// getSafeAreaInsets() so an iPhone rotated with its Dynamic
+// Island/sensor-housing edge on this side never has the row (or the square)
+// sitting under it.
 function positionLandscapeTransport(){
+  positionLandscapeArrows();
   const squareLeft=landscapeFocusCanvas.getBoundingClientRect().left;
-  const maxW=Math.max(80,squareLeft-16); // 80: below this it's not worth trying to show all four buttons legibly
-  const w=Math.min(190,maxW);
+  const videoAreaRect=document.querySelector('.landscape-video-area').getBoundingClientRect();
+  const insets=getSafeAreaInsets();
+  const minLeft=8+insets.left;
+  const maxW=Math.max(80,squareLeft-16-insets.left); // 80: below this it's not worth trying to show all four buttons legibly
+  const w=Math.min(260,maxW); // enlarged (Sep 2026, was 190) — more horizontal room per button, per feedback the first landscape version read as too small
   landscapeTransport.style.width=w+'px';
-  landscapeTransport.style.left=Math.max(8,(squareLeft-w)/2)+'px';
+  landscapeTransport.style.left=Math.max(minLeft,(squareLeft-w)/2)+'px';
+  const ARROW_RADIUS=20,GAP=14;
+  const naturalTop=landscapeArrowTop+ARROW_RADIUS+GAP;
+  const rowHeight=landscapeTransport.getBoundingClientRect().height||58; // measured AFTER the width above is applied, so this reflects the row's actual current height, not a stale one from a previous (wider/narrower) layout
+  const maxTop=videoAreaRect.bottom-rowHeight-8; // never let the row spill past the video area into the (white) notation band below it
+  landscapeTransport.style.top=Math.max(videoAreaRect.top+insets.top+8,Math.min(naturalTop,maxTop))+'px';
 }
 // Reverted (Sep 2026): every tile lives in the single #gridControls grid on
 // both mobile and desktop now — see the CSS/markup comments near
@@ -2116,33 +2268,43 @@ function trimNotationWhitespace(img,canvas){
   canvas.getContext('2d').drawImage(src,0,cropTop,w,cropH,0,0,w,cropH);
   return true;
 }
-// Bug fixed Sep 2026 (second attempt): rotating to landscape right on page
-// load — before ever pressing Play — showed a huge blank white bar instead
-// of notation, on real phones specifically. First attempt (the
-// .landscape-notation-band.is-loading collapse below) fixed the *visible
-// symptom* of a slow-loading image, verified against a desktop-Chromium
-// test harness — but the real cause on a real device turned out to be
-// deeper: the loader used to be a real <img> living inside this whole
-// view's display:none subtree (invisible until the phone is actually
-// rotated), and on real mobile browsers — unlike desktop Chromium, which
-// happily fetches regardless of visibility — an image inside a
-// display:none ancestor can have its fetch itself deferred until it
-// becomes visible. So the fetch may not even START until the moment of
-// rotation, which is also the moment layout needs an answer. The
-// is-loading collapse still matters as a safety net for genuinely slow
-// connections, but the real fix is to stop loading through a DOM element
-// that visibility can gate at all: getNotationImage() below uses a plain
-// detached Image() — never inserted into the document — so no ancestor's
-// display:none can affect when its fetch begins; it can start fetching
-// immediately at page load regardless of orientation. Cached by src so
-// repeat selections of the same tile don't re-fetch.
+// Bug fixed Sep 2026 (third attempt — reported still happening after the
+// second): rotating to landscape right on page load — before ever pressing
+// Play — showed a blank white area instead of notation, on real phones
+// specifically. First attempt (a .landscape-notation-band.is-loading class
+// toggling flex-basis:0) fixed the visible symptom of a slow-loading image
+// against a desktop-Chromium test harness. Second attempt swapped the
+// loader from a real <img> (living inside this whole view's display:none
+// subtree, whose fetch a real mobile browser can defer until it becomes
+// visible) to a detached Image() that's never inserted into the document at
+// all — removed one real, defensible source of the delay, verified against
+// the same harness, but evidently not the only or actual one on a real
+// device, since it didn't fix it. Rather than keep guessing at the timing
+// side, this rewrite makes the ONE thing that actually matters — whether
+// the collapse-while-loading is visually bulletproof regardless of cause or
+// duration — as simple as this codebase already knows works everywhere:
+// the plain hidden ATTRIBUTE (landscapeNotation.hidden, notationStrip.hidden
+// etc. elsewhere in this file), not a flex-basis/overflow trick that leans
+// on this specific browser correctly reconciling a flex item's cross-axis
+// intrinsic sizing against a zeroed main-axis basis — plausible that some
+// real device just doesn't. And on the loading-signal side, this now treats
+// EITHER the image's 'load' event OR its decode() promise resolving as
+// "ready" (whichever fires first), rather than 'load' alone, in case load
+// itself is what's unreliable for a detached image on some engine.
 const notationImageCache=new Map();
 function getNotationImage(src){
   let entry=notationImageCache.get(src);
   if(!entry){
-    entry={img:new Image(),ready:false};
-    entry.img.onload=()=>{entry.ready=true;};
+    entry={img:new Image(),ready:false,waiters:[]};
+    const markReady=()=>{
+      if(entry.ready)return;
+      entry.ready=true;
+      const waiters=entry.waiters;entry.waiters=[];
+      waiters.forEach(fn=>fn());
+    };
+    entry.img.onload=markReady;
     entry.img.src=src;
+    if(entry.img.decode)entry.img.decode().then(markReady).catch(()=>{}); // best-effort second signal — a decode() rejection (e.g. the image was never actually usable) just leaves 'load' as the only path to ready, same as before this existed
     notationImageCache.set(src,entry);
   }
   return entry;
@@ -2166,13 +2328,13 @@ function renderNotationStrip(){
     // Deliberately NOT gated on manuscriptOn — the landscape view is meant
     // to show regardless of whether notation is toggled on in portrait.
     // See getNotationImage()'s comment above for why this loads through a
-    // detached Image() rather than a DOM <img>. The is-loading class (see
-    // .landscape-notation-band.is-loading in the CSS) hard-collapses the
-    // band via flex-basis while we wait, regardless of whatever size the
-    // canvas happens to still be from a previous tile — so the video area
-    // keeps the full screen rather than showing a stale or oversized band.
+    // detached Image() and why "ready" is hidden the plain attribute way —
+    // the band is fully out of layout while waiting, so the video area
+    // keeps the full screen rather than showing a stale or oversized band
+    // regardless of whatever size the canvas happens to still be from a
+    // previous tile.
     currentLandscapeNotationSrc=src;
-    landscapeNotationCanvas.parentElement.classList.add('is-loading');
+    landscapeNotationCanvas.parentElement.hidden=true;
     const entry=getNotationImage(src);
     const applyLandscapeNotationImage=()=>{
       if(currentLandscapeNotationSrc!==src)return; // superseded by a newer selection already — don't draw stale content
@@ -2184,10 +2346,11 @@ function renderNotationStrip(){
         landscapeNotationCanvas.height=entry.img.naturalHeight;
         landscapeNotationCanvas.getContext('2d').drawImage(entry.img,0,0);
       }
-      landscapeNotationCanvas.parentElement.classList.remove('is-loading');
+      landscapeNotationCanvas.parentElement.hidden=false;
+      positionLandscapeArrows();positionLandscapeTransport(); // the band just changed size, which can shift the square's own size/position
     };
     if(entry.ready)applyLandscapeNotationImage();
-    else entry.img.addEventListener('load',applyLandscapeNotationImage,{once:true});
+    else entry.waiters.push(applyLandscapeNotationImage);
     landscapeNotation.hidden=false;
   }else{
     // No notationStrip configured for this piece at all — collapse for
