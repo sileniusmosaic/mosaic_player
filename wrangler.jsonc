@@ -1,8 +1,16 @@
 {
   "name": "mosaic-player",
   "compatibility_date": "2026-08-27",
+  "main": "worker.js",
   "assets": {
     "directory": "./",
-    "not_found_handling": "404-page"
-  }
+    "not_found_handling": "404-page",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "ADMIN_CONFIG",
+      "id": "a25a0f05fe4b4bcdaa5045ce29f8379e"
+    }
+  ]
 }

@@ -599,6 +599,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 const MOSAICS={
   abakua:{
     id:'abakua', label:'Abakuá', poster:'Mosaic/Abakua/poster_abakua.jpg',
+    metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
     cols:4, rows:2, tileCount:8, loopEnd:45.600,
     // True progressive video streaming (Aug 2026) — Abakuá is the proving
     // ground since it's the longest/hardest piece (biggest files, longest
@@ -644,6 +645,7 @@ const MOSAICS={
   },
   congo:{
     id:'congo', label:'Congo Yambumba', poster:'Mosaic/Congo_Yambumba/poster_congo.jpg',
+    metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
     cols:4, rows:2, tileCount:8, loopEnd:24.000, // was 24.050 — the real recording measures exactly 24.000s (1,152,000 samples @ 48kHz, verified from the raw Clave master); the wrong-by-50ms value was padding every stem's loop buffer with 50ms of silence at the end, which is the double-hit/flam on loop
 
     // Beat counter: given directly as 80 BPM rather than a bar count (BPM
@@ -671,6 +673,7 @@ const MOSAICS={
   },
   flipswing:{
     id:'flipswing', label:'Flip Swing', poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg',
+    metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
     cols:4, rows:2, tileCount:7, loopEnd:15.567,
     // Beat counter: 12 bars x 3 beats/bar = 36 beats per loop, counting
     // 1-2-3 repeating, with beat 1 landing exactly on the loop start (no
@@ -696,13 +699,55 @@ const MOSAICS={
     stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac']
   }
 };
-const MOSAIC_ORDER=['flipswing','abakua','congo'];
+let MOSAIC_ORDER=['flipswing','abakua','congo']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
 const TEMPO_PRESETS=[50,75,100]; // 25% dropped for now to reduce scope — can add back later
 function videoSourcesFor(c){return {100:c.videoBase+'100.mp4',75:c.videoBase+'75.mp4',50:c.videoBase+'50.mp4'}}
 
 let mosaicId=(new URLSearchParams(location.search).get('mosaic')||'flipswing').toLowerCase();
 if(!MOSAICS[mosaicId])mosaicId='flipswing';
 let cfg=MOSAICS[mosaicId];
+// Admin console settings (Sep 2026): the player renders immediately with the
+// hardcoded defaults above (order + metroOffsetMs:0 everywhere) exactly as
+// before, so the site works even if this fetch is slow, blocked, or the
+// Worker/KV backend isn't deployed yet — this only ever PATCHES that already-
+// working state on top, it never gates first paint on the network. See
+// admin.html for the console that writes these values, and worker.js for the
+// backing API.
+async function fetchAdminConfig(){
+  try{
+    const res=await fetch('/api/config',{cache:'no-store'});
+    if(!res.ok)return;
+    const remote=await res.json();
+    let orderChanged=false;
+    if(Array.isArray(remote.order)){
+      const validIds=remote.order.filter(id=>MOSAICS[id]);
+      const complete=validIds.concat(Object.keys(MOSAICS).filter(id=>!validIds.includes(id)));
+      if(complete.length&&complete.join(',')!==MOSAIC_ORDER.join(',')){
+        MOSAIC_ORDER=complete;
+        orderChanged=true;
+      }
+    }
+    if(remote.metroOffsetMs&&typeof remote.metroOffsetMs==='object'){
+      for(const id of Object.keys(MOSAICS)){
+        const v=remote.metroOffsetMs[id];
+        if(typeof v==='number'&&isFinite(v))MOSAICS[id].metroOffsetMs=v;
+      }
+    }
+    // cfg is a live reference into MOSAICS[mosaicId] — patching the object
+    // above already flowed the current piece's new offset through to every
+    // reader of cfg.metroOffsetMs (computeMetroBeatTimes, updateMetro) with
+    // no extra step needed; only the order-dependent UI needs a manual redraw.
+    if(orderChanged){
+      buildMosaicRail();
+      buildPieceStrip();
+    }
+  }catch(e){
+    // Offline, no Worker deployed yet, CORS, whatever — the defaults already
+    // rendered are a perfectly good fallback, so this stays silent (a console
+    // note only, not a user-facing error).
+    console.warn('Admin config fetch failed — using built-in defaults.',e);
+  }
+}
 // All tiles are separate Web Audio stems (sample-accurate, gapless native looping).
 // This part is UNCHANGED from the previous architecture — it was already proven
 // gapless and reliable. Audio is the one and only master clock: video has no
@@ -770,19 +815,25 @@ function updateMetro(){
   if(!metroReady()||!metroActive)return; // idle look (metronome icon) is pure CSS via .is-active
   const dur=videoCycle||LOOP_END;
   const p=scrubbing?scrubPos:currentPos();
+  // Admin-console click nudge (Sep 2026): positive metroOffsetMs delays the
+  // click (moves it later), so to keep the on-screen beat digit in phase
+  // with the actual scheduled click sound, walk the playback position BACK
+  // by the same amount before computing which beat we're on.
+  const offsetSec=(cfg.metroOffsetMs||0)/1000;
+  const pAdj=p-offsetSec;
   let beatFloat;
   if(cfg.bars){
     // Bar-count mode: the loop always contains exactly beatsPerBar*bars
     // beats, spread evenly across whatever the ACTUAL current-tempo loop
     // length is — self-correcting at every tempo, can't drift.
     const totalBeats=cfg.beatsPerBar*cfg.bars;
-    beatFloat=(((p/dur)*totalBeats)%totalBeats+totalBeats)%totalBeats;
+    beatFloat=(((pAdj/dur)*totalBeats)%totalBeats+totalBeats)%totalBeats;
   }else{
     // BPM mode: a fixed 60/bpm seconds per beat at 100% tempo, scaled by
     // the tempo control the same way the audio/video themselves are
     // (50% tempo = half speed = beats take twice as long).
     const secondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
-    beatFloat=((p/secondsPerBeat)%cfg.beatsPerBar+cfg.beatsPerBar)%cfg.beatsPerBar;
+    beatFloat=((pAdj/secondsPerBeat)%cfg.beatsPerBar+cfg.beatsPerBar)%cfg.beatsPerBar;
   }
   const beatInBar=Math.floor(beatFloat%cfg.beatsPerBar)+1;
   metroNum.textContent=String(beatInBar);
@@ -1048,11 +1099,25 @@ function computeMetroBeatTimes(cyc){
     const nominalSecondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
     totalBeats=Math.max(1,Math.round(cyc/nominalSecondsPerBeat));
   }
-  for(let i=0;i<totalBeats;i++)beats.push({t:(i/totalBeats)*cyc,accent:i%cfg.beatsPerBar===0});
+  // Admin-console click nudge (Sep 2026): shift every beat by metroOffsetMs
+  // (positive = later/delayed, negative = earlier), wrapping around the loop
+  // so a beat pushed past the end reappears near the start instead of being
+  // lost, or one pulled before zero reappears near the end. The wrap means
+  // beat order by index is no longer necessarily ascending in time, so the
+  // array is re-sorted by t afterward — scheduleMetroClicks() relies on
+  // ascending order to know when it's safely scheduled everything within its
+  // lookahead window.
+  const offsetSec=(cfg.metroOffsetMs||0)/1000;
+  for(let i=0;i<totalBeats;i++){
+    let t=(i/totalBeats)*cyc+offsetSec;
+    t=((t%cyc)+cyc)%cyc;
+    beats.push({t,accent:i%cfg.beatsPerBar===0});
+  }
+  beats.sort((a,b)=>a.t-b.t);
   return beats;
 }
 function metroBeatTimesFor(cyc){
-  const key=mosaicId+'|'+tempoPercent+'|'+cyc.toFixed(4);
+  const key=mosaicId+'|'+tempoPercent+'|'+cyc.toFixed(4)+'|'+(cfg.metroOffsetMs||0);
   if(metroBeatTimesKey!==key){metroBeatTimes=computeMetroBeatTimes(cyc);metroBeatTimesKey=key;}
   return metroBeatTimes;
 }
@@ -2931,6 +2996,7 @@ syncLandscapeMetroBtn();
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
+fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play to begin.');
 // The "first tap ANYWHERE starts playback" listener that used to live here
