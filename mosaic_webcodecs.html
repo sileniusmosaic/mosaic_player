@@ -533,7 +533,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     <div id="fpsReadout" class="note" hidden></div>
     <div id="badge" class="badge" hidden>Ready to start</div>
   </section>
-  <img id="poster" src="poster_abakua.jpg" alt="" hidden>
+  <img id="poster" src="Mosaic/Abakua/poster_abakua.jpg" alt="" hidden>
   <audio id="fallbackAudio" preload="none" playsinline loop hidden></audio>
 
   <div class="menu-panel">
@@ -589,7 +589,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // entry here — nothing else in this file is piece-specific.
 const MOSAICS={
   abakua:{
-    id:'abakua', label:'Abakuá', poster:'poster_abakua.jpg',
+    id:'abakua', label:'Abakuá', poster:'Mosaic/Abakua/poster_abakua.jpg',
     cols:4, rows:2, tileCount:8, loopEnd:45.600,
     // True progressive video streaming (Aug 2026) — Abakuá is the proving
     // ground since it's the longest/hardest piece (biggest files, longest
@@ -610,7 +610,7 @@ const MOSAICS={
     // relative filename, same convention as poster: committed into the git
     // repo, served from the app's own origin. Only Abakuá has this for now;
     // the section stays hidden for any piece with no `notation` array set.
-    notation:['abakua_notation_1.png'],
+    notation:['Mosaic/Abakua/abakua_notation_1.png'],
     // Single-line notation strip shown directly under the focus square at all
     // times (see renderNotationStrip()) — distinct from the `notation` array
     // above, which is the full sheet-music page(s) shown further down the
@@ -618,7 +618,7 @@ const MOSAICS={
     // pieces for now — the real plan is 23 per-instrument strips (8 Abakuá +
     // 8 Congo + 7 Flip Swing), swapped as the focused tile changes, once
     // those are ready.
-    notationStrip:'notation_strip_placeholder.png',
+    notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
     // bundled into the git repo/Worker static assets while every other
@@ -634,7 +634,7 @@ const MOSAICS={
     stemFiles:['https://media.beatsmosaic.co.uk/01_clave_abakua.aac','https://media.beatsmosaic.co.uk/02_bembe_abakua.aac','https://media.beatsmosaic.co.uk/03_cata_abakua.aac','https://media.beatsmosaic.co.uk/04_erikundi_abakua.aac','https://media.beatsmosaic.co.uk/05_quinto_abakua.aac','https://media.beatsmosaic.co.uk/06_conga_abakua.aac','https://media.beatsmosaic.co.uk/07_tumba_abakua.aac','https://media.beatsmosaic.co.uk/08_coro_abakua.aac']
   },
   congo:{
-    id:'congo', label:'Congo Yambumba', poster:'poster_congo.jpg',
+    id:'congo', label:'Congo Yambumba', poster:'Mosaic/Congo_Yambumba/poster_congo.jpg',
     cols:4, rows:2, tileCount:8, loopEnd:24.000, // was 24.050 — the real recording measures exactly 24.000s (1,152,000 samples @ 48kHz, verified from the raw Clave master); the wrong-by-50ms value was padding every stem's loop buffer with 50ms of silence at the end, which is the double-hit/flam on loop
 
     // Beat counter: given directly as 80 BPM rather than a bar count (BPM
@@ -650,9 +650,9 @@ const MOSAICS={
     // from just that prefix — same ffmpeg pipeline and codec (H.264/avc1) as
     // Abakuá, which is what actually made this safe to turn on here too.
     progressiveVideo:true,
-    notation:['congo_notation_1.png'],
+    notation:['Mosaic/Congo_Yambumba/congo_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now.
-    notationStrip:'notation_strip_placeholder.png',
+    notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -661,7 +661,7 @@ const MOSAICS={
     stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_clave_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_cata_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_erikundi_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_quinto_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_conga_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_tumba_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_coro1_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_coro2_congoyambumba.aac']
   },
   flipswing:{
-    id:'flipswing', label:'Flip Swing', poster:'poster_flip_swing.jpg',
+    id:'flipswing', label:'Flip Swing', poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg',
     cols:4, rows:2, tileCount:7, loopEnd:15.567,
     // Beat counter: 12 bars x 3 beats/bar = 36 beats per loop, counting
     // 1-2-3 repeating, with beat 1 landing exactly on the loop start (no
@@ -675,12 +675,12 @@ const MOSAICS={
     // production export (flip_swing_4x2_1920x960_100.mp4: faststart, moov
     // after ~6.5KB).
     progressiveVideo:true,
-    notation:['flipswing_notation_1.png'],
+    notation:['Mosaic/Flip_Swing/flipswing_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
     // except Kit (index 6 below — first real per-tile notation strip, Aug
     // 31 2026 — see notationStripByIndex and renderNotationStrip()).
-    notationStrip:'notation_strip_placeholder.png',
-    notationStripByIndex:{0:'01_bass_flipswing.png',1:'02_coro_flipswing.png',2:'02_coro_flipswing.png',4:'05_guitar1_flipswing.png',5:'06_guitar2_flipswing.png',6:'07_kit_flipswing.png'},
+    notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
+    notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png'},
     names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
@@ -1005,7 +1005,7 @@ async function ensureMetroBuffers(){
   if(metroBuffersLoading)return metroBuffersLoading;
   metroBuffersLoading=(async()=>{
     try{
-      const [n,a]=await Promise.all([fetchWithRetry('metro_click.wav',2),fetchWithRetry('metro_click_accent.wav',2)]);
+      const [n,a]=await Promise.all([fetchWithRetry('Mosaic/Shared/metro_click.wav',2),fetchWithRetry('Mosaic/Shared/metro_click_accent.wav',2)]);
       metroBuffers.normal=await ctx.decodeAudioData(n.slice(0));
       metroBuffers.accent=await ctx.decodeAudioData(a.slice(0));
       metroBuffersLoaded=true;
