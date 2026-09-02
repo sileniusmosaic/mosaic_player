@@ -248,28 +248,34 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .browse-tile{flex:0 0 auto;width:50px;aspect-ratio:1/1;border-radius:4px;background-color:#030405;background-repeat:no-repeat;border:1px solid var(--border)}
 @media(min-width:620px){.grid-stage{margin-top:8px}}
 /* Desktop (pointer:fine, gated by the .is-desktop class the app sets on
-   <html> at load — see IS_DESKTOP in the script): the 8 tiles split into two
-   4-tile vertical columns flanking the focus square (left column = first
-   half of the tile order, right column = the rest), instead of sitting
-   together as one 4x2 grid to the right the way mobile keeps them. Centering
-   the row (rather than just letting flex pack everything to the left) is
-   what actually puts the focus square in the middle of the screen — with
-   both side columns the same width, the center flex item lands dead center
-   automatically. Everything below the viewer (tempo row, transport, browse
-   list) stays exactly as on mobile, just wider. */
+   <html> at load — see IS_DESKTOP in the script): reverted (Sep 2026) back
+   to the focus square on the left with the same single 4x2 tile grid mobile
+   uses sitting beside it on the right, rather than splitting the tiles into
+   two columns flanking the focus square. #gridStageMobile (previously
+   desktop-hidden, mobile-only) is now shown on both — see .focus-column
+   below, which switches to a row on desktop so focusWrap and #gridStageMobile
+   sit side by side instead of stacked. The old two-side-column markup
+   (.grid-stage-side / #gridLeft / #gridRight) stays in the DOM — the script
+   still unconditionally looks the canvases up — but is permanently hidden
+   below and no longer wired into the engine or buildControls(); see the
+   script for the matching gridCanvasLeft/gridCanvasRight and buildControls()
+   changes. Everything below the viewer (tempo row, transport, browse list)
+   stays exactly as on mobile, just wider. */
 .is-desktop .app{max-width:1120px}
 .is-desktop .viewer{display:flex;gap:16px;align-items:center;justify-content:center}
-/* .focus-column wraps the focus square + notation strip (+ the mobile-only
-   single grid below them) so they size and center as one unit; on mobile
-   .viewer isn't flex at all, so this is just a plain block wrapper there —
-   same visual stacking as before this existed. */
+/* .focus-column wraps the focus square + notation strip + the tile grid so
+   they size and center as one unit; on mobile .viewer isn't flex at all, so
+   this is just a plain block wrapper there, stacked top-to-bottom (focus
+   square above the grid) via the base column direction below. Desktop
+   overrides to a row instead, so the grid sits to the focus square's right. */
 .focus-column{display:flex;flex-direction:column;gap:8px}
-.is-desktop .focus-column{flex:0 1 520px}
-/* The old single 4x2 grid stays for mobile only; desktop uses the two side
-   columns below instead. */
-.is-desktop #gridStageMobile{display:none}
+.is-desktop .focus-column{flex:0 1 900px;flex-direction:row;align-items:flex-start;gap:16px}
+.is-desktop .focus-wrap{width:520px;flex:0 0 520px}
+.is-desktop #gridStageMobile{flex:0 0 340px;margin-top:0}
+/* The old two-side-column layout is retired but its markup stays in the DOM
+   (see comment above) — keep it hidden on both mobile and desktop. */
 .grid-stage-side{display:none}
-.is-desktop .grid-stage-side{position:relative;display:block;aspect-ratio:1/4;width:140px;flex:0 0 auto;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
+.is-desktop .grid-stage-side{display:none}
 .grid-stage-side canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls-vert{position:absolute;inset:0;display:grid;grid-template-columns:1fr;grid-template-rows:repeat(4,1fr)}
 /* The old separate mobile focus-topbar overlay + desktop page-header (each
@@ -287,7 +293,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    (converted from a PDF export — white-background score), sitting between
    the transport row and the mosaic browse list. Hidden entirely for any
    piece with no `notation` array in its config — see renderNotation(). */
-.notation-pages img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--border);background:#000}
+.notation-pages img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--border);background:#fff}
 .notation-pages img+img{margin-top:10px}
 /* Notation strip (Aug 2026, now overlaid on the focus square — see markup):
    a single always-visible line of notation, distinct from .notation-pages
@@ -311,7 +317,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    overflow:hidden plus its own 10px corner radius already clips this to
    match every other layer inside it, the same way the canvas and dim
    overlays are clipped. pointer-events:none is inherited from the wrapper. */
-.notation-strip{width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#000;margin:0;flex:0 0 auto}
+.notation-strip{width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0;flex:0 0 auto}
 /* Manuscript toggled off (Aug 30 2026): visibility, not display — the image
    keeps its rendered box (same height) so .focus-label above it in the same
    flex column stays exactly where it is instead of dropping down into the
@@ -327,7 +333,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 @media (orientation:landscape) and (pointer:coarse){
   .app{display:none}
   .landscape-notation:not([hidden]){display:flex}
-  .landscape-notation{position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:#000;margin:0;padding:0}
+  .landscape-notation{position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:#fff;margin:0;padding:0}
   .landscape-notation img{width:100%;height:auto;display:block}
 }
 /* Rule (Aug 31 2026): the landscape notation view always carries the
@@ -406,9 +412,10 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
        but the notation strip itself is back on the focus square, overlaid
        on its bottom portion (see #focusWrap below). -->
   <div class="viewer">
-    <!-- Desktop-only: left half of the tile order, stacked vertically. Hidden
-         on mobile (.grid-stage-side is display:none by default); engine only
-         draws into these canvases when IS_DESKTOP — see the script. -->
+    <!-- Retired (Sep 2026, reverted back to the pre-split layout) but kept in
+         the DOM — the script still unconditionally looks these up — always
+         hidden now via .grid-stage-side{display:none} and never drawn into
+         or populated; see the CSS comment above .is-desktop .focus-column. -->
     <div class="grid-stage-side grid-stage-left"><canvas id="gridLeft" width="480" height="1920"></canvas><div id="gridControlsLeft" class="grid-controls-vert"></div></div>
     <div class="focus-column">
       <div id="focusWrap" class="focus-wrap">
@@ -472,9 +479,11 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
           <img id="notationStrip" class="notation-strip" alt="" hidden>
         </div>
       </div>
-      <!-- Mobile-only: all 8 tiles as one 4x2 grid, exactly as before. Hidden
-           on desktop (the two grid-stage-side columns above/below replace it
-           there) — see .is-desktop #gridStageMobile in the CSS. -->
+      <!-- All tiles as one 4x2 grid — shown on both mobile and desktop now
+           (reverted Sep 2026). On mobile it sits below the focus square in
+           .focus-column's normal column layout; on desktop, .focus-column
+           switches to a row so this sits to the focus square's right instead
+           — see the CSS comment above .is-desktop .focus-column. -->
       <div id="gridStageMobile" class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
     </div>
     <div class="grid-stage-side grid-stage-right"><canvas id="gridRight" width="480" height="1920"></canvas><div id="gridControlsRight" class="grid-controls-vert"></div></div>
@@ -704,10 +713,9 @@ let LOOP_END=cfg.loopEnd, NAMES=cfg.names, TILE_COLS=cfg.cols, TILE_ROWS=cfg.row
 let VIDEO_SOURCES=videoSourcesFor(cfg), STEM_URLS=cfg.stemFiles;
 const $=s=>document.querySelector(s);
 const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
-// Desktop-only split-grid canvases (see the CSS/markup for .grid-stage-side)
-// — each holds half the tiles stacked in one vertical column. Only actually
-// drawn into when IS_DESKTOP (see the engine constructor below); harmless to
-// look up unconditionally since the elements always exist in the DOM.
+// Retired split-grid canvases (see the CSS/markup for .grid-stage-side) —
+// kept looked-up here since the elements still exist in the DOM, but never
+// passed to the engine or drawn into any more (reverted Sep 2026).
 const gridLeft=$('#gridLeft'), gctxLeft=gridLeft.getContext('2d',{alpha:false}), gridRight=$('#gridRight'), gctxRight=gridRight.getContext('2d',{alpha:false});
 const bufferingSpinner=$('#bufferingSpinner');
 const focusCtx=focusCanvas.getContext('2d',{alpha:false});
@@ -1102,13 +1110,14 @@ function setStatus(msg,cls=''){status.textContent=msg;status.className='status'+
 // they were never two separately-timed things to begin with. Every tick, video
 // is simply redrawn to match wherever the audio (the real clock) currently is.
 let lastRecoverAt=0;
-// Desktop draws the two split side columns instead of the single mobile grid
-// — pass only the pair that matches the DOM layout actually visible (see
-// .is-desktop #gridStageMobile / .grid-stage-side in the CSS); IS_DESKTOP is
-// read once at load, same as everywhere else it gates layout.
+// Reverted (Sep 2026) back to the single mobile-style grid canvas on desktop
+// too, now that #gridStageMobile is shown there instead of the old split
+// side columns — see the CSS comment above .is-desktop .focus-column. The
+// gridLeft/gridRight canvases still exist in the DOM (see the markup
+// comment) but are never passed to the engine, so it never draws into them.
 const engine=new WebCodecsVideoEngine({
-  gridCanvas:IS_DESKTOP?undefined:grid,
-  gridCanvasLeft:IS_DESKTOP?gridLeft:undefined, gridCanvasRight:IS_DESKTOP?gridRight:undefined,
+  gridCanvas:grid,
+  gridCanvasLeft:undefined, gridCanvasRight:undefined,
   focusCanvas:focusCanvas,
   cols:TILE_COLS, rows:TILE_ROWS, tileCount:TILE_COUNT,
   onStatus:(msg,cls)=>setStatus(msg,cls),
@@ -1418,20 +1427,11 @@ function drawPoster(){
   const w=poster.naturalWidth,h=poster.naturalHeight;
   const anySolo=soloed.some(Boolean);
   drawFocusPoster();
-  if(IS_DESKTOP){
-    const half=Math.ceil(TILE_COLS*TILE_ROWS/2);
-    const drawColumn=(ctx,startIdx)=>{
-      const S=ctx.canvas.width,Sh=ctx.canvas.height/half;
-      for(let n=0;n<half;n++){
-        const i=startIdx+n;if(i>=TILE_COUNT)break;
-        drawOneTile(ctx,i,w,h,0,n*Sh,S,Sh,anySolo);
-      }
-    };
-    drawColumn(gctxLeft,0);drawColumn(gctxRight,half);
-  }else{
-    const S=grid.width/TILE_COLS,Sh=grid.height/TILE_ROWS;
-    for(let i=0;i<TILE_COUNT;i++)drawOneTile(gctx,i,w,h,(i%TILE_COLS)*S,Math.floor(i/TILE_COLS)*Sh,S,Sh,anySolo);
-  }
+  // Reverted (Sep 2026) to always drawing the single mobile-style grid, on
+  // both mobile and desktop — see the engine-construction comment above for
+  // why gctxLeft/gctxRight are never used any more.
+  const S=grid.width/TILE_COLS,Sh=grid.height/TILE_ROWS;
+  for(let i=0;i<TILE_COUNT;i++)drawOneTile(gctx,i,w,h,(i%TILE_COLS)*S,Math.floor(i/TILE_COLS)*Sh,S,Sh,anySolo);
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
@@ -1464,18 +1464,14 @@ function refreshSoloMuteState(){
   engine.soloDim=soloed.map(s=>anySolo&&!s);
   updateFocusUI();
 }
-// On desktop, tiles split across two containers (#gridControlsLeft for the
-// first half of the tile order, #gridControlsRight for the rest) instead of
-// all living in the single #gridControls grid mobile uses — see the
-// grid-stage-side markup/CSS and the split-canvas engine setup above.
-// Appending left's tiles before right's (both containers coming before
-// #gridControls in this desktop branch doesn't matter since it stays empty)
-// keeps document order 0..7 matching NAMES/tileEls order either way, which
-// the click handler below relies on via querySelectorAll('.tile').
+// Reverted (Sep 2026): every tile lives in the single #gridControls grid on
+// both mobile and desktop now — see the CSS/markup comments near
+// .is-desktop .focus-column. #gridControlsLeft/#gridControlsRight (see the
+// grid-stage-side markup) are cleared above for tidiness but never appended
+// to below.
 function buildControls(){
-  controls.innerHTML='';controlsLeft.innerHTML='';controlsRight.innerHTML=''; // clear any tiles from a previously-loaded mosaic
+  controls.innerHTML='';controlsLeft.innerHTML='';controlsRight.innerHTML=''; // clear any tiles from a previously-loaded mosaic (controlsLeft/Right are never populated any more — see below — but still cleared in case old content lingers)
   tileEls=[];muteBtns=[];soloBtns=[];
-  const half=Math.ceil(TILE_COLS*TILE_ROWS/2);
   NAMES.forEach((name,i)=>{
     const t=document.createElement('div');t.className='tile';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
@@ -1488,8 +1484,10 @@ function buildControls(){
     const mute=document.createElement('button');mute.type='button';mute.className='dawBtn muteBtn';mute.textContent='M';mute.setAttribute('aria-label','Mute '+name);
     const label=document.createElement('span');label.className='tile-name';label.textContent=name;
     t.appendChild(label);t.appendChild(tap);if(solo)t.appendChild(solo);t.appendChild(mute);
-    const target=IS_DESKTOP?(i<half?controlsLeft:controlsRight):controls;
-    target.appendChild(t);
+    // Reverted (Sep 2026): every tile goes into the single #gridControls
+    // grid now, on both mobile and desktop — see the CSS/markup comments
+    // near .focus-column for why controlsLeft/controlsRight are unused.
+    controls.appendChild(t);
     tileEls.push(t);muteBtns.push(mute);soloBtns.push(solo);
     tap.addEventListener('click',()=>{selected=i;document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));updateFocusUI();});
     if(solo)solo.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();soloed[i]=!soloed[i];solo.setAttribute('aria-label',(soloed[i]?'Unsolo ':'Solo ')+name);refreshSoloMuteState();});
@@ -2434,19 +2432,15 @@ async function switchMosaic(id){
     renderNotation();renderNotationStrip();preloadNotationStrips();
     timeline.max=String(LOOP_END);timeline.value='0';
 
-    // Wipe the grid canvas(es) before drawing anything for the new mosaic.
+    // Wipe the grid canvas before drawing anything for the new mosaic.
     // Without this, a piece with fewer tiles than the previous one (e.g. Flip
     // Swing's 7 vs Congo/Abakuá's 8) never repaints the leftover cell(s) —
-    // nothing in drawGridFromSource()/drawTileColumn() ever touches indices
-    // >= the new tileCount, so whatever was drawn there by the OLD mosaic
-    // just sits frozen on screen. Only the layout actually in use (mobile's
-    // single grid vs desktop's two side columns) needs wiping.
-    if(IS_DESKTOP){
-      gctxLeft.fillStyle='#030405';gctxLeft.fillRect(0,0,gridLeft.width,gridLeft.height);
-      gctxRight.fillStyle='#030405';gctxRight.fillRect(0,0,gridRight.width,gridRight.height);
-    }else{
-      gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
-    }
+    // nothing in drawGridFromSource()/drawOneTile() ever touches indices >=
+    // the new tileCount, so whatever was drawn there by the OLD mosaic just
+    // sits frozen on screen. Reverted (Sep 2026) to always wiping the single
+    // #grid canvas, on both mobile and desktop — see the engine-construction
+    // comment above for why gctxLeft/gctxRight are never drawn into any more.
+    gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
     focusCtx.fillStyle='#030405';focusCtx.fillRect(0,0,focusCanvas.width,focusCanvas.height);
 
     buildControls();buildMosaicRail();buildPieceStrip();
