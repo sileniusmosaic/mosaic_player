@@ -1,4 +1,3 @@
-raw_data/
-abakua source square/
-.DS_Store
 capacitor-app/
+Mosaic/*/raw/
+.DS_Store
