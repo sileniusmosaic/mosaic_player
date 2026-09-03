@@ -1280,33 +1280,7 @@ syncLandscapePlayBtn(); // initial state, before anything has changed to trigger
 // the temporal-dead-zone error a `let` declared only down there would cause
 // for code that runs before the script reaches that line).
 let landscapeArrowTop=null;
-// Bug fixed Sep 2026 (reported still jumping after the first "freeze"
-// attempt): that version force-recomputed landscapeArrowTop on EVERY
-// 'resize' event, on the assumption resize only ever fires on an actual
-// device rotation. On real mobile Safari that's false — it also fires
-// 'resize' whenever the address-bar/toolbar chrome animates away or back
-// (scrolling, tapping a button, even the keyboard), which changes
-// window.innerHeight by a few dozen pixels with the phone never actually
-// turning. Reacting to every one of those recomputed — and so visibly
-// moved — the "frozen" arrow position on ordinary interaction, exactly the
-// jumping this mechanism exists to prevent (invisible to this file's
-// desktop-Chromium Playwright tests, which don't have that toolbar-chrome
-// behavior to reproduce it). Comparing width>height instead of reacting to
-// resize itself filters that noise out: a genuine rotation flips which
-// dimension is bigger, but a toolbar animation never does (landscape width
-// is always far larger than landscape height either way), so this only
-// ever passes force=true through to positionLandscapeArrows() on an actual
-// orientation change. positionLandscapeTransport() still runs on every
-// resize regardless — it isn't cached/frozen, and SHOULD track the
-// square's real current geometry even through a toolbar-driven reflow.
-let landscapeIsWide=window.innerWidth>window.innerHeight;
-window.addEventListener('resize',()=>{
-  const nowWide=window.innerWidth>window.innerHeight;
-  const rotated=nowWide!==landscapeIsWide;
-  landscapeIsWide=nowWide;
-  positionLandscapeArrows(rotated);
-  positionLandscapeTransport();
-});
+window.addEventListener('resize',()=>{positionLandscapeArrows(true);positionLandscapeTransport();});
 positionLandscapeArrows();
 positionLandscapeTransport();
 // Manuscript toggle: purely a visibility flip on the already-loaded
