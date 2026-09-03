@@ -2061,36 +2061,6 @@ function syncLandscapeArrows(){
 // only ever passed from the resize listener (landscapeArrowTop's own
 // declaration, above) — discards the cache and recomputes from scratch,
 // since a rotation genuinely does change the video area's own height.
-// On-screen diagnostic readout (Sep 2026) — added specifically because the
-// arrow-position and notation-open bugs kept failing to reproduce in this
-// file's own Playwright test harness while still showing up on real
-// devices, and getting real devtools access to an iPhone mid-session isn't
-// always practical. Activated ONLY by adding ?debug=1 to the URL — normal
-// use is completely unaffected (debugLog() is a no-op otherwise). Shows a
-// small rolling log, bottom-left, of the real geometry at each of the
-// moments this file's comments call out as significant, so a report like
-// "still wrong" can come with actual numbers instead of a screenshot alone.
-const DEBUG_LANDSCAPE=new URLSearchParams(location.search).get('debug')==='1';
-let debugLandscapeEl=null;
-function debugLog(label){
-  if(!DEBUG_LANDSCAPE)return;
-  if(!debugLandscapeEl){
-    debugLandscapeEl=document.createElement('div');
-    debugLandscapeEl.style.cssText='position:fixed;left:2px;bottom:2px;z-index:99999;background:rgba(0,0,0,.85);color:#0f0;font:9px/1.3 monospace;padding:4px 6px;max-width:98vw;max-height:60vh;overflow:auto;white-space:pre-wrap;pointer-events:none;';
-    document.body.appendChild(debugLandscapeEl);
-  }
-  const va=document.querySelector('.landscape-video-area');
-  const vaRect=va?va.getBoundingClientRect():null;
-  const bandEl=document.querySelector('.landscape-notation-band');
-  const bandRect=bandEl?bandEl.getBoundingClientRect():null;
-  const c=document.getElementById('landscapeNotationCanvas');
-  const arrowR=document.getElementById('landscapeArrowRight');
-  const arrowRect=arrowR?arrowR.getBoundingClientRect():null;
-  const line='['+performance.now().toFixed(0)+'ms] '+label+' | vaH='+(vaRect?vaRect.height.toFixed(0):'?')+' bandH='+(bandRect?bandRect.height.toFixed(0):'?')+' bandHidden='+(bandEl?bandEl.hidden:'?')+' frozenTop='+(landscapeArrowTop===null?'null':landscapeArrowTop.toFixed(1))+' arrowRenderedCenter='+(arrowRect?(arrowRect.top+arrowRect.height/2).toFixed(1):'?')+' canvas='+(c?c.width+'x'+c.height:'?');
-  const existing=debugLandscapeEl.textContent?debugLandscapeEl.textContent.split('\n'):[];
-  existing.push(line);
-  debugLandscapeEl.textContent=existing.slice(-16).join('\n');
-}
 function positionLandscapeArrows(force){
   if(landscapeArrowTop===null||force){
     const rect=document.querySelector('.landscape-video-area').getBoundingClientRect();
@@ -2098,7 +2068,6 @@ function positionLandscapeArrows(force){
   }
   landscapeArrowLeft.style.top=landscapeArrowTop+'px';
   landscapeArrowRight.style.top=landscapeArrowTop+'px';
-  debugLog('positionLandscapeArrows(force='+!!force+')');
 }
 // Probe-element technique for reading env(safe-area-inset-*) as real pixel
 // numbers in script (Sep 2026) — CSS alone can bake these into a fixed
@@ -2443,7 +2412,6 @@ function getNotationImage(src){
       // whatever's now actually selected. A genuinely, persistently broken
       // image (a real 404) still gives up after 2 retries rather than
       // hammering the network forever.
-      debugLog('IMAGE LOAD FAILED src='+src+' attempt='+attempts);
       if(attempts<3)setTimeout(renderNotationStrip,600*attempts);
     };
     entry.img.src=src;
@@ -2459,7 +2427,6 @@ let currentLandscapeNotationSrc=null;
 function renderNotationStrip(){
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[selected];
   const src=perTile||cfg.notationStrip;
-  debugLog('renderNotationStrip() called, src='+src);
   if(src){
     notationStrip.src=src;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;
     // Toggled off (manuscriptBtn) now uses visibility, not the hidden
@@ -2491,23 +2458,8 @@ function renderNotationStrip(){
         landscapeNotationCanvas.getContext('2d').drawImage(entry.img,0,0);
       }
       landscapeNotationCanvas.parentElement.hidden=false;
-      // Force a synchronous reflow before measuring (Sep 2026, defensive):
-      // getBoundingClientRect() is SUPPOSED to force layout in every engine,
-      // but this codebase's own Playwright tests only ever exercise Blink
-      // (desktop Chromium) — real reports of this exact bug have all been on
-      // iOS, where both Safari AND "Chrome" are WebKit under Apple's App
-      // Store rules, a completely different engine this file has never
-      // actually been tested against. Reading a layout-dependent property
-      // right here, immediately after the hidden toggle above and before
-      // positionLandscapeArrows() measures anything, is the standard way to
-      // force any engine to flush layout NOW rather than risk it reusing a
-      // pre-toggle cached layout box for a moment longer than expected.
-      void landscapeNotationCanvas.parentElement.offsetHeight;
-      debugLog('applyLandscapeNotationImage() about to reposition, entry.ready='+entry.ready);
       positionLandscapeArrows();positionLandscapeTransport(); // the band just changed size, which can shift the square's own size/position
-      debugLog('applyLandscapeNotationImage() done');
     };
-    debugLog('entry.ready='+entry.ready+' (true=apply now, false=queued as waiter)');
     if(entry.ready)applyLandscapeNotationImage();
     else entry.waiters.push(applyLandscapeNotationImage);
     landscapeNotation.hidden=false;
@@ -2525,7 +2477,6 @@ function renderNotationStrip(){
     // area's final size is already settled the instant landscapeNotation is
     // hidden — so it's safe (and necessary, since nothing else would) to
     // establish/refresh the frozen arrow position right here.
-    debugLog('renderNotationStrip() no-notation branch, repositioning');
     positionLandscapeArrows();positionLandscapeTransport();
   }
 }
