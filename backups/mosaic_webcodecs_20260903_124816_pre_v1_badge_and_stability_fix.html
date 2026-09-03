@@ -81,14 +81,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:3px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
-/* Build version badge (Sep 2026, per direct request): a small, always-on
-   marker over the focus square (portrait) and the landscape video area,
-   showing which build is actually running. Added specifically because of
-   how much of this project's recent debugging time went to "did my last
-   fix actually go live" — a plain visible number answers that at a glance,
-   on any device, with no devtools or curl commands needed. Bump
-   BUILD_VERSION in the script by 1 on every change delivered from here on. */
-.build-version-badge{position:absolute;right:6px;bottom:6px;z-index:6;font:10px/1 monospace;color:rgba(255,255,255,.4);background:rgba(0,0,0,.35);padding:2px 5px;border-radius:4px;pointer-events:none;user-select:none}
 .focus-solo-dim{position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;display:none}.focus-wrap.is-solo-dimmed .focus-solo-dim{display:block}
 /* Wraps the instrument label + notation strip as one flex column, anchored
    to the bottom of the focus square (Aug 2026) — see the markup comment
@@ -556,7 +548,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 <div id="landscapeNotation" class="landscape-notation" hidden>
   <div class="landscape-video-area">
     <canvas id="landscapeFocusCanvas" class="landscape-focus-canvas"></canvas>
-    <div class="build-version-badge"></div>
     <!-- Mute dim (Sep 2026): same idea as the portrait focus square's own
          dimming overlay when muted (.focus-dim/.focus-wrap.is-muted) — see
          the CSS comment on .landscape-focus-dim for why this is a separate
@@ -693,7 +684,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
         <canvas id="mosaicFocus" class="focus-video"></canvas>
         <div class="focus-dim"></div>
         <div class="focus-solo-dim"></div>
-        <div class="build-version-badge"></div>
         <!-- Manuscript toggle: top-left, mirrors the beat counter at
              top-right. Icon (Aug 31 2026, reference-sheet option "M8"): two
              beamed eighth notes over a 6-line staff behind them — filled
@@ -860,16 +850,6 @@ window.addEventListener('load',()=>{
 const IS_DESKTOP=matchMedia('(pointer:fine)').matches;
 document.documentElement.classList.toggle('is-desktop',IS_DESKTOP);
 document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
-// Build version badge (Sep 2026, direct request during the arrow/notation
-// debugging saga): a small always-visible "vN" marker over the focus square
-// in both portrait and landscape, so a real device can confirm at a glance
-// that a just-deployed change is actually the one it's running — no
-// devtools, no curl, no cache-busting query strings needed. MAINTENANCE:
-// bump this by 1 on every change delivered from here on, nothing else to
-// wire up — every .build-version-badge element picks it up automatically
-// below.
-const BUILD_VERSION=1;
-document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
 // grid shape (cols x rows baked into the composite video by the ffmpeg
@@ -2134,43 +2114,10 @@ function debugLog(label){
 // unrotated phone doesn't spin this forever) instead of accepting garbage,
 // and if a stale frozen value already exists it's simply reapplied rather
 // than being clobbered by a mid-transition zero.
-function positionLandscapeArrows(force,retriesLeft,lastSeenHeight){
+function positionLandscapeArrows(force,retriesLeft){
   const rect=document.querySelector('.landscape-video-area').getBoundingClientRect();
   if(rect.height>0){
-    if(landscapeArrowTop===null||force){
-      // Sixth attempt (same real-device diagnostic session as the comment
-      // above, minutes later): a zero-height guard alone still wasn't
-      // enough. The live log caught this exact pair, 17ms apart, for the
-      // SAME tile (same canvas dimensions both times) right after a
-      // rotation: rectH=483 immediately followed by rectH=105. That's not
-      // a tile switch changing the real layout — it's the phone's own
-      // browser chrome (address bar / toolbar) still animating away as
-      // part of the rotation, which can make .landscape-video-area report
-      // a real, non-zero, but still TRANSIENT height for a frame or two
-      // before the chrome finishes collapsing and the layout reaches its
-      // true final size. The old code froze on the very first non-zero
-      // reading it saw — which is exactly how it caught that transient
-      // 483 instead of the true 105. Now it requires the SAME height (within
-      // 1px) on two consecutive animation frames before trusting it enough
-      // to freeze — a real settled layout naturally repeats; a mid-animation
-      // one doesn't.
-      if(lastSeenHeight!==undefined&&Math.abs(rect.height-lastSeenHeight)<1){
-        landscapeArrowTop=rect.top+rect.height/2;
-      }else{
-        const left=retriesLeft===undefined?60:retriesLeft;
-        debugLog('positionLandscapeArrows: waiting for stable height, saw='+rect.height.toFixed(0)+' prev='+(lastSeenHeight===undefined?'none':lastSeenHeight.toFixed(0))+' retriesLeft='+left);
-        if(left>0){
-          requestAnimationFrame(()=>positionLandscapeArrows(force,left-1,rect.height));
-        }else if(landscapeArrowTop===null){
-          // Genuinely out of patience and nothing frozen yet at all —
-          // better to use this last, possibly-still-transient reading than
-          // leave the arrows unpositioned forever.
-          landscapeArrowTop=rect.top+rect.height/2;
-        }else{
-          return; // keep the existing good value rather than risk a late bad one
-        }
-      }
-    }
+    if(landscapeArrowTop===null||force)landscapeArrowTop=rect.top+rect.height/2;
   }else if(landscapeArrowTop===null){
     // Nothing trustworthy to measure yet (still portrait, or mid-rotation-
     // transition) and no earlier good value to fall back on either. Retry
