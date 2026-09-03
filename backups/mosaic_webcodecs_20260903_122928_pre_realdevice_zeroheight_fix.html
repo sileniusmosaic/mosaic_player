@@ -2091,49 +2091,14 @@ function debugLog(label){
   existing.push(line);
   debugLandscapeEl.textContent=existing.slice(-16).join('\n');
 }
-// Bug fixed Sep 2026 (fifth attempt on this arrow-position saga — the
-// on-screen diagnostic above finally caught it with real numbers off a
-// real iPhone): every earlier fix this file made assumed the only risk was
-// TIMING relative to the notation image loading. The real device log
-// showed something more basic — this got called (from one of the
-// legitimately trusted call sites, e.g. a notation image finishing load)
-// while the phone was still sitting in PORTRAIT, before the user had ever
-// rotated to landscape at all. .landscape-video-area is display:none in
-// portrait (see the (orientation:landscape) media query), so its rect is
-// ALL ZEROS then — rect.top=0, rect.height=0 — and the old code froze
-// landscapeArrowTop at exactly 0 without any way to tell that measurement
-// apart from a legitimately-zero-centered video area. That frozen 0 then
-// sat there, wrong, until something eventually passed force=true — and the
-// same real-device log showed even THAT can't be trusted blindly: the very
-// first resize-event measurement taken at the instant of an actual
-// rotation ALSO read 0 (an iOS-specific layout-timing quirk this file's
-// Chromium-only Playwright tests can't reproduce), with a correct reading
-// only showing up 1.7 real seconds later. So this now refuses to trust or
-// freeze a zero-height measurement at all: if the video area isn't really
-// laid out yet, it retries on the next animation frame (capped, so an
-// unrotated phone doesn't spin this forever) instead of accepting garbage,
-// and if a stale frozen value already exists it's simply reapplied rather
-// than being clobbered by a mid-transition zero.
-function positionLandscapeArrows(force,retriesLeft){
-  const rect=document.querySelector('.landscape-video-area').getBoundingClientRect();
-  if(rect.height>0){
-    if(landscapeArrowTop===null||force)landscapeArrowTop=rect.top+rect.height/2;
-  }else if(landscapeArrowTop===null){
-    // Nothing trustworthy to measure yet (still portrait, or mid-rotation-
-    // transition) and no earlier good value to fall back on either. Retry
-    // shortly rather than freezing 0 — bounded to ~1s of retries (60
-    // frames) so this can't loop forever if the phone just never rotates.
-    const left=retriesLeft===undefined?60:retriesLeft;
-    debugLog('positionLandscapeArrows: zero-height, no frozen value yet, retriesLeft='+left);
-    if(left>0)requestAnimationFrame(()=>positionLandscapeArrows(force,left-1));
-    return;
+function positionLandscapeArrows(force){
+  if(landscapeArrowTop===null||force){
+    const rect=document.querySelector('.landscape-video-area').getBoundingClientRect();
+    landscapeArrowTop=rect.top+rect.height/2;
   }
-  // else: rect.height is 0 right now (mid-transition sample) but a real
-  // frozen value already exists from before — keep using it rather than
-  // overwriting good data with a momentary zero.
   landscapeArrowLeft.style.top=landscapeArrowTop+'px';
   landscapeArrowRight.style.top=landscapeArrowTop+'px';
-  debugLog('positionLandscapeArrows(force='+!!force+') rectH='+rect.height.toFixed(0));
+  debugLog('positionLandscapeArrows(force='+!!force+')');
 }
 // Probe-element technique for reading env(safe-area-inset-*) as real pixel
 // numbers in script (Sep 2026) — CSS alone can bake these into a fixed
