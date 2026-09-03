@@ -1307,16 +1307,7 @@ window.addEventListener('resize',()=>{
   positionLandscapeArrows(rotated);
   positionLandscapeTransport();
 });
-// No eager positionLandscapeArrows() call here (Sep 2026 fix — see the long
-// comment on updateFocusUI()): this runs at script-parse time, well before
-// renderNotationStrip() has ever populated the notation band for the first
-// tile, so .landscape-video-area's rect here is meaningless — freezing
-// landscapeArrowTop from it caused the exact "arrows sitting over the white
-// notation" bug. positionLandscapeTransport() is still safe to call here:
-// since it no longer freezes anything itself (see its own comment), this is
-// just a harmless first layout pass that gets superseded once a trusted
-// moment (image load, no-notation tile, or updateFocusUI()'s own call at
-// the end of the real init chain) establishes the real landscapeArrowTop.
+positionLandscapeArrows();
 positionLandscapeTransport();
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
@@ -1985,21 +1976,7 @@ function updateFocusUI(){
   focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
   syncLandscapeMuteBtn(); // landscape's one mute button always tracks whichever tile is now focused
   syncLandscapeArrows(); // may have just reached (or left) either end
-  // Deliberately NOT calling positionLandscapeArrows() here (Sep 2026 fix —
-  // see the long comment on that function): renderNotationStrip() just
-  // above has, for the very first tile shown, only just STARTED an async
-  // image load and synchronously collapsed the notation band to do it —
-  // meaning right here, mid-load, .landscape-video-area is temporarily
-  // taller than its true final size. Establishing the frozen arrow position
-  // from THIS moment locked in a center too far down the screen — visibly
-  // wrong (arrows sitting low, over the real notation once it appeared),
-  // not just "jumping" like the original bug. The only trustworthy moments
-  // to establish that baseline are handled elsewhere: once the image
-  // actually finishes (or immediately when a tile has no notation at all —
-  // both inside renderNotationStrip()), or on a genuine rotation. A tile
-  // switch after that baseline already exists needs nothing here either —
-  // the frozen value doesn't change, and it's already applied to the
-  // elements' own style.top from whenever it was first set.
+  positionLandscapeArrows(); // no-op on the frozen value unless this is the very first call (see that function's own comment) — cheap to call unconditionally here
   positionLandscapeTransport(); // the square's rendered size can change with the tile (different notation image height), so its left edge — what the transport centers against — can too
   engine.selected=selected;
   if(engine.decodedFrameCount>0)engine.render(currentPos());
@@ -2097,23 +2074,16 @@ function getSafeAreaInsets(){
 // (including any change just made moments earlier in this same tick, e.g. a
 // canvas resize from applyLandscapeNotationImage()) rather than a stale one.
 // Anchored below the arrows' own frozen position (Sep 2026, was centered
-// beside the square). This used to call positionLandscapeArrows() itself at
-// the top — removed (Sep 2026, see the long comment on updateFocusUI()):
-// that unconditionally established the frozen baseline the FIRST time this
-// ran, which for the very first tile shown could be mid-image-load, same
-// bug as updateFocusUI()'s own direct call. Now it only ever READS
-// landscapeArrowTop; if a baseline hasn't been established yet it uses a
-// live (uncached) measurement just for this one layout pass, without
-// freezing it into landscapeArrowTop — that freeze is only ever done by
-// positionLandscapeArrows() itself, called from one of the trusted moments
-// (image actually loaded, no-notation tile, or a genuine rotation). The
-// left edge and top are both clamped against getSafeAreaInsets() so an
-// iPhone rotated with its Dynamic Island/sensor-housing edge on this side
-// never has the row (or the square) sitting under it.
+// beside the square) — positionLandscapeArrows() is called first so
+// landscapeArrowTop is guaranteed set (it's a cheap no-op once already
+// cached). The left edge and top are both clamped against
+// getSafeAreaInsets() so an iPhone rotated with its Dynamic
+// Island/sensor-housing edge on this side never has the row (or the square)
+// sitting under it.
 function positionLandscapeTransport(){
+  positionLandscapeArrows();
   const squareLeft=landscapeFocusCanvas.getBoundingClientRect().left;
   const videoAreaRect=document.querySelector('.landscape-video-area').getBoundingClientRect();
-  const anchorTop=landscapeArrowTop!==null?landscapeArrowTop:(videoAreaRect.top+videoAreaRect.height/2);
   const insets=getSafeAreaInsets();
   const minLeft=8+insets.left;
   const maxW=Math.max(80,squareLeft-16-insets.left); // 80: below this it's not worth trying to show all four buttons legibly
@@ -2121,7 +2091,7 @@ function positionLandscapeTransport(){
   landscapeTransport.style.width=w+'px';
   landscapeTransport.style.left=Math.max(minLeft,(squareLeft-w)/2)+'px';
   const ARROW_RADIUS=20,GAP=14;
-  const naturalTop=anchorTop+ARROW_RADIUS+GAP;
+  const naturalTop=landscapeArrowTop+ARROW_RADIUS+GAP;
   const rowHeight=landscapeTransport.getBoundingClientRect().height||58; // measured AFTER the width above is applied, so this reflects the row's actual current height, not a stale one from a previous (wider/narrower) layout
   const maxTop=videoAreaRect.bottom-rowHeight-8; // never let the row spill past the video area into the (white) notation band below it
   landscapeTransport.style.top=Math.max(videoAreaRect.top+insets.top+8,Math.min(naturalTop,maxTop))+'px';
@@ -2348,74 +2318,19 @@ function trimNotationWhitespace(img,canvas){
 // "ready" (whichever fires first), rather than 'load' alone, in case load
 // itself is what's unreliable for a detached image on some engine.
 const notationImageCache=new Map();
-// Keyed by src, persists ACROSS a failed entry's delete-and-recreate cycle
-// below — deliberately NOT stored on the entry object itself, which gets
-// thrown away and rebuilt fresh on every retry (a fresh entry always starts
-// its own attempts count back at zero). Without this separate, persistent
-// counter a genuinely broken image (a real 404, not a transient blip) would
-// retry forever: each retry's fresh entry would see itself as "attempt 1"
-// and schedule yet another retry, with nothing ever accumulating toward a
-// limit — caught by verify_notation_load_failure_retry.py's
-// always-fails scenario, which saw 16 requests in 3.5s before this existed.
-const notationImageAttempts=new Map();
-// Bug fixed Sep 2026 (fourth attempt — reported still happening after the
-// third, "hidden attribute + dual onload/decode signal" fix above): all
-// three prior attempts assumed the image WOULD eventually load and only
-// worried about hiding the gap while it did. None of them handled the image
-// simply failing to load at all — and until now there was no onerror
-// handler here whatsoever. A single dropped/failed request for the very
-// first tile's notation (a cold network path, a transient blip, anything
-// short of a hard 404) left this src's cache entry permanently stuck at
-// ready:false with no retry, ever — ["does not find notation on opening"]
-// for the rest of that session, since notationImageCache only ever creates
-// one Image() per src. The reported workaround — switching tiles away and
-// back "fixes" it — is consistent with this: whatever transient condition
-// caused the original failure (cold cache, brief network hiccup) had simply
-// cleared by the time something ELSE prompted a fresh look, but nothing in
-// this file was actually retrying — most likely the user's phone itself
-// reloaded the page in the background after being backgrounded, which
-// reads to them as "switching tiles fixed it" but was really a fresh page
-// load with a fresh (successful) network attempt. Fixed two ways: (1) a
-// failed entry is discarded on its NEXT lookup, so any later call —
-// including just landing back on the same tile — gets a brand new Image()
-// and a fresh request instead of the same dead one; (2) a failure also
-// schedules a few automatic retries on its own, so a real device doesn't
-// need ANY user interaction at all to recover from a purely transient
-// glitch on the very first tile shown.
 function getNotationImage(src){
   let entry=notationImageCache.get(src);
-  if(entry&&entry.failed){
-    notationImageCache.delete(src);
-    entry=null;
-  }
   if(!entry){
-    entry={img:new Image(),ready:false,failed:false,waiters:[]};
+    entry={img:new Image(),ready:false,waiters:[]};
     const markReady=()=>{
-      if(entry.ready||entry.failed)return;
+      if(entry.ready)return;
       entry.ready=true;
-      notationImageAttempts.delete(src); // success — forget any earlier failures for this src
       const waiters=entry.waiters;entry.waiters=[];
       waiters.forEach(fn=>fn());
     };
     entry.img.onload=markReady;
-    entry.img.onerror=()=>{
-      if(entry.ready)return; // decode() already won the race — a late/spurious error event changes nothing
-      entry.failed=true;
-      const attempts=(notationImageAttempts.get(src)||0)+1;
-      notationImageAttempts.set(src,attempts);
-      // Self-healing retry, up to 3 attempts total (the initial load plus
-      // two retries), backing off a little each time — covers the fully
-      // passive case (user just sits on the first, broken tile) with no
-      // interaction needed. renderNotationStrip() recomputes its own src
-      // fresh from current state, so if the user has since moved to a
-      // different tile this simply becomes a harmless no-op re-render of
-      // whatever's now actually selected. A genuinely, persistently broken
-      // image (a real 404) still gives up after 2 retries rather than
-      // hammering the network forever.
-      if(attempts<3)setTimeout(renderNotationStrip,600*attempts);
-    };
     entry.img.src=src;
-    if(entry.img.decode)entry.img.decode().then(markReady).catch(()=>{}); // best-effort second signal — a decode() rejection (e.g. the image was never actually usable) just leaves onerror (above) as the path to a retry, same as before this existed
+    if(entry.img.decode)entry.img.decode().then(markReady).catch(()=>{}); // best-effort second signal — a decode() rejection (e.g. the image was never actually usable) just leaves 'load' as the only path to ready, same as before this existed
     notationImageCache.set(src,entry);
   }
   return entry;
@@ -2472,12 +2387,6 @@ function renderNotationStrip(){
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
     currentLandscapeNotationSrc=null;
     landscapeNotation.hidden=true;
-    // Trusted baseline moment too (Sep 2026, see updateFocusUI()'s comment):
-    // there's no async image load to wait for on this branch — the video
-    // area's final size is already settled the instant landscapeNotation is
-    // hidden — so it's safe (and necessary, since nothing else would) to
-    // establish/refresh the frozen arrow position right here.
-    positionLandscapeArrows();positionLandscapeTransport();
   }
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}

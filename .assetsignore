@@ -7,3 +7,5 @@
 .wrangler
 capacitor-app
 .DS_Store
+backups
+Claude outputs
