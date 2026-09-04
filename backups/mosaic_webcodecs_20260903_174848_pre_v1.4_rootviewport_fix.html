@@ -359,13 +359,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    browser window that happens to be wide keeps its normal two-column
    layout instead of ever hitting this. Hidden by default/in portrait;
    the media query below is the only thing that ever shows it. */
-/* --mute-top (Sep 2026 rewrite): the single source of truth for the mute
-   button's vertical position, shared via a custom property so the arrows
-   (below) can align to it in pure CSS instead of JS reading
-   muteBtnLandscape's rendered rect. Defined here (not only inside the
-   orientation media query) so it's always available to inherit, regardless
-   of which rule ends up applying it. */
-.landscape-notation{display:none;--mute-top:max(85px,calc(env(safe-area-inset-top) + 79px));--cluster-size:55px}
+.landscape-notation{display:none}
 @media (orientation:landscape) and (pointer:coarse){
   .app{display:none}
   .landscape-notation:not([hidden]){display:flex}
@@ -458,7 +452,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    reset buttons actually use), so the gap folded in below is 55+10=65
    (20+65=85, 14+65=79), not 26+10=36 — an earlier version used the smaller
    number, which visibly overlapped the real (bigger) metronome button. */
-.muteBtn.muteBtn-landscape{top:var(--mute-top);right:max(20px,calc(env(safe-area-inset-right) + 14px))}
+.muteBtn.muteBtn-landscape{top:max(85px,calc(env(safe-area-inset-top) + 79px));right:max(20px,calc(env(safe-area-inset-right) + 14px))}
 /* Reset (Sep 2026, offset corrected) — see the markup comment on
    #resetBtnLandscape. The real #reset button has no shared class of its
    own to hook into (unlike mute/metro), so this is .dawBtn (the plain
@@ -470,44 +464,23 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    10px gap, folded the same flat way as the mute button above
    (20+65=85, 14+65=79). */
 .dawBtn.resetBtn-landscape{top:max(20px,calc(env(safe-area-inset-top) + 14px));right:max(85px,calc(env(safe-area-inset-right) + 79px))}
-/* v1.6 (real report): mute/reset read as noticeably smaller than the
-   metronome sitting right next to/above them — both were still just plain
-   .dawBtn size (26px, see that rule) while .metroBtn is 55px. Sized to match
-   exactly; the "right" offsets above stay as same-frame fallbacks only —
-   positionLandscapeMetroCluster() overrides them with inline styles once the
-   real layout is known, same pattern the arrows already use for their own
-   CSS top:50% fallback. Growing "right"-anchored boxes only extends them
-   further LEFT (away from the anchor edge), so the existing top/right
-   arithmetic between all three buttons above still holds unchanged — see the
-   comments on those rules. Icon/label sizes bumped to match: .reset-icon was
-   a flat 22px (fine inside the old 26px circle, lost inside a 55px one);
-   .metro-icon already scales itself (72% of its own button, see that rule)
-   so it needed no change; the mute button has no icon at all, just the
-   letter "M" at .dawBtn's 13.2px font — bumped to roughly the same
-   proportion of the new size. */
-.muteBtn.muteBtn-landscape,.dawBtn.resetBtn-landscape{width:55px;height:55px}
-.resetBtn-landscape .reset-icon{width:40px;height:40px}
-.muteBtn-landscape{font-size:30px}
-/* Landscape square-navigation arrows (Sep 2026, rewritten Sep 2026 — see the
-   architecture note near the top of the script block for the full "why").
-   Used to be positioned by JS: measure .landscape-video-area, wait for two
-   animation frames to agree, cross-check against window.innerHeight, freeze
-   a pixel value — a whole saga of real-device bugs because that measurement
-   can be transiently wrong right after an iOS rotation (a documented WebKit
-   quirk, not a bug specific to this app). Replaced with a pure CSS formula:
-   align the arrow's center with the mute button's own center (same ask as
-   before — "bring the arrows down to the level of the mute button" — see
-   --mute-top on .landscape-notation, which both this and the real mute
-   button now read from, so they're defined by the same number and can't
-   disagree), clamped so a very short video area (a tall two-line notation
-   band) never pushes it past its own top/bottom edge — calc(100% - 20px)
-   resolves against .landscape-video-area's own rendered height (this
-   element's containing block), which is exactly the clamp the old JS was
-   doing by hand. No measurement, no timing, no race: the browser keeps this
-   correct continuously, including mid-rotation, because it's declared, not
-   computed-then-frozen. [hidden] (the syncLandscapeArrows() toggle, not a
-   CSS class) removes whichever end has nowhere further to go. */
-.landscapeArrow{position:absolute;top:max(20px,min(calc(var(--mute-top) + (var(--cluster-size) / 2)),calc(100% - 20px)));transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:2px solid var(--text);background:rgba(12,9,6,.72);color:var(--text);display:grid;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;z-index:5}
+/* Landscape square-navigation arrows (Sep 2026) — see the markup comment on
+   #landscapeArrowLeft/Right. Flank the focus square. top is set from the
+   script (positionLandscapeArrows()) as a frozen pixel value rather than a
+   plain top:50% of .landscape-video-area, which is what these used to use —
+   that area's height (and so its 50% midpoint) shifts with every tile switch
+   whenever the newly-focused tile's notation band is a different height,
+   which read as the arrows visibly jumping up and down each time (reported
+   directly). top:50% below is only a same-frame fallback until that first
+   script-driven measurement lands; transform stays a plain CSS rule since
+   centering on a point by the element's own height never needs to change.
+   Sized and styled independently of .dawBtn (metro/mute/reset) rather than
+   sharing it — those are pinned to fixed screen corners regardless of
+   content, these need to sit close to the square itself, a different anchor
+   point entirely, so sharing the class would mean fighting its positioning
+   assumptions more than it would save. [hidden] (the syncLandscapeArrows()
+   toggle, not a CSS class) removes whichever end has nowhere further to go. */
+.landscapeArrow{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:2px solid var(--text);background:rgba(12,9,6,.72);color:var(--text);display:grid;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;z-index:5}
 .landscapeArrow[hidden]{display:none}
 .landscapeArrow svg{width:20px;height:20px}
 .landscapeArrowLeft{left:12px}
@@ -568,10 +541,9 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      Controls added Sep 2026 so nothing here requires rotating back to
      portrait: a swipe left/right anywhere in this view (script, near
      selectTile()) or the on-screen left/right arrows flanking the square
-     change which tile is focused (arrows sit at a fixed vertical position —
-     a pure CSS formula, see .landscapeArrow and --mute-top — so they don't
-     jump around as a differently-shaped notation image changes the video
-     area's height); a
+     change which tile is focused (arrows sit at a frozen vertical position —
+     see positionLandscapeArrows() — so they don't jump around as a
+     differently-shaped notation image changes the video area's height); a
      mute button (top-right, under the metronome) mutes whichever tile is
      currently focused and dims the square while it's muted, same idea as
      portrait's own dimming (see #landscapeFocusDim); a reset button sits
@@ -899,7 +871,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.0';
+const BUILD_VERSION='1.3';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -975,11 +947,8 @@ const MOSAICS={
     // Abakuá, which is what actually made this safe to turn on here too.
     progressiveVideo:true,
     notation:['Mosaic/Congo_Yambumba/congo_notation_1.png'],
-    // See Abakuá's own comment above — same placeholder strip for now,
-    // except Cata (index 1 below — first real per-tile notation strip for
-    // Congo, Sep 2026 — see notationStripByIndex and renderNotationStrip()).
+    // See Abakuá's own comment above — same placeholder strip for now.
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png'},
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -1321,50 +1290,57 @@ new MutationObserver(syncLandscapePlayBtn).observe(playBtn,{attributes:true,attr
 new MutationObserver(syncLandscapePlayBtn).observe(playLabel,{characterData:true,childList:true,subtree:true});
 playBtnLandscape.addEventListener('click',()=>playBtn.click());
 syncLandscapePlayBtn(); // initial state, before anything has changed to trigger the observers
-// Landscape layout: rewritten Sep 2026 after a long run of real-device-only
-// bugs (arrows in the wrong place, notation not appearing, buttons painting
-// wrong) that traced back to one root cause — this code used to measure the
-// screen with JS (getBoundingClientRect/window.innerHeight) right after a
-// rotation and freeze what it saw, but iOS can transiently report the wrong
-// geometry for a frame or two right after rotating (a documented WebKit
-// quirk, see bugs.webkit.org #170595 — not something app code can fully
-// out-guess with thresholds/retry counts, which is what the old code tried
-// and kept needing new patches for). The fix is architectural, not another
-// patch: push as much of this positioning into CSS as possible (the arrows'
-// vertical position is now a pure CSS formula — see .landscapeArrow and
-// --mute-top), and for the two things that genuinely can't be expressed in
-// CSS alone (the transport row and the metro/mute/reset cluster both depend
-// on the square's actual rendered size, which depends on the current tile's
-// notation image aspect ratio — not knowable until it loads), replace the
-// old poll-and-guess loop with a ResizeObserver on the square itself. A
-// ResizeObserver callback only ever fires with the box's real, current,
-// post-layout size — no threshold, no frame-counting, no "is this stable
-// yet" guessing — and if a transient bad reading ever does slip through, the
-// box's size changing again (to the real value) makes it fire again on its
-// own, self-correcting without any retry logic of ours. This one observer
-// replaces every scattered manual positionLandscapeTransport()/
-// positionLandscapeMetroCluster() call that used to be sprinkled across
-// updateFocusUI(), the notation-image loader, and the resize listener.
-let landscapeClusterNeedsRecompute=true; // metro/mute/reset freeze until a genuine rotation ("also not moving" — real report); starts true so the very first layout pass positions them
-new ResizeObserver(()=>{
-  positionLandscapeTransport(); // deliberately recomputed on every firing — the square's size legitimately varies per tile (different notation band height)
-  if(landscapeClusterNeedsRecompute){
-    positionLandscapeMetroCluster();
-    landscapeClusterNeedsRecompute=false;
-  }
-}).observe(landscapeFocusCanvas);
-// matchMedia's orientation query — not the old width>height diff on every
-// 'resize' event — is the purpose-built signal for "did the device actually
-// rotate". Real mobile Safari fires plain 'resize' constantly for reasons
-// that have nothing to do with rotation (toolbar chrome animating away,
-// the keyboard, even scrolling), which is what forced the old code to
-// hand-roll its own "is this a real rotation" filter; this event simply
-// doesn't fire for those cases.
-window.matchMedia('(orientation: landscape) and (pointer: coarse)').addEventListener('change',(e)=>{
-  if(!e.matches)return; // only care about arriving IN landscape, not leaving it
-  landscapeClusterNeedsRecompute=true; // the ResizeObserver firing next (the square's size always changes across a real rotation) will pick this up and recompute
-  setTimeout(()=>nudgeRepaint(landscapeNotation),250); // v1.7: works around a real report of the play/tempo row occasionally painting wrong right after a rotation — see nudgeRepaint()'s comment
+// Keeps the transport row centered against the square's actual current
+// position/size (see positionLandscapeTransport()'s own comment) across an
+// orientation change — the one case that changes the square's geometry
+// without going through updateFocusUI() (which calls it directly for every
+// other case: a tile switch, a piece switch, a notation image finishing).
+// Rotation is the one case that genuinely changes the video area's height
+// (and so the arrows' frozen center — see positionLandscapeArrows(), defined
+// further down alongside syncLandscapeArrows() — landscapeArrowTop itself is
+// declared here, though, so every earlier reference in this file — this
+// listener included — sees it as already-initialized rather than tripping
+// the temporal-dead-zone error a `let` declared only down there would cause
+// for code that runs before the script reaches that line).
+let landscapeArrowTop=null;
+// Bug fixed Sep 2026 (reported still jumping after the first "freeze"
+// attempt): that version force-recomputed landscapeArrowTop on EVERY
+// 'resize' event, on the assumption resize only ever fires on an actual
+// device rotation. On real mobile Safari that's false — it also fires
+// 'resize' whenever the address-bar/toolbar chrome animates away or back
+// (scrolling, tapping a button, even the keyboard), which changes
+// window.innerHeight by a few dozen pixels with the phone never actually
+// turning. Reacting to every one of those recomputed — and so visibly
+// moved — the "frozen" arrow position on ordinary interaction, exactly the
+// jumping this mechanism exists to prevent (invisible to this file's
+// desktop-Chromium Playwright tests, which don't have that toolbar-chrome
+// behavior to reproduce it). Comparing width>height instead of reacting to
+// resize itself filters that noise out: a genuine rotation flips which
+// dimension is bigger, but a toolbar animation never does (landscape width
+// is always far larger than landscape height either way), so this only
+// ever passes force=true through to positionLandscapeArrows() on an actual
+// orientation change. positionLandscapeTransport() still runs on every
+// resize regardless — it isn't cached/frozen, and SHOULD track the
+// square's real current geometry even through a toolbar-driven reflow.
+let landscapeIsWide=window.innerWidth>window.innerHeight;
+window.addEventListener('resize',()=>{
+  const nowWide=window.innerWidth>window.innerHeight;
+  const rotated=nowWide!==landscapeIsWide;
+  landscapeIsWide=nowWide;
+  positionLandscapeArrows(rotated);
+  positionLandscapeTransport();
 });
+// No eager positionLandscapeArrows() call here (Sep 2026 fix — see the long
+// comment on updateFocusUI()): this runs at script-parse time, well before
+// renderNotationStrip() has ever populated the notation band for the first
+// tile, so .landscape-video-area's rect here is meaningless — freezing
+// landscapeArrowTop from it caused the exact "arrows sitting over the white
+// notation" bug. positionLandscapeTransport() is still safe to call here:
+// since it no longer freezes anything itself (see its own comment), this is
+// just a harmless first layout pass that gets superseded once a trusted
+// moment (image load, no-notation tile, or updateFocusUI()'s own call at
+// the end of the real init chain) establishes the real landscapeArrowTop.
+positionLandscapeTransport();
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
 // renderNotationStrip() already applies (a piece with no notationStrip
@@ -2032,14 +2008,22 @@ function updateFocusUI(){
   focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
   syncLandscapeMuteBtn(); // landscape's one mute button always tracks whichever tile is now focused
   syncLandscapeArrows(); // may have just reached (or left) either end
-  // No manual reposition call needed here any more (Sep 2026 rewrite — see
-  // the architecture note near the ResizeObserver setup, above): the arrows
-  // are pure CSS now, and the transport row / metro cluster are kept correct
-  // by the ResizeObserver watching the square itself, which fires on its own
-  // whenever renderNotationStrip() (just above) ends up changing the square's
-  // rendered size — including the exact "mid-load, temporarily wrong size"
-  // moment the old comment here warned about, since the observer just fires
-  // again once the real, final size lands.
+  // Deliberately NOT calling positionLandscapeArrows() here (Sep 2026 fix —
+  // see the long comment on that function): renderNotationStrip() just
+  // above has, for the very first tile shown, only just STARTED an async
+  // image load and synchronously collapsed the notation band to do it —
+  // meaning right here, mid-load, .landscape-video-area is temporarily
+  // taller than its true final size. Establishing the frozen arrow position
+  // from THIS moment locked in a center too far down the screen — visibly
+  // wrong (arrows sitting low, over the real notation once it appeared),
+  // not just "jumping" like the original bug. The only trustworthy moments
+  // to establish that baseline are handled elsewhere: once the image
+  // actually finishes (or immediately when a tile has no notation at all —
+  // both inside renderNotationStrip()), or on a genuine rotation. A tile
+  // switch after that baseline already exists needs nothing here either —
+  // the frozen value doesn't change, and it's already applied to the
+  // elements' own style.top from whenever it was first set.
+  positionLandscapeTransport(); // the square's rendered size can change with the tile (different notation image height), so its left edge — what the transport centers against — can too
   engine.selected=selected;
   if(engine.decodedFrameCount>0)engine.render(currentPos());
   else drawPoster();
@@ -2088,15 +2072,27 @@ function syncLandscapeArrows(){
   landscapeArrowLeft.hidden=selected<=0;
   landscapeArrowRight.hidden=selected>=TILE_COUNT-1;
 }
-// On-screen diagnostic readout — added because the old arrow-position and
-// notation-open bugs kept failing to reproduce in this file's own Playwright
-// test harness while still showing up on real devices, and getting real
-// devtools access to an iPhone mid-session isn't always practical. Kept
-// after the Sep 2026 rewrite below (see the architecture note near the
-// ResizeObserver setup, well above) even though the specific bugs it was
-// built to chase are gone, since it's cheap and may still be useful for
-// whatever comes next. Activated ONLY by adding ?debug=1 to the URL — normal
-// use is completely unaffected (debugLog() is a no-op otherwise).
+// Freezes the arrows' vertical position (Sep 2026 — see the CSS comment on
+// .landscapeArrow: they used to sit at a plain top:50% of
+// .landscape-video-area, whose height — and so its own 50% midpoint — shifts
+// with every tile switch whenever the newly-focused tile's notation band is
+// a different height, which read as the arrows visibly jumping up and down
+// each time, reported directly). Computed once from the video area's
+// CURRENT center and cached in landscapeArrowTop; every later call (a tile
+// switch, via updateFocusUI()) just re-applies the cached value, so the
+// arrows never move again until an actual orientation change. force=true —
+// only ever passed from the resize listener (landscapeArrowTop's own
+// declaration, above) — discards the cache and recomputes from scratch,
+// since a rotation genuinely does change the video area's own height.
+// On-screen diagnostic readout (Sep 2026) — added specifically because the
+// arrow-position and notation-open bugs kept failing to reproduce in this
+// file's own Playwright test harness while still showing up on real
+// devices, and getting real devtools access to an iPhone mid-session isn't
+// always practical. Activated ONLY by adding ?debug=1 to the URL — normal
+// use is completely unaffected (debugLog() is a no-op otherwise). Shows a
+// small rolling log, bottom-left, of the real geometry at each of the
+// moments this file's comments call out as significant, so a report like
+// "still wrong" can come with actual numbers instead of a screenshot alone.
 const DEBUG_LANDSCAPE=new URLSearchParams(location.search).get('debug')==='1';
 let debugLandscapeEl=null;
 let debugLandscapeLines=[];
@@ -2149,36 +2145,106 @@ function debugLog(label){
   const videoCanvasRect=landscapeFocusCanvas?landscapeFocusCanvas.getBoundingClientRect():null;
   const vaComputedDisplay=va?getComputedStyle(va).display:'?';
   const vv=window.visualViewport;
-  const line='['+performance.now().toFixed(0)+'ms] '+label+' | vaH='+(vaRect?vaRect.height.toFixed(0):'?')+' vaDisplay='+vaComputedDisplay+' rootH='+(notationRootRect?notationRootRect.height.toFixed(0):'?')+' rootTop='+(notationRootRect?notationRootRect.top.toFixed(0):'?')+' videoCanvasH='+(videoCanvasRect?videoCanvasRect.height.toFixed(0):'?')+' winH='+window.innerHeight+' vvH='+(vv?vv.height.toFixed(0):'?')+' bandH='+(bandRect?bandRect.height.toFixed(0):'?')+' bandHidden='+(bandEl?bandEl.hidden:'?')+' arrowRenderedCenter='+(arrowRect?(arrowRect.top+arrowRect.height/2).toFixed(1):'?')+' canvas='+(c?c.width+'x'+c.height:'?');
+  const line='['+performance.now().toFixed(0)+'ms] '+label+' | vaH='+(vaRect?vaRect.height.toFixed(0):'?')+' vaDisplay='+vaComputedDisplay+' rootH='+(notationRootRect?notationRootRect.height.toFixed(0):'?')+' rootTop='+(notationRootRect?notationRootRect.top.toFixed(0):'?')+' videoCanvasH='+(videoCanvasRect?videoCanvasRect.height.toFixed(0):'?')+' winH='+window.innerHeight+' vvH='+(vv?vv.height.toFixed(0):'?')+' bandH='+(bandRect?bandRect.height.toFixed(0):'?')+' bandHidden='+(bandEl?bandEl.hidden:'?')+' frozenTop='+(landscapeArrowTop===null?'null':landscapeArrowTop.toFixed(1))+' arrowRenderedCenter='+(arrowRect?(arrowRect.top+arrowRect.height/2).toFixed(1):'?')+' canvas='+(c?c.width+'x'+c.height:'?');
   debugLandscapeLines.push(line);
   if(debugLandscapeLines.length>200)debugLandscapeLines=debugLandscapeLines.slice(-200); // keep a much longer history now that it's hidden by default — only rendered (and truncated for display) when actually expanded
   debugLandscapeRender();
 }
-// v1.7 fix (same report): even once the notation band correctly shows and
-// everything is correctly positioned, real reports describe the landscape
-// Play button (and the 50% tempo preset) rendering wrong — missing entirely,
-// or showing a half-filled background — right after rotating, recovering
-// only once something else (tapping mute or reset) is clicked. Every value
-// involved (CSS classes, --play-progress, the button's own background rule)
-// checks out correct in the DOM at that point — this looks like a real
-// WebKit paint bug, where the browser has computed the right styles but
-// hasn't actually repainted the affected layer yet, and needs some unrelated
-// DOM mutation to notice. A near-imperceptible opacity nudge (change it,
-// force a layout read, change it back next frame) is a standard, widely-used
-// workaround for exactly this class of iOS WebKit staleness — applied to the
-// whole landscape view rather than hunting down every individual affected
-// button.
-function nudgeRepaint(el){
-  if(!el)return;
-  el.style.opacity='0.999999';
-  void el.offsetHeight;
-  requestAnimationFrame(()=>{el.style.opacity='';});
+// Bug fixed Sep 2026 (fifth attempt on this arrow-position saga — the
+// on-screen diagnostic above finally caught it with real numbers off a
+// real iPhone): every earlier fix this file made assumed the only risk was
+// TIMING relative to the notation image loading. The real device log
+// showed something more basic — this got called (from one of the
+// legitimately trusted call sites, e.g. a notation image finishing load)
+// while the phone was still sitting in PORTRAIT, before the user had ever
+// rotated to landscape at all. .landscape-video-area is display:none in
+// portrait (see the (orientation:landscape) media query), so its rect is
+// ALL ZEROS then — rect.top=0, rect.height=0 — and the old code froze
+// landscapeArrowTop at exactly 0 without any way to tell that measurement
+// apart from a legitimately-zero-centered video area. That frozen 0 then
+// sat there, wrong, until something eventually passed force=true — and the
+// same real-device log showed even THAT can't be trusted blindly: the very
+// first resize-event measurement taken at the instant of an actual
+// rotation ALSO read 0 (an iOS-specific layout-timing quirk this file's
+// Chromium-only Playwright tests can't reproduce), with a correct reading
+// only showing up 1.7 real seconds later. So this now refuses to trust or
+// freeze a zero-height measurement at all: if the video area isn't really
+// laid out yet, it retries on the next animation frame (capped, so an
+// unrotated phone doesn't spin this forever) instead of accepting garbage,
+// and if a stale frozen value already exists it's simply reapplied rather
+// than being clobbered by a mid-transition zero.
+function positionLandscapeArrows(force,retriesLeft,lastSeenHeight){
+  const rect=document.querySelector('.landscape-video-area').getBoundingClientRect();
+  if(rect.height>0){
+    if(landscapeArrowTop===null||force){
+      // Sixth attempt (same real-device diagnostic session as the comment
+      // above, minutes later): a zero-height guard alone still wasn't
+      // enough. The live log caught this exact pair, 17ms apart, for the
+      // SAME tile (same canvas dimensions both times) right after a
+      // rotation: rectH=483 immediately followed by rectH=105. That's not
+      // a tile switch changing the real layout — it's the phone's own
+      // browser chrome (address bar / toolbar) still animating away as
+      // part of the rotation, which can make .landscape-video-area report
+      // a real, non-zero, but still TRANSIENT height for a frame or two
+      // before the chrome finishes collapsing and the layout reaches its
+      // true final size. The old code froze on the very first non-zero
+      // reading it saw — which is exactly how it caught that transient
+      // 483 instead of the true 105. Now it requires the SAME height (within
+      // 1px) on two consecutive animation frames before trusting it enough
+      // to freeze — a real settled layout naturally repeats; a mid-animation
+      // one doesn't.
+      if(lastSeenHeight!==undefined&&Math.abs(rect.height-lastSeenHeight)<1){
+        landscapeArrowTop=rect.top+rect.height/2;
+      }else{
+        const left=retriesLeft===undefined?60:retriesLeft;
+        debugLog('positionLandscapeArrows: waiting for stable height, saw='+rect.height.toFixed(0)+' prev='+(lastSeenHeight===undefined?'none':lastSeenHeight.toFixed(0))+' retriesLeft='+left);
+        if(left>0){
+          requestAnimationFrame(()=>positionLandscapeArrows(force,left-1,rect.height));
+        }else if(landscapeArrowTop===null){
+          // Genuinely out of patience and nothing frozen yet at all —
+          // better to use this last, possibly-still-transient reading than
+          // leave the arrows unpositioned forever.
+          landscapeArrowTop=rect.top+rect.height/2;
+        }else{
+          return; // keep the existing good value rather than risk a late bad one
+        }
+      }
+    }
+  }else if(landscapeArrowTop===null){
+    // Nothing trustworthy to measure yet (still portrait, or mid-rotation-
+    // transition) and no earlier good value to fall back on either. Retry
+    // shortly rather than freezing 0.
+    //
+    // Bug fixed Sep 2026 (real-device log caught this): the original version
+    // capped this at 60 rAF frames (~1s) and then gave up FOR GOOD, no
+    // further retry ever scheduled — reasonable if a rotation were always
+    // near-instant, but a real person can easily take longer than a second
+    // to actually turn their phone after whatever triggered this call. In
+    // the captured log this "worked out" only because the resize listener's
+    // OWN force=true call happened to fire ~1.6s later and re-entered this
+    // function fresh — but that's a lucky coincidence, not something this
+    // function should depend on. Past the fast rAF burst (still useful for
+    // the sub-second cases), this now falls back to a slow, cheap poll via
+    // setTimeout that keeps going for a long time (a few minutes) rather
+    // than abandoning silently — if the phone genuinely never rotates this
+    // amounts to one negligible timer tick every 400ms, and it stops the
+    // moment a real measurement succeeds.
+    const left=retriesLeft===undefined?60:retriesLeft;
+    debugLog('positionLandscapeArrows: zero-height, no frozen value yet, retriesLeft='+left);
+    if(left>0){
+      requestAnimationFrame(()=>positionLandscapeArrows(force,left-1));
+    }else{
+      setTimeout(()=>positionLandscapeArrows(force,10),400);
+    }
+    return;
+  }
+  // else: rect.height is 0 right now (mid-transition sample) but a real
+  // frozen value already exists from before — keep using it rather than
+  // overwriting good data with a momentary zero.
+  landscapeArrowLeft.style.top=landscapeArrowTop+'px';
+  landscapeArrowRight.style.top=landscapeArrowTop+'px';
+  debugLog('positionLandscapeArrows(force='+!!force+') rectH='+rect.height.toFixed(0));
 }
-// Arrow vertical positioning is now pure CSS — see .landscapeArrow and
-// --mute-top in the <style> above. No JS measurement, no freeze, nothing to
-// call here any more; this comment stands in place of the old
-// arrowCenterFromRect()/positionLandscapeArrows() functions (removed Sep
-// 2026 rewrite) as a signpost for anyone searching for them.
 // Probe-element technique for reading env(safe-area-inset-*) as real pixel
 // numbers in script (Sep 2026) — CSS alone can bake these into a fixed
 // position, but positionLandscapeTransport() below needs to compare them
@@ -2203,26 +2269,27 @@ function getSafeAreaInsets(){
 // current tile's notation band is. None of that is expressible as a plain
 // CSS value, so this reads the square's actual rendered position and sizes/
 // centers the transport row against it directly. getBoundingClientRect()
-// forces a synchronous layout, so this always sees the CURRENT geometry.
-// Called only from the ResizeObserver set up near the top of this script
-// (Sep 2026 rewrite) — one call site instead of several scattered ones.
-// Anchored below the arrows' own position, read directly off their rendered
-// rect: the arrows are pure CSS now (see .landscapeArrow), so unlike the old
-// landscapeArrowTop cache this is always correct the instant it's read, no
-// "has a baseline been established yet" question to handle. The left edge
-// and top are both clamped against getSafeAreaInsets() so an iPhone rotated
-// with its Dynamic Island/sensor-housing edge on this side never has the row
-// (or the square) sitting under it.
+// forces a synchronous layout, so this always sees the CURRENT geometry
+// (including any change just made moments earlier in this same tick, e.g. a
+// canvas resize from applyLandscapeNotationImage()) rather than a stale one.
+// Anchored below the arrows' own frozen position (Sep 2026, was centered
+// beside the square). This used to call positionLandscapeArrows() itself at
+// the top — removed (Sep 2026, see the long comment on updateFocusUI()):
+// that unconditionally established the frozen baseline the FIRST time this
+// ran, which for the very first tile shown could be mid-image-load, same
+// bug as updateFocusUI()'s own direct call. Now it only ever READS
+// landscapeArrowTop; if a baseline hasn't been established yet it uses a
+// live (uncached) measurement just for this one layout pass, without
+// freezing it into landscapeArrowTop — that freeze is only ever done by
+// positionLandscapeArrows() itself, called from one of the trusted moments
+// (image actually loaded, no-notation tile, or a genuine rotation). The
+// left edge and top are both clamped against getSafeAreaInsets() so an
+// iPhone rotated with its Dynamic Island/sensor-housing edge on this side
+// never has the row (or the square) sitting under it.
 function positionLandscapeTransport(){
   const squareLeft=landscapeFocusCanvas.getBoundingClientRect().left;
   const videoAreaRect=document.querySelector('.landscape-video-area').getBoundingClientRect();
-  // Either arrow works (both share the exact same .landscapeArrow top
-  // formula) — but at the very first/last tile one of them is [hidden]
-  // (see syncLandscapeArrows()), and a hidden element's rect reads all
-  // zeros, so read whichever one is actually visible right now.
-  const anchorArrow=landscapeArrowLeft.hidden?landscapeArrowRight:landscapeArrowLeft;
-  const arrowRect=anchorArrow.getBoundingClientRect();
-  const anchorTop=arrowRect.top+arrowRect.height/2;
+  const anchorTop=landscapeArrowTop!==null?landscapeArrowTop:(videoAreaRect.top+videoAreaRect.height/2);
   const insets=getSafeAreaInsets();
   const minLeft=8+insets.left;
   const maxW=Math.max(80,squareLeft-16-insets.left); // 80: below this it's not worth trying to show all four buttons legibly
@@ -2234,30 +2301,6 @@ function positionLandscapeTransport(){
   const rowHeight=landscapeTransport.getBoundingClientRect().height||58; // measured AFTER the width above is applied, so this reflects the row's actual current height, not a stale one from a previous (wider/narrower) layout
   const maxTop=videoAreaRect.bottom-rowHeight-8; // never let the row spill past the video area into the (white) notation band below it
   landscapeTransport.style.top=Math.max(videoAreaRect.top+insets.top+8,Math.min(naturalTop,maxTop))+'px';
-}
-// Landscape metro/mute/reset cluster centering (v1.6, real report): sitting
-// tight in the exact screen corner read as cramped — wanted centered into
-// the black space beside the square instead. Unlike positionLandscapeTransport
-// above (which deliberately recomputes on every tile, since the square's own
-// size legitimately changes the space it centers within), this stays put
-// once set ("also not moving" — reported directly) — the ResizeObserver
-// callback that calls this (see the architecture note near its setup, well
-// above) only does so when landscapeClusterNeedsRecompute is true, i.e. once
-// per genuine rotation, never on a plain tile switch. This function itself
-// no longer needs to know or enforce that — it just computes and applies,
-// unconditionally, whenever it's called. CLUSTER_W/GAP mirror the values
-// .metroBtn/.muteBtn-landscape/.resetBtn-landscape's own CSS already uses
-// for sizing and spacing (also var(--cluster-size) now — see the CSS).
-function positionLandscapeMetroCluster(){
-  const squareRight=landscapeFocusCanvas.getBoundingClientRect().right;
-  const insets=getSafeAreaInsets();
-  const CLUSTER_W=55,GAP=10;
-  const blackSpaceW=window.innerWidth-squareRight;
-  const minRight=Math.max(20,14+insets.right); // same floor as the CSS max(20px, safe-area+14px) it replaces
-  const centeredRight=Math.max(minRight,(blackSpaceW-CLUSTER_W)/2);
-  metroBtnLandscape.style.right=centeredRight+'px';
-  muteBtnLandscape.style.right=centeredRight+'px';
-  resetBtnLandscape.style.right=(centeredRight+CLUSTER_W+GAP)+'px';
 }
 // Reverted (Sep 2026): every tile lives in the single #gridControls grid on
 // both mobile and desktop now — see the CSS/markup comments near
@@ -2584,15 +2627,6 @@ function renderNotationStrip(){
     const entry=getNotationImage(src);
     const applyLandscapeNotationImage=()=>{
       if(currentLandscapeNotationSrc!==src)return; // superseded by a newer selection already — don't draw stale content
-      // Sep 2026 rewrite: this used to wait out a viewport-settling race
-      // (see the architecture note near the ResizeObserver setup, well
-      // above) before revealing the band — real reports showed that wait
-      // could in the worst case never resolve. It no longer needs to wait
-      // for anything: revealing the band here just changes the square's
-      // size, and the ResizeObserver watching the square (not this function)
-      // is what repositions the transport row and metro cluster in response,
-      // whenever that size change actually lands — decoupled from why it
-      // changed, so there's nothing left here that can hang.
       if(!trimNotationWhitespace(entry.img,landscapeNotationCanvas)){
         // No measurable margin, an already-tight image, or a pixel-read
         // failure — fall back to drawing it untouched at full size so the
@@ -2602,8 +2636,21 @@ function renderNotationStrip(){
         landscapeNotationCanvas.getContext('2d').drawImage(entry.img,0,0);
       }
       landscapeNotationCanvas.parentElement.hidden=false;
-      debugLog('applyLandscapeNotationImage() revealed band, entry.ready='+entry.ready);
-      nudgeRepaint(landscapeNotation); // v1.7: works around a real report of the play/tempo row occasionally painting wrong right after this — see nudgeRepaint()'s comment
+      // Force a synchronous reflow before measuring (Sep 2026, defensive):
+      // getBoundingClientRect() is SUPPOSED to force layout in every engine,
+      // but this codebase's own Playwright tests only ever exercise Blink
+      // (desktop Chromium) — real reports of this exact bug have all been on
+      // iOS, where both Safari AND "Chrome" are WebKit under Apple's App
+      // Store rules, a completely different engine this file has never
+      // actually been tested against. Reading a layout-dependent property
+      // right here, immediately after the hidden toggle above and before
+      // positionLandscapeArrows() measures anything, is the standard way to
+      // force any engine to flush layout NOW rather than risk it reusing a
+      // pre-toggle cached layout box for a moment longer than expected.
+      void landscapeNotationCanvas.parentElement.offsetHeight;
+      debugLog('applyLandscapeNotationImage() about to reposition, entry.ready='+entry.ready);
+      positionLandscapeArrows();positionLandscapeTransport(); // the band just changed size, which can shift the square's own size/position
+      debugLog('applyLandscapeNotationImage() done');
     };
     debugLog('entry.ready='+entry.ready+' (true=apply now, false=queued as waiter)');
     if(entry.ready)applyLandscapeNotationImage();
@@ -2618,7 +2665,13 @@ function renderNotationStrip(){
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
     currentLandscapeNotationSrc=null;
     landscapeNotation.hidden=true;
-    debugLog('renderNotationStrip() no-notation branch');
+    // Trusted baseline moment too (Sep 2026, see updateFocusUI()'s comment):
+    // there's no async image load to wait for on this branch — the video
+    // area's final size is already settled the instant landscapeNotation is
+    // hidden — so it's safe (and necessary, since nothing else would) to
+    // establish/refresh the frozen arrow position right here.
+    debugLog('renderNotationStrip() no-notation branch, repositioning');
+    positionLandscapeArrows();positionLandscapeTransport();
   }
 }
 function AC(){return window.AudioContext||window.webkitAudioContext}
