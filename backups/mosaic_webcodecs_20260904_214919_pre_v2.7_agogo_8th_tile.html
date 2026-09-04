@@ -970,7 +970,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.8';
+const BUILD_VERSION='2.6';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1061,7 +1061,7 @@ const MOSAICS={
   flipswing:{
     id:'flipswing', label:'Flip Swing', poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg',
     metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
-    cols:4, rows:2, tileCount:8, loopEnd:15.567, // 8th tile (Agogo) added Sep 2026 — was 7 real + 1 blank cell
+    cols:4, rows:2, tileCount:7, loopEnd:15.567,
     // Beat counter: 12 bars x 3 beats/bar = 36 beats per loop, counting
     // 1-2-3 repeating, with beat 1 landing exactly on the loop start (no
     // pickup/count-in). This is all that's needed to derive the live BPM —
@@ -1076,15 +1076,14 @@ const MOSAICS={
     progressiveVideo:true,
     notation:['Mosaic/Flip_Swing/flipswing_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
-    // except Kit (index 6 — first real per-tile notation strip, Aug 31
-    // 2026) and Agogo (index 7 below — added Sep 4 2026 alongside the 8th
-    // tile itself — see notationStripByIndex and renderNotationStrip()).
+    // except Kit (index 6 below — first real per-tile notation strip, Aug
+    // 31 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',3:'Mosaic/Flip_Swing/04_repenique_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png',7:'Mosaic/Flip_Swing/08_agogo_flipswing.png'},
-    names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit','Agogo'],
+    notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',3:'Mosaic/Flip_Swing/04_repenique_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png'},
+    names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
-    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_agogo_flipswing.aac']
+    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac']
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()

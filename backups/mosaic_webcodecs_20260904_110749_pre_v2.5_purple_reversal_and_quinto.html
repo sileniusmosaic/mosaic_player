@@ -121,9 +121,9 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    in landscape, via .muteBtn.muteBtn-landscape's shared base), one place to
    change it. .is-muted below (a real state change, not a resting look) keeps
    its own distinct teal, untouched. */
-.muteBtn{right:4px}
+.muteBtn{right:4px;border-color:var(--accent-purple);color:var(--accent-purple)}
 .soloBtn{left:4px}
-.muteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.muteBtn.is-muted{background:#4d7c8f;color:#eaf5f9;border-color:#2c4a54}
 .soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
 /* Beat counter: top-right of the focus square (Aug 2026 — moved up from
    bottom-right so the notation overlay, now anchored to the bottom of the
@@ -160,7 +160,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 /* metro-num only ever renders while .is-active is present (display:block is
    set below), so this single unconditional color applies purely to the ON
    state — no separate .is-active-scoped override needed. */
-.metroBtn .metro-num{display:none;color:var(--text)}
+.metroBtn .metro-num{display:none;color:var(--accent-purple)}
 /* Active-ring (Aug 31 2026, recolored Sep 2026 — see the icon comment above;
    turned purple Sep 4 2026 per user request: metronome stays cream/white
    when OFF, purple ring+digits only when ON). */
@@ -178,14 +178,12 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    button, in both resting and is-active looks (unlike the metronome, which
    deliberately keeps a cream/purple off/on distinction — this one was asked
    to just match mute, no on/off difference). */
-.manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+.manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--accent-purple);border-color:var(--accent-purple);background:#0c0906}
 .manuscriptBtn .manuscript-icon{width:72%;height:72%;fill:none;stroke:none}
-.manuscriptBtn .manuscript-icon .staff-line{stroke:var(--text);stroke-width:.8;opacity:.6}
-.manuscriptBtn .manuscript-icon .note-head{fill:var(--text);stroke:none}
-.manuscriptBtn .manuscript-icon .note-beam{fill:var(--text);stroke:none}
-.manuscriptBtn .manuscript-icon .note-stems{fill:none;stroke:var(--text);stroke-width:1.6;stroke-linecap:round}
-/* Selected/toggled-on state: purple circumference only — icon stays white,
-   matching the app-wide "purple rim on selection" rule (Sep 4 2026). */
+.manuscriptBtn .manuscript-icon .staff-line{stroke:var(--accent-purple);stroke-width:.8;opacity:.6}
+.manuscriptBtn .manuscript-icon .note-head{fill:var(--accent-purple);stroke:none}
+.manuscriptBtn .manuscript-icon .note-beam{fill:var(--accent-purple);stroke:none}
+.manuscriptBtn .manuscript-icon .note-stems{fill:none;stroke:var(--accent-purple);stroke-width:1.6;stroke-linecap:round}
 .manuscriptBtn.is-active{border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
@@ -242,17 +240,14 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 /* Active tempo (Sep 2026, real report: bring purple back, but only as a
    border+text ring rather than the old solid fill — background stays the
    same dark #0c0906 every circular button now shares). */
-.tempo-buttons button.active{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.tempo-buttons button.active{background:#0c0906;color:var(--accent-purple);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .tempo-buttons button:disabled{opacity:.4}
 /* Play (Sep 2026, real report: purple border+icon, still no fill — the dark
    background and circular shape stay exactly like every other button here,
    only the "circumference and writing" go purple, per the ask). Its .active
    rule stays dead code either way (see the comment on updateTempoUI()
    further down — #play has no data-p attribute, so it can never match). */
-/* Play stays fully purple always (not gated by .active/selection like every
-   other accent button) — rim, fill AND background purple; icon stays white
-   for contrast against the solid purple fill (Sep 4 2026 request). */
-#play{background:var(--accent-purple);border-color:var(--accent-purple);color:var(--text)}
+#play{border-color:var(--accent-purple);color:var(--accent-purple)}
 /* Play/pause icon (Aug 30 2026, now the button's ONLY content — no visible
    label): a triangle that swaps to two vertical bars while playing. Both
    shapes live in one SVG, toggled via the button's own is-playing class (set
@@ -582,7 +577,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 /* Active tempo (Sep 2026, real report: purple is back — see the matching
    .tempo-buttons button.active comment in portrait — still a ring, not a
    fill, so the dark background every button here shares stays put). */
-.landscape-transport button.active{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.landscape-transport button.active{background:#0c0906;color:var(--accent-purple);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .landscape-transport button:disabled{opacity:.4}
 .landscape-transport .play-icon{width:22px;height:22px}
 /* Same loading-fill/is-loading/reset-instant treatment as the real #play
@@ -593,7 +588,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    real report — matches #play in portrait); background stays the same dark
    #0c0906 every circular button here shares. The loading-progress fill
    (::before, below) is the same purple regardless, so nothing changes there. */
-.landscape-transport .transportPlayBtn{background:var(--accent-purple);color:var(--text);border-color:var(--accent-purple);font-weight:750;position:relative;overflow:hidden;--play-progress:0}
+.landscape-transport .transportPlayBtn{background:#0c0906;color:var(--accent-purple);border-color:var(--accent-purple);font-weight:750;position:relative;overflow:hidden;--play-progress:0}
 .landscape-transport .transportPlayBtn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
 .landscape-transport .transportPlayBtn.is-loading{background:var(--accent-purple-dim)}
 .landscape-transport .transportPlayBtn.reset-instant::before{transition:none!important}
@@ -970,7 +965,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.8';
+const BUILD_VERSION='2.4';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1047,10 +1042,10 @@ const MOSAICS={
     progressiveVideo:true,
     notation:['Mosaic/Congo_Yambumba/congo_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
-    // except Cata, Erikundi and Quinto (indices 1-3 below — real per-tile
-    // notation strips for Congo, Sep 2026 — see notationStripByIndex and renderNotationStrip()).
+    // except Cata and Erikundi (indices 1-2 below — real per-tile notation
+    // strips for Congo, Sep 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png'},
+    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png'},
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -1061,7 +1056,7 @@ const MOSAICS={
   flipswing:{
     id:'flipswing', label:'Flip Swing', poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg',
     metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
-    cols:4, rows:2, tileCount:8, loopEnd:15.567, // 8th tile (Agogo) added Sep 2026 — was 7 real + 1 blank cell
+    cols:4, rows:2, tileCount:7, loopEnd:15.567,
     // Beat counter: 12 bars x 3 beats/bar = 36 beats per loop, counting
     // 1-2-3 repeating, with beat 1 landing exactly on the loop start (no
     // pickup/count-in). This is all that's needed to derive the live BPM —
@@ -1076,15 +1071,14 @@ const MOSAICS={
     progressiveVideo:true,
     notation:['Mosaic/Flip_Swing/flipswing_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
-    // except Kit (index 6 — first real per-tile notation strip, Aug 31
-    // 2026) and Agogo (index 7 below — added Sep 4 2026 alongside the 8th
-    // tile itself — see notationStripByIndex and renderNotationStrip()).
+    // except Kit (index 6 below — first real per-tile notation strip, Aug
+    // 31 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',3:'Mosaic/Flip_Swing/04_repenique_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png',7:'Mosaic/Flip_Swing/08_agogo_flipswing.png'},
-    names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit','Agogo'],
+    notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',3:'Mosaic/Flip_Swing/04_repenique_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png'},
+    names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
-    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_agogo_flipswing.aac']
+    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac']
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
@@ -3281,14 +3275,6 @@ function buildTempoButtons(){
 // the one real function).
 function buildLandscapeTransport(){
   TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));landscapeTransport.appendChild(b)});
-  // Sep 4 2026 fix: buildTempoButtons() runs before this (see the init call
-  // chain) and already calls updateTempoUI() once — but these buttons don't
-  // exist yet at that point, so its landscapeTransport pass found nothing to
-  // mark. Without this, the landscape 100% preset opened with no ring at all
-  // until the next real tempo tap (any tempo change) called updateTempoUI()
-  // again and finally saw these buttons. Same call as buildTempoButtons()
-  // makes for its own row, just deferred to after these buttons actually exist.
-  updateTempoUI();
 }
 // Covers both rows in one pass — a button with no data-p (#play/
 // #playBtnLandscape) always fails +undefined===tempoPercent, so this never
@@ -3793,17 +3779,6 @@ async function reset(){
   muted=Array(TILE_COUNT).fill(false);
   soloed=Array(TILE_COUNT).fill(false);
   refreshSoloMuteState();
-  // Reset (Sep 4 2026) — beat counter goes back to its own default (off) too,
-  // same as a fresh piece switch does (see loadPiece()'s metroActive=false
-  // block above): "reset" should mean tempo 100% AND every other toggle back
-  // to its starting state, not tempo alone. stopStems() below already cancels
-  // any clicks actually scheduled; this just fixes the button's own visuals.
-  if(metroActive){
-    metroActive=false;
-    metroBtn.classList.toggle('is-active',metroActive);
-    metroBtn.setAttribute('aria-label','Beat counter: off');
-    syncLandscapeMetroBtn();
-  }
   cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
   try{
     if(!prepared){

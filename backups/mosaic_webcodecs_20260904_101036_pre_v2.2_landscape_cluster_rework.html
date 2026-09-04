@@ -116,14 +116,9 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
 .focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
 .dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 13.2px -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;line-height:1}
-/* Purple border+text (Sep 2026, real report) — shared by every mute button
-   in the app (the small per-tile ones in portrait AND the single overlay one
-   in landscape, via .muteBtn.muteBtn-landscape's shared base), one place to
-   change it. .is-muted below (a real state change, not a resting look) keeps
-   its own distinct teal, untouched. */
 .muteBtn{right:4px}
 .soloBtn{left:4px}
-.muteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.muteBtn.is-muted{background:#4d7c8f;color:#eaf5f9;border-color:#2c4a54}
 .soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
 /* Beat counter: top-right of the focus square (Aug 2026 — moved up from
    bottom-right so the notation overlay, now anchored to the bottom of the
@@ -133,38 +128,29 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    default) since it sits much bigger and lower than those. Deliberately
    bigger than the tile mute/solo buttons — the number needs to be readable
    at a glance while playing, not just identifiable. */
-.metroBtn{top:10px;right:10px;left:auto;bottom:auto;width:55px;height:55px;color:var(--text);font-size:36.3px;border-color:var(--text);background:#0c0906}
-/* Metronome icon (Aug 31 2026 — picked from a reference sheet, option "T7";
-   recolored Sep 2026, real report — was var(--tile-border), a pale BLUE
-   (#cbe0e6) despite every comment here describing it as "near-white": that
-   variable is also used for .tile.is-selected's outline elsewhere, where the
-   blue tint is intentional, but reused here it just read as a mismatched
-   metronome next to the plain cream (var(--text)) mute/reset buttons. Now
-   var(--text) throughout, same as every other DAW-style button, in both
-   portrait (.metroBtn) and landscape (.metroBtn.metroBtn-landscape only
-   overrides position, not color) — case, pendulum arm with its weight, a
-   vertical tick/tempo scale down the middle, and two small feet at the base.
-   Every piece drawn as its own class so each part can be stroke-only or
-   fill-only as appropriate (see rules below) instead of one blanket
-   path/circle rule like the old design needed. */
+.metroBtn{top:10px;right:10px;left:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);font-size:36.3px;border-color:var(--border);background:#0c0906}
+/* Metronome icon (Aug 31 2026 — picked from a reference sheet, option "T7"):
+   outline style in the same near-white tone as the manuscript icon below
+   (var(--tile-border)) rather than the old solid brass — case, pendulum arm
+   with its weight, a vertical tick/tempo scale down the middle, and two
+   small feet at the base. Every piece drawn as its own class so each part
+   can be stroke-only or fill-only as appropriate (see rules below) instead
+   of one blanket path/circle rule like the old design needed. */
 .metroBtn .metro-icon{width:72%;height:72%;fill:none;stroke:none}
-.metroBtn .metro-icon .metro-case{stroke:var(--text);stroke-width:1.6;stroke-linejoin:round;fill:none}
-.metroBtn .metro-icon .metro-arm{stroke:var(--text);stroke-width:1.6;stroke-linecap:round}
-.metroBtn .metro-icon .metro-ticks line{stroke:var(--text);stroke-width:1.6;stroke-linecap:round}
-.metroBtn .metro-icon .metro-weight{fill:var(--text)}
-.metroBtn .metro-icon .metro-foot{fill:var(--text)}
+.metroBtn .metro-icon .metro-case{stroke:var(--tile-border);stroke-width:1.6;stroke-linejoin:round;fill:none}
+.metroBtn .metro-icon .metro-arm{stroke:var(--tile-border);stroke-width:1.6;stroke-linecap:round}
+.metroBtn .metro-icon .metro-ticks line{stroke:var(--tile-border);stroke-width:1.6;stroke-linecap:round}
+.metroBtn .metro-icon .metro-weight{fill:var(--tile-border)}
+.metroBtn .metro-icon .metro-foot{fill:var(--tile-border)}
 /* Beat-count number (Aug 31 2026): kept in the brass/brown tone the icons
    used to be, rather than switching to the new white — it needed its own
    color now that the icon itself went white, and brass reads clearly
    against both the dark idle button and the white active-ring below. */
-/* metro-num only ever renders while .is-active is present (display:block is
-   set below), so this single unconditional color applies purely to the ON
-   state — no separate .is-active-scoped override needed. */
-.metroBtn .metro-num{display:none;color:var(--text)}
-/* Active-ring (Aug 31 2026, recolored Sep 2026 — see the icon comment above;
-   turned purple Sep 4 2026 per user request: metronome stays cream/white
-   when OFF, purple ring+digits only when ON). */
-.metroBtn.is-active{border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.metroBtn .metro-num{display:none;color:var(--brass)}
+/* Active-ring (Aug 31 2026): a full white ring around the button, not just
+   a border-color tweak — same treatment on manuscriptBtn below so the two
+   read as one matched on/off language. */
+.metroBtn.is-active{border-color:var(--tile-border);box-shadow:0 0 0 2px var(--tile-border)}
 .metroBtn.is-active .metro-icon{display:none}
 .metroBtn.is-active .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
@@ -172,21 +158,15 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    beat counter at top-right. Turns the notation overlay (now anchored to
    the bottom of the focus square — see .notation-strip) on and off. Icon
    (Aug 31 2026 — reference-sheet option "M8"): two beamed eighth notes,
-   outline style. Recolored Sep 2026 alongside .metroBtn above to fix the
-   var(--tile-border)-was-actually-blue issue (var(--text) throughout);
-   recolored AGAIN Sep 2026, real report — purple border+icon like the mute
-   button, in both resting and is-active looks (unlike the metronome, which
-   deliberately keeps a cream/purple off/on distinction — this one was asked
-   to just match mute, no on/off difference). */
-.manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+   outline style, same near-white tone and same active-ring treatment as
+   the beat counter so the two read as a matched pair. */
+.manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--tile-border);border-color:var(--border);background:#0c0906}
 .manuscriptBtn .manuscript-icon{width:72%;height:72%;fill:none;stroke:none}
-.manuscriptBtn .manuscript-icon .staff-line{stroke:var(--text);stroke-width:.8;opacity:.6}
-.manuscriptBtn .manuscript-icon .note-head{fill:var(--text);stroke:none}
-.manuscriptBtn .manuscript-icon .note-beam{fill:var(--text);stroke:none}
-.manuscriptBtn .manuscript-icon .note-stems{fill:none;stroke:var(--text);stroke-width:1.6;stroke-linecap:round}
-/* Selected/toggled-on state: purple circumference only — icon stays white,
-   matching the app-wide "purple rim on selection" rule (Sep 4 2026). */
-.manuscriptBtn.is-active{border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.manuscriptBtn .manuscript-icon .staff-line{stroke:var(--tile-border);stroke-width:.8;opacity:.6}
+.manuscriptBtn .manuscript-icon .note-head{fill:var(--tile-border);stroke:none}
+.manuscriptBtn .manuscript-icon .note-beam{fill:var(--tile-border);stroke:none}
+.manuscriptBtn .manuscript-icon .note-stems{fill:none;stroke:var(--tile-border);stroke-width:1.6;stroke-linecap:round}
+.manuscriptBtn.is-active{border-color:var(--tile-border);box-shadow:0 0 0 2px var(--tile-border)}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
@@ -201,12 +181,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .transport button.primary{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
 .transport button:disabled{opacity:.5}
 .settingsBtn{margin-left:auto}
-/* #reset made circular (Sep 2026, real report — same request as the tempo
-   row above: match the metro/manuscript overlays, 55px, var(--text)-on-dark,
-   no accent color). Stays exactly where it is in the .transport flex row —
-   only its own shape/size/color changed. #settingsBtn deliberately untouched
-   (not part of the request), so it keeps its plain pill look. */
-#reset{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 /* Screen-reader-only text (Aug 30 2026): kept in the DOM so the accessible
    name still updates with state (Play/Pause/Loading…), just not painted —
    every icon-only control button now relies on either this class (Play,
@@ -222,37 +196,18 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    same size (Aug 31 2026) — bump it up slightly and add a matching stroke
    along the path edges to bulk up its line weight so the two feel matched. */
 .reset-icon{width:22px;height:22px;stroke:currentColor;stroke-width:.7;stroke-linejoin:round;stroke-linecap:round}
-/* Bumped to suit the bigger 55px circles (Sep 2026 — see .tempo-buttons
-   button and #reset below); scoped by ID so the plain #settingsBtn (still
-   its old pill shape/size) and the landscape buttons (each already have
-   their own scoped icon-size override) are untouched. */
-#play .play-icon{width:26px;height:26px}
-#reset .reset-icon{width:34px;height:34px}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
-.tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0;justify-items:center}
-/* Circular, matched to the metro/manuscript overlays (Sep 2026, real report —
-   "make the play/50/75/100 buttons circular... same size as the notation and
-   metronome overlays and all the same white colour, no blue"; .metroBtn/
-   .manuscriptBtn are both 55px, var(--text)-on-dark). Buttons stay in exactly
-   the same grid slots as before — still a 4-column row below the focus
-   square, only each button's own shape/size/color changed, not its position
-   — justify-items:center (above) keeps each now-smaller circle centered in
-   its (still wider) 1fr column instead of stretching to fill it. */
-.tempo-buttons button{font:inherit;border:2px solid var(--text);border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;color:var(--text);font-size:13.2px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
-/* Active tempo (Sep 2026, real report: bring purple back, but only as a
-   border+text ring rather than the old solid fill — background stays the
-   same dark #0c0906 every circular button now shares). */
-.tempo-buttons button.active{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0}
+/* min-height 38.5px (Aug 30 2026) — was an implicit ~35px from padding alone,
+   this is that same rendered height +10% per feedback. display:flex centers
+   the (possibly taller-than-text) content both ways; the 6px gap only does
+   anything for #play, which has an icon next to its label — a no-op for the
+   plain-text 50/75/100 buttons. */
+.tempo-buttons button{font:inherit;border:2px solid var(--window-border);border-radius:6px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:13.2px;font-weight:700;min-height:38.5px;display:flex;align-items:center;justify-content:center;gap:6px}
+.tempo-buttons button.active{background:var(--accent-purple);color:#fff;border-color:var(--window-border)}
 .tempo-buttons button:disabled{opacity:.4}
-/* Play (Sep 2026, real report: purple border+icon, still no fill — the dark
-   background and circular shape stay exactly like every other button here,
-   only the "circumference and writing" go purple, per the ask). Its .active
-   rule stays dead code either way (see the comment on updateTempoUI()
-   further down — #play has no data-p attribute, so it can never match). */
-/* Play stays fully purple always (not gated by .active/selection like every
-   other accent button) — rim, fill AND background purple; icon stays white
-   for contrast against the solid purple fill (Sep 4 2026 request). */
-#play{background:var(--accent-purple);border-color:var(--accent-purple);color:var(--text)}
+.tempo-buttons button#play{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750}
+.tempo-buttons button#play.active{background:var(--accent-purple-dim);color:#fff}
 /* Play/pause icon (Aug 30 2026, now the button's ONLY content — no visible
    label): a triangle that swaps to two vertical bars while playing. Both
    shapes live in one SVG, toggled via the button's own is-playing class (set
@@ -410,7 +365,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    muteBtnLandscape's rendered rect. Defined here (not only inside the
    orientation media query) so it's always available to inherit, regardless
    of which rule ends up applying it. */
-.landscape-notation{display:none;--cluster-top:max(20px,calc(env(safe-area-inset-top) + 14px));--mute-top:max(85px,calc(env(safe-area-inset-top) + 79px));--cluster-size:55px}
+.landscape-notation{display:none;--mute-top:max(85px,calc(env(safe-area-inset-top) + 79px));--cluster-size:55px}
 @media (orientation:landscape) and (pointer:coarse){
   .app{display:none}
   .landscape-notation:not([hidden]){display:flex}
@@ -449,7 +404,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      flex item with a real, flex-derived height) has available, and
      height:100% on the canvas then resolves against that real number. */
   .landscape-video-area{flex:1 1 auto;min-height:0;position:relative;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);place-items:center}
-  .landscape-focus-canvas{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block;z-index:1}
+  .landscape-focus-canvas{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block}
   /* Mute dim (Sep 2026) — same idea as .focus-dim over the portrait focus
      square (see that rule and focusWrap.classList.toggle('is-muted',...)),
      just without a shared parent class to hang off of: this view's mute
@@ -458,15 +413,8 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      is-visible class (set by syncLandscapeMuteBtn()) is simpler than trying
      to reuse .focus-wrap/.focus-dim's tile-indexed structure here. Same
      grid-area as the canvas above so it always covers exactly the square,
-     whatever size that currently is. Explicit z-index (Sep 2026, real
-     report: mute correctly stopped the audio but the square never visibly
-     dimmed) — canvas above is redrawn every frame by mirrorLandscapeFocus()'s
-     own requestAnimationFrame loop, and a continuously-updated canvas is a
-     prime candidate for being promoted to its own GPU compositing layer,
-     which on WebKit can end up painting above a plain (z-index:auto) sibling
-     regardless of DOM order. z-index:1 here (2 above) settles the stacking
-     explicitly instead of leaving it to auto-layering. */
-  .landscape-focus-dim{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;background:rgba(0,0,0,.55);pointer-events:none;display:none;z-index:2}
+     whatever size that currently is. */
+  .landscape-focus-dim{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;background:rgba(0,0,0,.55);pointer-events:none;display:none}
   .landscape-focus-dim.is-visible{display:block}
   .landscape-notation-band{flex:0 0 auto;width:100%;background:#fff;line-height:0}
   .landscape-notation-canvas{width:100%;height:auto;display:block}
@@ -475,20 +423,21 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      sharp edge rather than fading/blending into black. */
   .landscape-bottom-margin{flex:0 0 10vh;background:#000}
 }
-/* Rule (Aug 31 2026, moved top-left Sep 2026, moved again Sep 2026): the
-   landscape notation view always carries the instrument name. Now pinned to
-   the bottom-left corner of the focus SQUARE itself (direct feedback — match
-   portrait's own .focus-label placement over #mosaicFocus, see that rule),
-   via .landscape-focus-label-anchor sharing the exact same grid-area:1/1 +
-   height:100%/aspect-ratio:1/1 sizing trick as .landscape-focus-dim above —
-   so the anchor's own box always exactly matches the square regardless of
-   the square's current size (which varies with the focused tile's notation
-   band height), and the label just sits absolute bottom-left inside that
-   box. Font bumped 10% over .focus-label's own 15.4px, per direct feedback.
-   Same dark-badge look as .focus-label/.tile-name elsewhere in the app for
-   visual consistency. */
-.landscape-focus-label-anchor{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;position:relative;pointer-events:none;z-index:3}
-.landscape-notation-label{position:absolute;left:10px;bottom:6px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:16.94px;color:var(--text);pointer-events:none}
+/* Rule (Aug 31 2026, moved top-left Sep 2026): the landscape notation view
+   always carries the instrument name. Originally bottom-left, back when the
+   notation image was only vertically centered inside a full-screen white
+   sheet, leaving that corner clear; now that the notation is a white band
+   anchored to the bottom edge (see .landscape-notation-band above), a
+   bottom-left badge would sit on top of the notation itself, so this now
+   pins to the top-left corner instead — over the video/black area, clear of
+   both the band and the metronome button (top-right). Same dark-badge look
+   as .focus-label/.tile-name elsewhere in the app for visual consistency.
+   position:fixed on the parent already establishes the containing block
+   this positions against. max() keeps a real 24px/20px of breathing room on
+   any device, but grows past that using env(safe-area-inset-*) (viewport-
+   fit=cover is set on the viewport meta tag above) so it also clears the
+   notch/home-indicator safe area on a phone that has one. */
+.landscape-notation-label{position:absolute;left:max(24px,calc(env(safe-area-inset-left) + 16px));top:max(20px,calc(env(safe-area-inset-top) + 16px));background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);pointer-events:none}
 /* Landscape metronome (Aug 31 2026) — see the markup comment on
    #metroBtnLandscape. Only top/right are overridden (same safe-area-aware
    treatment as the label above, mirrored to the opposite corner); every
@@ -496,7 +445,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    icon-to-digit swap) already applies unchanged via its shared classes.
    The compound selector beats the plain .dawBtn/.metroBtn rules on
    specificity regardless of source order. */
-.metroBtn.metroBtn-landscape{top:var(--cluster-top);right:max(20px,calc(env(safe-area-inset-right) + 14px))}
+.metroBtn.metroBtn-landscape{top:max(20px,calc(env(safe-area-inset-top) + 14px));right:max(20px,calc(env(safe-area-inset-right) + 14px))}
 /* Mute (Sep 2026, offset corrected) — see the markup comment on
    #muteBtnLandscape. Its own circle, stacked directly under the metronome:
    same right edge, top pushed down by one button's height plus a 10px gap
@@ -520,7 +469,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    not .dawBtn's 26px default — see the mute comment above for why) plus a
    10px gap, folded the same flat way as the mute button above
    (20+65=85, 14+65=79). */
-.dawBtn.resetBtn-landscape{top:var(--cluster-top);right:max(85px,calc(env(safe-area-inset-right) + 79px))}
+.dawBtn.resetBtn-landscape{top:max(20px,calc(env(safe-area-inset-top) + 14px));right:max(85px,calc(env(safe-area-inset-right) + 79px))}
 /* v1.6 (real report): mute/reset read as noticeably smaller than the
    metronome sitting right next to/above them — both were still just plain
    .dawBtn size (26px, see that rule) while .metroBtn is 55px. Sized to match
@@ -546,10 +495,10 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    a pixel value — a whole saga of real-device bugs because that measurement
    can be transiently wrong right after an iOS rotation (a documented WebKit
    quirk, not a bug specific to this app). Replaced with a pure CSS formula:
-   align the arrow's center with the TOP ROW of the metro/reset cluster (Sep
-   2026, direct feedback — was aligned to the mute button's row below; now
-   reads --cluster-top, the same value the metro/reset row and the Play/
-   tempo grid's own row all read from, so none of the four can ever
+   align the arrow's center with the mute button's own center (same ask as
+   before — "bring the arrows down to the level of the mute button" — see
+   --mute-top on .landscape-notation, which both this and the real mute
+   button now read from, so they're defined by the same number and can't
    disagree), clamped so a very short video area (a tall two-line notation
    band) never pushes it past its own top/bottom edge — calc(100% - 20px)
    resolves against .landscape-video-area's own rendered height (this
@@ -557,12 +506,10 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    doing by hand. No measurement, no timing, no race: the browser keeps this
    correct continuously, including mid-rotation, because it's declared, not
    computed-then-frozen. [hidden] (the syncLandscapeArrows() toggle, not a
-   CSS class) removes whichever end has nowhere further to go. Diameter
-   matches --cluster-size (Sep 2026, direct feedback — read as mismatched
-   next to the now-circular Play/tempo grid and metro/mute/reset buttons). */
-.landscapeArrow{position:absolute;top:max(20px,min(calc(var(--cluster-top) + (var(--cluster-size) / 2)),calc(100% - 20px)));transform:translateY(-50%);width:var(--cluster-size);height:var(--cluster-size);border-radius:50%;border:2px solid var(--text);background:rgba(12,9,6,.72);color:var(--text);display:grid;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;z-index:5}
+   CSS class) removes whichever end has nowhere further to go. */
+.landscapeArrow{position:absolute;top:max(20px,min(calc(var(--mute-top) + (var(--cluster-size) / 2)),calc(100% - 20px)));transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:2px solid var(--text);background:rgba(12,9,6,.72);color:var(--text);display:grid;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;z-index:5}
 .landscapeArrow[hidden]{display:none}
-.landscapeArrow svg{width:28px;height:28px}
+.landscapeArrow svg{width:20px;height:20px}
 .landscapeArrowLeft{left:12px}
 .landscapeArrowRight{right:12px}
 /* Landscape transport (Sep 2026, enlarged/repositioned) — see the markup
@@ -577,23 +524,17 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    here — see that function's comment for why a fixed CSS value can't work
    for any of them (it now anchors below the arrows' own frozen position,
    plus has to stay clear of a notched/Dynamic-Island phone's safe area). */
-.landscape-transport{position:absolute;top:var(--cluster-top);display:grid;grid-template-columns:repeat(2,var(--cluster-size));grid-template-rows:repeat(2,var(--cluster-size));gap:10px;z-index:5}
-.landscape-transport button{font:inherit;border:2px solid var(--text);border-radius:50%;padding:0;background:#0c0906;color:var(--text);font-size:13px;font-weight:700;width:var(--cluster-size);height:var(--cluster-size);display:flex;align-items:center;justify-content:center;gap:4px}
-/* Active tempo (Sep 2026, real report: purple is back — see the matching
-   .tempo-buttons button.active comment in portrait — still a ring, not a
-   fill, so the dark background every button here shares stays put). */
-.landscape-transport button.active{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
+.landscape-transport{position:absolute;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;z-index:5}
+.landscape-transport button{font:inherit;border:2px solid var(--window-border);border-radius:8px;padding:8px 3px;background:var(--panel2);color:var(--text);font-size:13px;font-weight:700;min-height:42px;display:flex;align-items:center;justify-content:center;gap:4px}
+.landscape-transport button.active{background:var(--accent-purple);color:#fff;border-color:var(--window-border)}
 .landscape-transport button:disabled{opacity:.4}
-.landscape-transport .play-icon{width:22px;height:22px}
+.landscape-transport .play-icon{width:19px;height:19px}
 /* Same loading-fill/is-loading/reset-instant treatment as the real #play
-   button (see #play and its neighbors above) — duplicated here rather than
-   shared because those rules are scoped to #play's id specifically (only one
-   element may ever have that id), so they never reach this separate button
-   no matter what classes it carries. Resting border/text purple (Sep 2026,
-   real report — matches #play in portrait); background stays the same dark
-   #0c0906 every circular button here shares. The loading-progress fill
-   (::before, below) is the same purple regardless, so nothing changes there. */
-.landscape-transport .transportPlayBtn{background:var(--accent-purple);color:var(--text);border-color:var(--accent-purple);font-weight:750;position:relative;overflow:hidden;--play-progress:0}
+   button (see .tempo-buttons button#play and its neighbors above) —
+   duplicated here rather than shared because those rules are scoped to
+   #play's id specifically (only one element may ever have that id), so they
+   never reach this separate button no matter what classes it carries. */
+.landscape-transport .transportPlayBtn{background:var(--accent-purple);color:#fff;border-color:var(--window-border);font-weight:750;position:relative;overflow:hidden;--play-progress:0}
 .landscape-transport .transportPlayBtn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
 .landscape-transport .transportPlayBtn.is-loading{background:var(--accent-purple-dim)}
 .landscape-transport .transportPlayBtn.reset-instant::before{transition:none!important}
@@ -650,12 +591,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
          element/class rather than reusing that one directly. Toggled by
          syncLandscapeMuteBtn() alongside the mute button's own look. -->
     <div id="landscapeFocusDim" class="landscape-focus-dim"></div>
-    <!-- Instrument name (moved bottom-left-over-the-square Sep 2026 — see the
-         CSS comment on .landscape-notation-label). The anchor div shares the
-         exact same grid-area:1/1 + height:100%/aspect-ratio:1/1 sizing as
-         #landscapeFocusDim above, so its box always matches the square
-         exactly; the label itself just sits absolute bottom-left inside it. -->
-    <div class="landscape-focus-label-anchor"><div id="landscapeNotationLabel" class="landscape-notation-label"></div></div>
     <!-- Square-to-square navigation (Sep 2026): swiping anywhere in this view
          (see the touch handler in the script) already changes focus, but a
          visible, tappable way to do the same thing matters on a device
@@ -671,29 +606,22 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     <button id="landscapeArrowRight" type="button" class="landscapeArrow landscapeArrowRight" aria-label="Next square">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
     </button>
-    <!-- Transport (Sep 2026, reworked into a 2x2 circular grid — direct
-         feedback: should read as a matched pair with the metro/mute/reset
-         cluster on the other side, not a wide pill on one side and circles
-         on the other). Play/Pause + the same 50/75/100% tempo presets as the
-         portrait transport row, laid out Play/50% over 75%/100% (DOM order
-         play,50,75,100 maps straight onto the 2-col/2-row grid — see
-         buildTempoButtons() below). Every button is var(--cluster-size)
-         (55px) round, same diameter as the metro/mute/reset cluster and the
-         nav arrows. Vertical position is pure CSS now (top:var(--cluster-
-         top), the same value the arrows and the metro/reset row read from —
-         see .landscape-transport). Horizontal position still has to be JS
-         (positionLandscapeTransport() in the script), since it centers in
-         the black letterboxed space to the LEFT of the focus square and that
-         space's width depends on the square's rendered size, which itself
-         depends on the notation band's height for whichever tile is focused
-         — not expressible as a fixed CSS value. Mirrors
-         positionLandscapeMetroCluster()'s own right-side centering exactly,
-         just measured from the opposite edge, so the two clusters land the
-         same visual distance from the square. #playBtnLandscape is a
-         separate button (not a repositioned original, same reasoning as
-         #metroBtnLandscape below) mirrored via syncLandscapePlayBtn() in the
-         script; the tempo preset buttons are built alongside the real ones
-         in buildTempoButtons() and call the exact same changeTempo(). -->
+    <!-- Transport (Sep 2026, repositioned/enlarged): Play/Pause + the same
+         50/75/100% tempo presets as the portrait transport row, so tempo can
+         be changed without rotating back. Anchored just below the left
+         arrow's own frozen position (not the video area's dynamic bottom
+         edge — an earlier version was) and horizontally centered in the
+         black letterboxed space beside the focus square — both set by
+         positionLandscapeTransport() in the script (not pure CSS), since
+         that space's actual width depends on the square's rendered size,
+         which itself depends on the notation band's height for whichever
+         tile is focused, and the row also has to stay clear of a notched/
+         Dynamic-Island phone's safe area — none of that is expressible as a
+         fixed CSS value. #playBtnLandscape is a separate button (not a
+         repositioned original, same reasoning as #metroBtnLandscape below)
+         mirrored via syncLandscapePlayBtn() in the script; the tempo preset
+         buttons are built alongside the real ones in buildTempoButtons() and
+         call the exact same changeTempo(). -->
     <div id="landscapeTransport" class="landscape-transport" aria-label="Playback controls">
       <button id="playBtnLandscape" type="button" class="transportPlayBtn" aria-label="Play">
         <svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path class="icon-play" d="M4 2.3v11.4c0 .8.9 1.3 1.6.9l9-5.7c.6-.4.6-1.3 0-1.7l-9-5.7c-.7-.4-1.6.1-1.6.8z"></path><g class="icon-pause"><rect x="3.6" y="2.5" width="3.1" height="11" rx="1"></rect><rect x="9.3" y="2.5" width="3.1" height="11" rx="1"></rect></g></svg>
@@ -714,6 +642,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
        a fixed-height black spacer below the band, not padding on the band
        itself, so its corners never sit against the curved screen edge. -->
   <div class="landscape-bottom-margin"></div>
+  <div id="landscapeNotationLabel" class="landscape-notation-label"></div>
   <!-- Landscape reset (Sep 2026): its own circle to the left of the
        metronome, same top-right row. #reset has no shared class of its own
        (see the CSS comment on .dawBtn.resetBtn-landscape), so this only
@@ -970,7 +899,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.8';
+const BUILD_VERSION='2.1';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1047,10 +976,10 @@ const MOSAICS={
     progressiveVideo:true,
     notation:['Mosaic/Congo_Yambumba/congo_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
-    // except Cata, Erikundi and Quinto (indices 1-3 below — real per-tile
-    // notation strips for Congo, Sep 2026 — see notationStripByIndex and renderNotationStrip()).
+    // except Cata and Erikundi (indices 1-2 below — real per-tile notation
+    // strips for Congo, Sep 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png'},
+    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png'},
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -1061,7 +990,7 @@ const MOSAICS={
   flipswing:{
     id:'flipswing', label:'Flip Swing', poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg',
     metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
-    cols:4, rows:2, tileCount:8, loopEnd:15.567, // 8th tile (Agogo) added Sep 2026 — was 7 real + 1 blank cell
+    cols:4, rows:2, tileCount:7, loopEnd:15.567,
     // Beat counter: 12 bars x 3 beats/bar = 36 beats per loop, counting
     // 1-2-3 repeating, with beat 1 landing exactly on the loop start (no
     // pickup/count-in). This is all that's needed to derive the live BPM —
@@ -1076,15 +1005,14 @@ const MOSAICS={
     progressiveVideo:true,
     notation:['Mosaic/Flip_Swing/flipswing_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
-    // except Kit (index 6 — first real per-tile notation strip, Aug 31
-    // 2026) and Agogo (index 7 below — added Sep 4 2026 alongside the 8th
-    // tile itself — see notationStripByIndex and renderNotationStrip()).
+    // except Kit (index 6 below — first real per-tile notation strip, Aug
+    // 31 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',3:'Mosaic/Flip_Swing/04_repenique_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png',7:'Mosaic/Flip_Swing/08_agogo_flipswing.png'},
-    names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit','Agogo'],
+    notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',3:'Mosaic/Flip_Swing/04_repenique_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png'},
+    names:['Bass','Coro 1','Coro 2','Repenique','Guitar 1','Guitar 2','Kit'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
-    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_agogo_flipswing.aac']
+    stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac']
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
@@ -1417,33 +1345,10 @@ syncLandscapePlayBtn(); // initial state, before anything has changed to trigger
 // replaces every scattered manual positionLandscapeTransport()/
 // positionLandscapeMetroCluster() call that used to be sprinkled across
 // updateFocusUI(), the notation-image loader, and the resize listener.
-let landscapeClusterNeedsRecompute=true; // metro/mute/reset AND the Play/tempo cluster (Sep 2026: made to match — real report, see below) freeze until a genuine rotation ("also not moving"); starts true so the very first layout pass positions them
+let landscapeClusterNeedsRecompute=true; // metro/mute/reset freeze until a genuine rotation ("also not moving" — real report); starts true so the very first layout pass positions them
 new ResizeObserver(()=>{
-  // Zero-size guard (Sep 2026, real report): the right arrow could be found
-  // overlapping the metronome on the very first rotation, self-correcting
-  // the moment the phone was rotated away and back. Root cause: this
-  // observer's very first callback can fire while landscapeFocusCanvas has
-  // no rendered box yet (display:none ancestor, before the phone is ever
-  // rotated into landscape) — a documented WebKit quirk with an .observe()
-  // call's initial callback. That phantom firing was consuming
-  // landscapeClusterNeedsRecompute (still true from page load) with a
-  // meaningless zero-size reading, so the FIRST real rotation found the flag
-  // already false and skipped positioning entirely, leaving both clusters at
-  // their CSS fallback position (which is close enough to the screen edge to
-  // overlap the arrows). Rotating away and back worked purely because the
-  // matchMedia listener below re-arms the flag on every genuine landscape
-  // entry. Ignoring any firing where the canvas has no real size yet closes
-  // that race without touching the matchMedia/recompute logic itself.
-  if(landscapeFocusCanvas.getBoundingClientRect().width===0)return;
-  // Both clusters now recompute ONLY on a genuine rotation, not on every tile
-  // switch (Sep 2026, real report: the metro/mute/reset cluster stays put
-  // across tile switches, as designed, but the Play/tempo cluster was still
-  // drifting left/right with the square's size — inconsistent with the other
-  // side). positionLandscapeTransport() no longer needs to run on its own
-  // schedule now that the Play/tempo cluster is a fixed-footprint 2x2 grid
-  // (see its own comment) rather than a variable-width bar.
+  positionLandscapeTransport(); // deliberately recomputed on every firing — the square's size legitimately varies per tile (different notation band height)
   if(landscapeClusterNeedsRecompute){
-    positionLandscapeTransport();
     positionLandscapeMetroCluster();
     landscapeClusterNeedsRecompute=false;
   }
@@ -2290,44 +2195,45 @@ function getSafeAreaInsets(){
   probe.remove();
   return insets;
 }
-// The Play/tempo cluster is now a fixed 2x2 grid of circular buttons (Sep
-// 2026 — see the markup comment on #landscapeTransport), so its footprint
-// never changes and its vertical position is pure CSS (top:var(--cluster-
-// top) — the same value the arrows and the metro/reset row read from). The
-// one thing that still can't be pure CSS is its HORIZONTAL position: it
-// centers in the black letterboxed space to the LEFT of the focus square,
-// and that space's width is (square's own left edge) — a number CSS can't
-// see, since the square's size depends on the current tile's notation band
-// height (aspect-ratio:1/1 off a variable height). This mirrors
-// positionLandscapeMetroCluster() below exactly, just measured from the
-// opposite edge, so the two clusters land the same visual distance from the
-// square on either side. getBoundingClientRect() forces a synchronous
-// layout, so this always sees the CURRENT geometry. Called only from the
-// ResizeObserver set up near the top of this script, and ONLY when
-// landscapeClusterNeedsRecompute is true (Sep 2026, real report: used to run
-// on every firing — deliberately, to track the square's per-tile size — but
-// that made this cluster visibly drift left/right on a plain tile switch
-// while the metro/mute/reset cluster on the other side stayed put, reading
-// as inconsistent. Now both clusters freeze together, exactly like the other
-// side, and only ever move on a genuine rotation.
+// The transport row lives in the black letterboxed space to the LEFT of the
+// focus square (see the markup comment on #landscapeTransport) — a space
+// whose width is (viewport width − square width) / 2, and the square's width
+// itself is set by CSS from the square's HEIGHT (aspect-ratio:1/1,
+// height:100% of .landscape-video-area), which varies with how tall the
+// current tile's notation band is. None of that is expressible as a plain
+// CSS value, so this reads the square's actual rendered position and sizes/
+// centers the transport row against it directly. getBoundingClientRect()
+// forces a synchronous layout, so this always sees the CURRENT geometry.
+// Called only from the ResizeObserver set up near the top of this script
+// (Sep 2026 rewrite) — one call site instead of several scattered ones.
+// Anchored below the arrows' own position, read directly off their rendered
+// rect: the arrows are pure CSS now (see .landscapeArrow), so unlike the old
+// landscapeArrowTop cache this is always correct the instant it's read, no
+// "has a baseline been established yet" question to handle. The left edge
+// and top are both clamped against getSafeAreaInsets() so an iPhone rotated
+// with its Dynamic Island/sensor-housing edge on this side never has the row
+// (or the square) sitting under it.
 function positionLandscapeTransport(){
   const squareLeft=landscapeFocusCanvas.getBoundingClientRect().left;
+  const videoAreaRect=document.querySelector('.landscape-video-area').getBoundingClientRect();
+  // Either arrow works (both share the exact same .landscapeArrow top
+  // formula) — but at the very first/last tile one of them is [hidden]
+  // (see syncLandscapeArrows()), and a hidden element's rect reads all
+  // zeros, so read whichever one is actually visible right now.
+  const anchorArrow=landscapeArrowLeft.hidden?landscapeArrowRight:landscapeArrowLeft;
+  const arrowRect=anchorArrow.getBoundingClientRect();
+  const anchorTop=arrowRect.top+arrowRect.height/2;
   const insets=getSafeAreaInsets();
-  const CLUSTER_W=55,GAP=10,ARROW_INSET=12;
-  const clusterTotal=CLUSTER_W*2+GAP; // 2x2 grid — same total width as the metro+reset row on the other side
-  const blackSpaceW=squareLeft;
-  // minLeft (Sep 2026, real report — persistent overlap with the left arrow,
-  // not just a first-open race): the old floor (20, or the safe-area inset)
-  // was never actually far enough from the edge to clear the arrow's OWN
-  // footprint (left:12px, --cluster-size wide — see .landscapeArrow), so on
-  // any device/tile combination narrow enough to hit the floor, the cluster
-  // and the arrow could genuinely overlap — not a timing bug, a real gap in
-  // the math. ARROW_INSET+CLUSTER_W+GAP guarantees the cluster's left edge
-  // clears the arrow's right edge by a full GAP, no matter how little black
-  // space is available. Mirrors positionLandscapeMetroCluster's minRight.
-  const minLeft=Math.max(20,14+insets.left,ARROW_INSET+CLUSTER_W+GAP);
-  const centeredLeft=Math.max(minLeft,(blackSpaceW-clusterTotal)/2);
-  landscapeTransport.style.left=centeredLeft+'px';
+  const minLeft=8+insets.left;
+  const maxW=Math.max(80,squareLeft-16-insets.left); // 80: below this it's not worth trying to show all four buttons legibly
+  const w=Math.min(260,maxW); // enlarged (Sep 2026, was 190) — more horizontal room per button, per feedback the first landscape version read as too small
+  landscapeTransport.style.width=w+'px';
+  landscapeTransport.style.left=Math.max(minLeft,(squareLeft-w)/2)+'px';
+  const ARROW_RADIUS=20,GAP=14;
+  const naturalTop=anchorTop+ARROW_RADIUS+GAP;
+  const rowHeight=landscapeTransport.getBoundingClientRect().height||58; // measured AFTER the width above is applied, so this reflects the row's actual current height, not a stale one from a previous (wider/narrower) layout
+  const maxTop=videoAreaRect.bottom-rowHeight-8; // never let the row spill past the video area into the (white) notation band below it
+  landscapeTransport.style.top=Math.max(videoAreaRect.top+insets.top+8,Math.min(naturalTop,maxTop))+'px';
 }
 // Landscape metro/mute/reset cluster centering (v1.6, real report): sitting
 // tight in the exact screen corner read as cramped — wanted centered into
@@ -2345,14 +2251,9 @@ function positionLandscapeTransport(){
 function positionLandscapeMetroCluster(){
   const squareRight=landscapeFocusCanvas.getBoundingClientRect().right;
   const insets=getSafeAreaInsets();
-  const CLUSTER_W=55,GAP=10,ARROW_INSET=12;
+  const CLUSTER_W=55,GAP=10;
   const blackSpaceW=window.innerWidth-squareRight;
-  // minRight (Sep 2026, real report — mirrors positionLandscapeTransport's
-  // own minLeft fix above, same root cause): the old floor could sit closer
-  // to the edge than the right arrow's own footprint (right:12px,
-  // --cluster-size wide), letting the two genuinely overlap on a narrow
-  // enough black space rather than this being purely a timing issue.
-  const minRight=Math.max(20,14+insets.right,ARROW_INSET+CLUSTER_W+GAP);
+  const minRight=Math.max(20,14+insets.right); // same floor as the CSS max(20px, safe-area+14px) it replaces
   const centeredRight=Math.max(minRight,(blackSpaceW-CLUSTER_W)/2);
   metroBtnLandscape.style.right=centeredRight+'px';
   muteBtnLandscape.style.right=centeredRight+'px';
@@ -3281,14 +3182,6 @@ function buildTempoButtons(){
 // the one real function).
 function buildLandscapeTransport(){
   TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));landscapeTransport.appendChild(b)});
-  // Sep 4 2026 fix: buildTempoButtons() runs before this (see the init call
-  // chain) and already calls updateTempoUI() once — but these buttons don't
-  // exist yet at that point, so its landscapeTransport pass found nothing to
-  // mark. Without this, the landscape 100% preset opened with no ring at all
-  // until the next real tempo tap (any tempo change) called updateTempoUI()
-  // again and finally saw these buttons. Same call as buildTempoButtons()
-  // makes for its own row, just deferred to after these buttons actually exist.
-  updateTempoUI();
 }
 // Covers both rows in one pass — a button with no data-p (#play/
 // #playBtnLandscape) always fails +undefined===tempoPercent, so this never
@@ -3793,17 +3686,6 @@ async function reset(){
   muted=Array(TILE_COUNT).fill(false);
   soloed=Array(TILE_COUNT).fill(false);
   refreshSoloMuteState();
-  // Reset (Sep 4 2026) — beat counter goes back to its own default (off) too,
-  // same as a fresh piece switch does (see loadPiece()'s metroActive=false
-  // block above): "reset" should mean tempo 100% AND every other toggle back
-  // to its starting state, not tempo alone. stopStems() below already cancels
-  // any clicks actually scheduled; this just fixes the button's own visuals.
-  if(metroActive){
-    metroActive=false;
-    metroBtn.classList.toggle('is-active',metroActive);
-    metroBtn.setAttribute('aria-label','Beat counter: off');
-    syncLandscapeMetroBtn();
-  }
   cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
   try{
     if(!prepared){
