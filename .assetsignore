@@ -9,3 +9,7 @@ capacitor-app
 .DS_Store
 backups
 Claude outputs
+
+# Raw video masters + build outputs (never served directly — see .gitignore,
+# same exclusion) added Sep 4 2026 after a deploy failed on a 134MiB .mov here.
+Mosaic/*/raw

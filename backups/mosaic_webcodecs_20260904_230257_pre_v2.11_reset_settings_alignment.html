@@ -205,15 +205,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    row above: match the metro/manuscript overlays, 55px, var(--text)-on-dark,
    no accent color). Stays exactly where it is in the .transport flex row —
    only its own shape/size/color changed. */
-/* Nudged 4.375px in from the panel's left edge (Sep 4 2026, real report:
-   "bring reset and settings in from the edge a little so they're
-   vertically in line with play and 100%"). Measured via a headless render:
-   Play/100% sit centered in their grid column, which insets them ~16.4px
-   from the tempo-row's shared left/right edge; Reset/Settings, as flex
-   children flush against the .panel's own border+padding, only got a 12px
-   inset — this margin makes up exactly that ~4.375px difference so all
-   four buttons line up vertically. */
-#reset{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text);margin-left:4.375px}
+#reset{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 /* #settingsBtn (Sep 4 2026, real report — "make the settings button in
    portrait a circle... to match all the other circle buttons, lose the
    square shape"): same treatment as #reset right above — the plain
@@ -221,7 +213,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    overridden here with the shared 55px/var(--text)-on-dark circle every
    other transport/overlay button already uses. Position in the flex row
    (margin-left:auto, see .settingsBtn above) is untouched. */
-#settingsBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text);margin-right:4.375px}
+#settingsBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 #settingsBtn .settings-icon{width:28px;height:28px}
 /* Screen-reader-only text (Aug 30 2026): kept in the DOM so the accessible
    name still updates with state (Play/Pause/Loading…), just not painted —
@@ -987,7 +979,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.11';
+const BUILD_VERSION='2.10';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
