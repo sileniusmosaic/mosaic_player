@@ -1006,7 +1006,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.20';
+const BUILD_VERSION='2.19';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1083,14 +1083,13 @@ const MOSAICS={
     progressiveVideo:true,
     notation:['Mosaic/Congo_Yambumba/congo_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
-    // except Clave, Cata, Erikundi, Quinto, Conga and Tumba (indices 0-5
-    // below — real per-tile notation strips for Congo, Sep 2026 — see
+    // except Cata, Erikundi, Quinto, Conga and Tumba (indices 1-5 below —
+    // real per-tile notation strips for Congo, Sep 2026 — see
     // notationStripByIndex and renderNotationStrip(); Conga added Sep 5 2026,
-    // Tumba and Clave added Sep 7 2026, each replacing the generic
-    // placeholder for that tile). Only Coro 1/Coro 2 (indices 6-7) still fall
-    // back to the shared placeholder.
+    // Tumba added Sep 7 2026, each replacing the generic placeholder for that
+    // tile).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{0:'Mosaic/Congo_Yambumba/01_clave_congoyambumba.png',1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png',4:'Mosaic/Congo_Yambumba/05_conga_congoyambumba.png',5:'Mosaic/Congo_Yambumba/06_tumba_congoyambumba.png'},
+    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png',4:'Mosaic/Congo_Yambumba/05_conga_congoyambumba.png',5:'Mosaic/Congo_Yambumba/06_tumba_congoyambumba.png'},
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
