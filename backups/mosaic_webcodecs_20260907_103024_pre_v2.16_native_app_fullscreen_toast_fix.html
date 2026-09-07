@@ -1006,7 +1006,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.16';
+const BUILD_VERSION='2.15';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1522,37 +1522,19 @@ window.matchMedia('(orientation: landscape) and (pointer: coarse)').addEventList
 // backs OUT of fullscreen while still in landscape, don't re-trap them on
 // their very next tap; only retry once they've left landscape and rotated
 // back into it.
-//
-// Sep 7 2026 fix: this whole feature is now skipped inside the native
-// Capacitor app (isNativeApp below). Real report: rotating in the app
-// showed a "Mosaic Player is now running in full screen mode" system
-// banner with a dismiss X — that's the OS/WebView's own courtesy notice
-// for a page calling requestFullscreen(), the same one Android/Chrome
-// shows a normal mobile SITE the first few times. It's appropriate on the
-// web (there's real browser chrome being hidden), but the native app has
-// no browser chrome to hide in the first place — it's already fullscreen
-// by virtue of being a native app window — so calling the Fullscreen API
-// there does nothing useful and only produces that unwanted banner.
-// window.Capacitor.isNativePlatform() is Capacitor's own standard,
-// documented way to detect "running inside the wrapped native app" vs. a
-// normal mobile browser; it's simply absent/undefined on the web, so this
-// check is a no-op there and the feature runs exactly as before.
-const isNativeApp=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
-if(!isNativeApp){
-  let fsUserExited=false;
-  const tryAutoFullscreen=()=>{
-    try{
-      if(fsUserExited||document.fullscreenElement||!document.documentElement.requestFullscreen)return;
-      if(!window.matchMedia('(orientation: landscape) and (pointer: coarse)').matches)return;
-      document.documentElement.requestFullscreen().catch(()=>{});
-    }catch{}
-  };
-  document.addEventListener('pointerdown',tryAutoFullscreen,{passive:true});
-  document.addEventListener('fullscreenchange',()=>{
-    if(!document.fullscreenElement&&window.matchMedia('(orientation: landscape) and (pointer: coarse)').matches)fsUserExited=true;
-  });
-  window.matchMedia('(orientation: landscape) and (pointer: coarse)').addEventListener('change',(e)=>{if(!e.matches)fsUserExited=false;});
+let fsUserExited=false;
+function tryAutoFullscreen(){
+  try{
+    if(fsUserExited||document.fullscreenElement||!document.documentElement.requestFullscreen)return;
+    if(!window.matchMedia('(orientation: landscape) and (pointer: coarse)').matches)return;
+    document.documentElement.requestFullscreen().catch(()=>{});
+  }catch{}
 }
+document.addEventListener('pointerdown',tryAutoFullscreen,{passive:true});
+document.addEventListener('fullscreenchange',()=>{
+  if(!document.fullscreenElement&&window.matchMedia('(orientation: landscape) and (pointer: coarse)').matches)fsUserExited=true;
+});
+window.matchMedia('(orientation: landscape) and (pointer: coarse)').addEventListener('change',(e)=>{if(!e.matches)fsUserExited=false;});
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
 // renderNotationStrip() already applies (a piece with no notationStrip
