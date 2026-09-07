@@ -126,12 +126,6 @@
     </div>
 
     <div class="card">
-      <h2>Square order</h2>
-      <p class="sub" style="margin-bottom:14px;">Which grid position each square appears in. Doesn't touch the video or audio — the same source footage just gets drawn into a different cell, so this is free to change any time.</p>
-      <div id="tileOrderList"></div>
-    </div>
-
-    <div class="card">
       <h2>Stem volume</h2>
       <p class="sub" style="margin-bottom:14px;">Trim each stem's playback level in dB, relative to its normal (0dB) level. Applies instantly to anyone already playing this piece.</p>
       <div id="stemList"></div>
@@ -176,7 +170,6 @@
   var pieceTitle=document.getElementById('pieceTitle');
   var piecePreviewLink=document.getElementById('piecePreviewLink');
   var pieceNudgeRow=document.getElementById('pieceNudgeRow');
-  var tileOrderList=document.getElementById('tileOrderList');
   var stemList=document.getElementById('stemList');
   var saveBtn=document.getElementById('saveBtn');
   var saveStatus=document.getElementById('saveStatus');
@@ -186,28 +179,8 @@
     KNOWN_IDS.forEach(function(id){out[id]=STEM_NAMES[id].map(function(){return 0;});});
     return out;
   }
-  // Identity order (square 0 in slot 0, square 1 in slot 1, ...) — "not
-  // reordered". A saved tileOrder[id] is a permutation of these same indices.
-  function defaultTileOrder(){
-    var out={};
-    KNOWN_IDS.forEach(function(id){out[id]=STEM_NAMES[id].map(function(_,i){return i;});});
-    return out;
-  }
-  // Given a possibly-incomplete/invalid array from the server, return SOME
-  // valid permutation of 0..count-1 — keep whatever's a valid, non-duplicate
-  // index, then append whatever's missing in natural order. Mirrors
-  // worker.js's own normalizeConfig() logic so client and server always agree
-  // on what a "valid" order looks like.
-  function sanitizeTileOrder(arr,count){
-    var seen={},out=[];
-    (Array.isArray(arr)?arr:[]).forEach(function(v){
-      if(typeof v==='number'&&v>=0&&v<count&&Math.floor(v)===v&&!seen[v]){seen[v]=true;out.push(v);}
-    });
-    for(var i=0;i<count;i++)if(!seen[i])out.push(i);
-    return out;
-  }
 
-  var state={order:KNOWN_IDS.slice(),metroOffsetMs:{},stemGainDb:defaultStemGainDb(),tileOrder:defaultTileOrder()};
+  var state={order:KNOWN_IDS.slice(),metroOffsetMs:{},stemGainDb:defaultStemGainDb()};
   KNOWN_IDS.forEach(function(id){state.metroOffsetMs[id]=0;});
   var configLoaded=false; // only ever fetch the starting values ONCE per page
 
@@ -266,11 +239,6 @@
           });
         });
       }
-      if(cfg.tileOrder&&typeof cfg.tileOrder==='object'){
-        KNOWN_IDS.forEach(function(id){
-          state.tileOrder[id]=sanitizeTileOrder(cfg.tileOrder[id],STEM_NAMES[id].length);
-        });
-      }
       renderRoute();
     }).catch(function(e){
       console.warn('Could not load current config, starting from defaults.',e);
@@ -286,17 +254,6 @@
     if(j<0||j>=state.order.length)return;
     var tmp=state.order[i];state.order[i]=state.order[j];state.order[j]=tmp;
     renderMenu();
-  }
-
-  // Swaps the tile at grid slot `slot` with its neighbor (dir=-1 up/earlier,
-  // dir=+1 down/later) within one piece's own tileOrder[id] array. Same shape
-  // as moveOrder() above, just scoped per-piece instead of site-wide.
-  function moveTileOrder(id,slot,dir){
-    var arr=state.tileOrder[id];
-    var j=slot+dir;
-    if(j<0||j>=arr.length)return;
-    var tmp=arr[slot];arr[slot]=arr[j];arr[j]=tmp;
-    renderPiece(id);
   }
 
   // ---- Routing (Sep 7 2026): plain hash routing so "click a piece -> its
@@ -377,27 +334,6 @@
       pieceNudgeRow.appendChild(row);
     })();
 
-    // Square order — same up/down-arrow list as "Play order" on the menu
-    // (moveTileOrder() below is that same idea, scoped to one piece's own
-    // tileOrder[id] array instead of the site-wide piece order). The row
-    // shows each SQUARE'S NAME at whatever grid slot it currently occupies —
-    // moving "Kit" up means Kit now appears one slot earlier on screen; the
-    // underlying video/audio for Kit is completely untouched, this only ever
-    // changes which cell it's drawn into (see the card's own sub-text).
-    tileOrderList.innerHTML='';
-    state.tileOrder[id].forEach(function(tileIdx,slot){
-      var row=document.createElement('div');row.className='piece-row';
-      var name=document.createElement('div');name.className='piece-name';name.textContent=(slot+1)+'. '+STEM_NAMES[id][tileIdx];
-      var btns=document.createElement('div');btns.className='order-btns';
-      var up=document.createElement('button');up.type='button';up.textContent='▲';up.disabled=(slot===0);
-      up.addEventListener('click',function(){moveTileOrder(id,slot,-1);});
-      var down=document.createElement('button');down.type='button';down.textContent='▼';down.disabled=(slot===state.tileOrder[id].length-1);
-      down.addEventListener('click',function(){moveTileOrder(id,slot,1);});
-      btns.appendChild(up);btns.appendChild(down);
-      row.appendChild(name);row.appendChild(btns);
-      tileOrderList.appendChild(row);
-    });
-
     // Per-stem dB volume trim.
     stemList.innerHTML='';
     STEM_NAMES[id].forEach(function(stemName,i){
@@ -462,11 +398,6 @@
         KNOWN_IDS.forEach(function(id){
           var arr=saved.stemGainDb[id];
           if(Array.isArray(arr))state.stemGainDb[id]=STEM_NAMES[id].map(function(_,i){return (typeof arr[i]==='number')?arr[i]:0;});
-        });
-      }
-      if(saved.tileOrder){
-        KNOWN_IDS.forEach(function(id){
-          state.tileOrder[id]=sanitizeTileOrder(saved.tileOrder[id],STEM_NAMES[id].length);
         });
       }
       renderRoute();

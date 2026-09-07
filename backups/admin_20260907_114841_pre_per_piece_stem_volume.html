@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Mosaic Admin</title>
+<style>
+  :root{color-scheme:dark;}
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;background:#0b0c10;color:#e8e8ec;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:640px;margin:0 auto;padding:24px 16px 80px;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .sub{color:#9a9aa5;font-size:13px;margin:0 0 28px;}
+
+  /* ---- Passphrase gate ---- */
+  #gate{display:flex;flex-direction:column;gap:12px;max-width:320px;margin:80px auto 0;text-align:center;}
+  #gate p{color:#9a9aa5;font-size:13px;margin:0 0 8px;}
+  #gate input{background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:8px;padding:12px 14px;font-size:16px;text-align:center;}
+  #gate button{background:#6c5ce7;color:#fff;border:none;border-radius:8px;padding:12px 14px;font-size:15px;font-weight:600;cursor:pointer;}
+  #gate button:active{background:#5b4bd6;}
+  #gateError{color:#ff6b6b;font-size:13px;min-height:18px;}
+
+  /* ---- Main console ---- */
+  #console{display:none;}
+  .card{background:#15161c;border:1px solid #24252e;border-radius:12px;padding:16px;margin-bottom:16px;}
+  .card h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#9a9aa5;margin:0 0 14px;}
+  .piece-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #22232b;}
+  .piece-row:last-child{border-bottom:none;}
+  .piece-name{flex:1;font-size:15px;font-weight:600;}
+  .order-btns{display:flex;flex-direction:column;gap:2px;}
+  .order-btns button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;width:28px;height:24px;font-size:12px;cursor:pointer;line-height:1;}
+  .order-btns button:disabled{opacity:.3;cursor:default;}
+  .nudge-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #22232b;}
+  .nudge-row:last-child{border-bottom:none;}
+  .nudge-name{font-size:15px;font-weight:600;}
+  .nudge-controls{display:flex;align-items:center;gap:8px;}
+  .nudge-controls input[type=number]{width:80px;background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:8px;font-size:14px;text-align:right;}
+  .nudge-controls button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;width:30px;height:30px;font-size:14px;cursor:pointer;}
+  .nudge-unit{color:#9a9aa5;font-size:13px;}
+  .preview-link{display:block;font-size:12px;color:#8a8fff;text-decoration:none;margin-top:4px;}
+  .preview-link:active{opacity:.7;}
+
+  .save-bar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:14px 0 0;}
+  #saveBtn{flex:1;background:#6c5ce7;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;}
+  #saveBtn:disabled{opacity:.5;cursor:default;}
+  #saveBtn:active:not(:disabled){background:#5b4bd6;}
+  #saveStatus{font-size:13px;color:#9a9aa5;min-height:18px;}
+  #saveStatus.ok{color:#4cd964;}
+  #saveStatus.err{color:#ff6b6b;}
+
+  .parked{color:#6a6a75;font-size:13px;font-style:italic;}
+</style>
+</head>
+<body>
+
+<div id="gate" class="wrap">
+  <h1>Mosaic Admin</h1>
+  <p>Enter the admin passphrase to continue.</p>
+  <input id="gateInput" type="password" placeholder="Passphrase" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button id="gateBtn" type="button">Unlock</button>
+  <div id="gateError"></div>
+</div>
+
+<div id="console" class="wrap">
+  <h1>Mosaic Admin</h1>
+  <p class="sub">Changes here go live for everyone immediately once saved — there's no separate publish step.</p>
+
+  <div class="card">
+    <h2>Play order</h2>
+    <div id="orderList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Metronome click nudge</h2>
+    <p class="sub" style="margin-bottom:14px;">Milliseconds to shift the click earlier or later, per piece. Positive = click plays later; negative = click plays earlier. Doesn't change the tempo or the spacing between clicks, only when the very first one in the loop lands.</p>
+    <div id="nudgeList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Coming later</h2>
+    <p class="parked">Drag-and-drop file upload for new pieces/assets — parked for now, not built yet.</p>
+  </div>
+
+  <div class="save-bar">
+    <button id="saveBtn" type="button">Save &amp; publish</button>
+  </div>
+  <div id="saveStatus"></div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var PIECE_LABELS={flipswing:'Flip Swing',abakua:'Abakuá',congo:'Congo Yambumba'};
+  var KNOWN_IDS=Object.keys(PIECE_LABELS);
+  var PASS_KEY='mosaicAdminPass';
+
+  var gate=document.getElementById('gate');
+  var gateInput=document.getElementById('gateInput');
+  var gateBtn=document.getElementById('gateBtn');
+  var gateError=document.getElementById('gateError');
+  var consoleEl=document.getElementById('console');
+  var orderList=document.getElementById('orderList');
+  var nudgeList=document.getElementById('nudgeList');
+  var saveBtn=document.getElementById('saveBtn');
+  var saveStatus=document.getElementById('saveStatus');
+
+  var state={order:KNOWN_IDS.slice(),metroOffsetMs:{}};
+  KNOWN_IDS.forEach(function(id){state.metroOffsetMs[id]=0;});
+  var configLoaded=false; // only ever fetch the starting values ONCE per page
+
+  function passphrase(){return sessionStorage.getItem(PASS_KEY)||'';}
+
+  // Unlocking re-shows the console every time — including right after a
+  // wrong-passphrase Save bounces you back to the gate — but it must NOT
+  // re-fetch and clobber whatever you'd already typed in. Only the very
+  // first unlock of the page load pulls the live values; typing the
+  // passphrase again just gets you back to your own in-progress edits.
+  function showConsole(){
+    gate.style.display='none';
+    consoleEl.style.display='block';
+    if(!configLoaded){configLoaded=true;loadConfig();}
+  }
+
+  // Passphrase is only checked for real on the server (worker.js), on every
+  // write — this gate is just so you're not staring at a blank page. Getting
+  // the passphrase wrong here just means the first Save comes back 401 and
+  // you're bounced back to the gate.
+  gateBtn.addEventListener('click',function(){
+    var v=gateInput.value;
+    if(!v){gateError.textContent='Enter a passphrase.';return;}
+    sessionStorage.setItem(PASS_KEY,v);
+    gateError.textContent='';
+    showConsole();
+  });
+  gateInput.addEventListener('keydown',function(e){if(e.key==='Enter')gateBtn.click();});
+
+  (function checkExistingPass(){
+    if(passphrase())showConsole();
+  })();
+
+  function loadConfig(){
+    fetch('/api/config',{cache:'no-store'}).then(function(res){
+      if(!res.ok)throw new Error('config fetch failed: '+res.status);
+      return res.json();
+    }).then(function(cfg){
+      if(Array.isArray(cfg.order)){
+        var valid=cfg.order.filter(function(id){return KNOWN_IDS.indexOf(id)>=0;});
+        state.order=valid.concat(KNOWN_IDS.filter(function(id){return valid.indexOf(id)<0;}));
+      }
+      if(cfg.metroOffsetMs&&typeof cfg.metroOffsetMs==='object'){
+        KNOWN_IDS.forEach(function(id){
+          var v=cfg.metroOffsetMs[id];
+          state.metroOffsetMs[id]=(typeof v==='number'&&isFinite(v))?v:0;
+        });
+      }
+      render();
+    }).catch(function(e){
+      console.warn('Could not load current config, starting from defaults.',e);
+      render();
+      saveStatus.textContent='Could not load the current live settings — showing defaults instead. Saving will still work.';
+      saveStatus.className='err';
+    });
+  }
+
+  function moveOrder(id,dir){
+    var i=state.order.indexOf(id);
+    var j=i+dir;
+    if(j<0||j>=state.order.length)return;
+    var tmp=state.order[i];state.order[i]=state.order[j];state.order[j]=tmp;
+    render();
+  }
+
+  function render(){
+    orderList.innerHTML='';
+    state.order.forEach(function(id,i){
+      var row=document.createElement('div');row.className='piece-row';
+      var name=document.createElement('div');name.className='piece-name';name.textContent=(i+1)+'. '+(PIECE_LABELS[id]||id);
+      var btns=document.createElement('div');btns.className='order-btns';
+      var up=document.createElement('button');up.type='button';up.textContent='▲';up.disabled=(i===0);
+      up.addEventListener('click',function(){moveOrder(id,-1);});
+      var down=document.createElement('button');down.type='button';down.textContent='▼';down.disabled=(i===state.order.length-1);
+      down.addEventListener('click',function(){moveOrder(id,1);});
+      btns.appendChild(up);btns.appendChild(down);
+      row.appendChild(name);row.appendChild(btns);
+      orderList.appendChild(row);
+    });
+
+    nudgeList.innerHTML='';
+    KNOWN_IDS.forEach(function(id){
+      var row=document.createElement('div');row.className='nudge-row';
+      var left=document.createElement('div');
+      var name=document.createElement('div');name.className='nudge-name';name.textContent=PIECE_LABELS[id]||id;
+      left.appendChild(name);
+      var preview=document.createElement('a');preview.className='preview-link';preview.href='/?mosaic='+id;preview.target='_blank';preview.rel='noopener';preview.textContent='Open live to test →';
+      left.appendChild(preview);
+
+      var controls=document.createElement('div');controls.className='nudge-controls';
+      var minus=document.createElement('button');minus.type='button';minus.textContent='−';
+      var input=document.createElement('input');input.type='number';input.step='1';input.min='-500';input.max='500';input.value=String(state.metroOffsetMs[id]);
+      var plus=document.createElement('button');plus.type='button';plus.textContent='+';
+      var unit=document.createElement('span');unit.className='nudge-unit';unit.textContent='ms';
+
+      function clamp(v){v=Math.round(v);if(isNaN(v))v=0;return Math.max(-500,Math.min(500,v));}
+      function setVal(v){v=clamp(v);state.metroOffsetMs[id]=v;input.value=String(v);}
+      input.addEventListener('change',function(){setVal(parseFloat(input.value));});
+      minus.addEventListener('click',function(){setVal(state.metroOffsetMs[id]-5);});
+      plus.addEventListener('click',function(){setVal(state.metroOffsetMs[id]+5);});
+
+      controls.appendChild(minus);controls.appendChild(input);controls.appendChild(plus);controls.appendChild(unit);
+      row.appendChild(left);row.appendChild(controls);
+      nudgeList.appendChild(row);
+    });
+  }
+
+  saveBtn.addEventListener('click',function(){
+    saveBtn.disabled=true;
+    saveStatus.textContent='Saving…';saveStatus.className='';
+    fetch('/api/admin/config',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-admin-passphrase':passphrase()},
+      body:JSON.stringify(state)
+    }).then(function(res){
+      if(res.status===401){
+        sessionStorage.removeItem(PASS_KEY);
+        consoleEl.style.display='none';
+        gate.style.display='flex';
+        gateError.textContent='Incorrect passphrase — try again.';
+        throw new Error('unauthorized');
+      }
+      if(!res.ok)throw new Error('save failed: '+res.status);
+      return res.json();
+    }).then(function(saved){
+      if(Array.isArray(saved.order))state.order=saved.order;
+      if(saved.metroOffsetMs)state.metroOffsetMs=saved.metroOffsetMs;
+      render();
+      saveStatus.textContent='Saved — live for everyone now.';
+      saveStatus.className='ok';
+    }).catch(function(e){
+      if(e.message!=='unauthorized'){
+        saveStatus.textContent='Save failed — check your connection and try again.';
+        saveStatus.className='err';
+      }
+    }).finally(function(){
+      saveBtn.disabled=false;
+    });
+  });
+})();
+</script>
+</body>
+</html>

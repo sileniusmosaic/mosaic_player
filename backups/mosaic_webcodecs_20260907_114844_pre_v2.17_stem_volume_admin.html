@@ -1006,7 +1006,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.18';
+const BUILD_VERSION='2.16';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1167,56 +1167,6 @@ async function fetchAdminConfig(){
         if(typeof v==='number'&&isFinite(v))MOSAICS[id].metroOffsetMs=v;
       }
     }
-    // Per-stem volume trim (Sep 7 2026, admin console): admin.html stores
-    // this as dB per piece (a human fader unit); the player's own gain
-    // plumbing (setTrackMute()/ensureGains(), both pre-existing — see the
-    // cfg.levels comment on the flipswing MOSAICS entry above) already
-    // expects a plain LINEAR multiplier per tile index, so the dB->linear
-    // conversion happens right here, once, rather than teaching those
-    // functions about decibels. 0dB -> 1.0 (no change), matching the
-    // "missing/undefined = 1" default those functions already fall back to.
-    if(remote.stemGainDb&&typeof remote.stemGainDb==='object'){
-      for(const id of Object.keys(MOSAICS)){
-        const arr=remote.stemGainDb[id];
-        if(!Array.isArray(arr))continue;
-        MOSAICS[id].levels=arr.map(db=>(typeof db==='number'&&isFinite(db))?Math.pow(10,db/20):1);
-      }
-      // If playback already started before this fetch resolved, the gain
-      // nodes for the CURRENT piece exist with the old (default 1.0) levels
-      // baked in at creation time — refreshSoloMuteState() is the existing
-      // single source of truth that re-applies cfg.levels (alongside
-      // mute/solo) to every live gain node, so just calling it here picks
-      // up the new trim immediately with no audible glitch (setTrackMute()
-      // ramps, it doesn't jump). Harmless/no-op if audio hasn't started yet.
-      if(ctx&&gains.length===TILE_COUNT)refreshSoloMuteState();
-    }
-    // Tile display order (Sep 7 2026, admin console "reorder the squares"):
-    // a per-piece permutation, same dB-style pattern as metroOffsetMs/
-    // stemGainDb above — stored per mosaic id, only the current piece's
-    // change needs an immediate visible effect. currentTileOrder() (used by
-    // drawPoster()/buildControls()/the engine) always re-reads cfg.tileOrder
-    // live, so setting it here is enough for the NEXT paint to pick it up —
-    // this block's own job is just to force that next paint to actually
-    // happen right away instead of waiting for some unrelated redraw.
-    let currentPieceTileOrderChanged=false;
-    if(remote.tileOrder&&typeof remote.tileOrder==='object'){
-      for(const id of Object.keys(MOSAICS)){
-        const arr=remote.tileOrder[id];
-        if(!Array.isArray(arr)||arr.length!==MOSAICS[id].tileCount)continue;
-        const prev=MOSAICS[id].tileOrder;
-        const same=Array.isArray(prev)&&prev.length===arr.length&&arr.every((v,k)=>prev[k]===v);
-        if(!same){
-          MOSAICS[id].tileOrder=arr;
-          if(id===mosaicId)currentPieceTileOrderChanged=true;
-        }
-      }
-    }
-    if(currentPieceTileOrderChanged){
-      buildControls(); // hit-areas must move to match the new on-screen positions
-      engine.tileOrder=currentTileOrder();
-      if(engine.decodedFrameCount>0)engine.render(currentPos()); // already playing/paused-on-video — repaint the live frame in the new layout
-      else drawPoster();
-    }
     // cfg is a live reference into MOSAICS[mosaicId] — patching the object
     // above already flowed the current piece's new offset through to every
     // reader of cfg.metroOffsetMs (computeMetroBeatTimes, updateMetro) with
@@ -1256,28 +1206,6 @@ function gridDestShape(){
   if(!IS_DESKTOP)return {cols:TILE_COLS,rows:TILE_ROWS,columnMajor:false};
   return {cols:GRID_DEST_COLS_DESKTOP,rows:Math.ceil((TILE_COLS*TILE_ROWS)/GRID_DEST_COLS_DESKTOP),columnMajor:true};
 }
-// Tile display order (Sep 7 2026, admin-console "reorder the squares"
-// feature): a per-piece permutation of tile indices — currentTileOrder()[slot]
-// is which tile (by its one true logical index — the same index NAMES[i],
-// muted[i], gains[i], stemFiles[i] etc. already use everywhere) is drawn in
-// grid position `slot`. This is purely a draw-time/DOM-insertion-order remap:
-// the source video is still cropped from its one fixed baked-in layout via
-// tileSource()/tileRect() using the LOGICAL index, exactly as before —
-// nothing new is decoded and no extra canvas work happens, just which cell a
-// given crop lands in — so reordering costs nothing per frame. Defaults to
-// identity (slot N shows tile N) whenever cfg.tileOrder is absent or the
-// wrong length (a piece that's never been reordered, or a stale saved order
-// from before a piece's tile count changed).
-function currentTileOrder(){
-  const t=cfg.tileOrder;
-  return (Array.isArray(t)&&t.length===TILE_COUNT)?t:Array.from({length:TILE_COUNT},(_,i)=>i);
-}
-// Inverse of currentTileOrder() — which grid slot tile `i` currently occupies.
-// Used by the landscape swipe/arrow navigation (below) so "next/previous"
-// always means "the next square to the right/left on screen" in whatever
-// order is currently showing, rather than raw logical-index order.
-function tileSlotOf(i){const o=currentTileOrder();const s=o.indexOf(i);return s<0?i:s;}
-function tileAtSlot(slot){const o=currentTileOrder();const c=Math.max(0,Math.min(TILE_COUNT-1,slot));return o[c];}
 // Same per-tile pixel resolution as the original 960x480 (4 cols x 2 rows of
 // 240x240) canvas, just reshaped to the desktop destination's column/row
 // count — e.g. 2 cols x 4 rows of the same 240x240 cells, 480x960 overall.
@@ -1455,12 +1383,7 @@ metroBtnLandscape.addEventListener('click',()=>{
     if(!t)return;
     const dx=t.clientX-startX,dy=t.clientY-startY;
     if(Math.abs(dx)<MIN_SWIPE_PX||Math.abs(dy)>MAX_OFF_AXIS_PX)return;
-    // Sep 7 2026: steps by grid SLOT (tileSlotOf/tileAtSlot), not raw logical
-    // index, so a swipe always moves to the next/previous square as actually
-    // laid out on screen — matters once tiles can be admin-reordered (see
-    // currentTileOrder()'s comment); a no-op identity order makes this behave
-    // exactly as before.
-    selectTile(tileAtSlot(tileSlotOf(selected)+(dx<0?1:-1))); // swipe left = next tile, swipe right = previous tile
+    selectTile(selected+(dx<0?1:-1)); // swipe left = next tile, swipe right = previous tile
   },{passive:true});
   landscapeNotation.addEventListener('touchcancel',()=>{tracking=false;},{passive:true});
 })();
@@ -1470,8 +1393,8 @@ metroBtnLandscape.addEventListener('click',()=>{
 // are really just three inputs into one function. No need to guard against
 // clicking a hidden arrow — selectTile() clamps regardless — but they're
 // hidden anyway once there's nowhere left to go (syncLandscapeArrows()).
-landscapeArrowLeft.addEventListener('click',()=>selectTile(tileAtSlot(tileSlotOf(selected)-1))); // slot-based (Sep 7 2026) — see tileSlotOf()/tileAtSlot()
-landscapeArrowRight.addEventListener('click',()=>selectTile(tileAtSlot(tileSlotOf(selected)+1)));
+landscapeArrowLeft.addEventListener('click',()=>selectTile(selected-1));
+landscapeArrowRight.addEventListener('click',()=>selectTile(selected+1));
 // Landscape mute (Sep 2026) — forwards to whichever tile is currently
 // focused's real mute button in the portrait grid, same single-source-of-
 // truth forwarding as the metronome above. muteBtns[selected] always exists
@@ -1950,7 +1873,6 @@ const engine=new WebCodecsVideoEngine({
 });
 engine.muted=muted; // shared by reference — toggling muted[i] is automatically visible to the engine
 engine.soloDim=soloed.map(()=>false);
-engine.tileOrder=currentTileOrder(); // admin-console tile reorder (Sep 7 2026) — see currentTileOrder()'s comment and wc-engine.js's drawGridFromSource()
 
 function sizeFocusCanvas(){
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -2260,15 +2182,9 @@ function drawPoster(){
   // TILE_ROWS regardless, since that's the source video/poster's actual shape.
   const {cols:destCols,rows:destRows,columnMajor}=gridDestShape();
   const S=grid.width/destCols,Sh=grid.height/destRows;
-  // Sep 7 2026: dx/dy are now keyed by SLOT (grid position), and `i` — the
-  // actual tile cropped/muted/highlighted — comes from currentTileOrder()[slot].
-  // Identity order (the default) makes slot===i, so this is a no-op change
-  // for every piece that hasn't been reordered.
-  const order=currentTileOrder();
-  for(let slot=0;slot<TILE_COUNT;slot++){
-    const i=order[slot];
-    const dx=columnMajor?Math.floor(slot/destRows)*S:(slot%destCols)*S;
-    const dy=columnMajor?(slot%destRows)*Sh:Math.floor(slot/destCols)*Sh;
+  for(let i=0;i<TILE_COUNT;i++){
+    const dx=columnMajor?Math.floor(i/destRows)*S:(i%destCols)*S;
+    const dy=columnMajor?(i%destRows)*Sh:Math.floor(i/destCols)*Sh;
     drawOneTile(gctx,i,w,h,dx,dy,S,Sh,anySolo);
   }
 }
@@ -2292,14 +2208,7 @@ function selectTile(i){
   const clamped=Math.max(0,Math.min(TILE_COUNT-1,i));
   if(clamped===selected)return;
   selected=clamped;
-  // tileEls is indexed by logical tile index (same as `selected`), NOT DOM/
-  // visual order — see buildControls()'s comment. Was a raw
-  // querySelectorAll('.tile') NodeList walk keyed by DOM position, which
-  // silently pointed at the wrong square as soon as tiles could be
-  // admin-reordered (Sep 7 2026 fix — real bug caught while building that
-  // feature, not yet reachable by any user since reordering didn't exist
-  // before now).
-  tileEls.forEach((el,j)=>{if(el)el.classList.toggle('is-selected',j===selected);});
+  document.querySelectorAll('.tile').forEach((el,j)=>el.classList.toggle('is-selected',j===selected));
   updateFocusUI();
 }
 function updateFocusUI(){
@@ -2364,9 +2273,8 @@ function syncLandscapeMuteBtn(){
 // markup comment on #landscapeArrowLeft for why a disabled-but-visible arrow
 // at either end was rejected in favor of just not showing it.
 function syncLandscapeArrows(){
-  const s=tileSlotOf(selected); // slot-based (Sep 7 2026) — see tileSlotOf()
-  landscapeArrowLeft.hidden=s<=0;
-  landscapeArrowRight.hidden=s>=TILE_COUNT-1;
+  landscapeArrowLeft.hidden=selected<=0;
+  landscapeArrowRight.hidden=selected>=TILE_COUNT-1;
 }
 // On-screen diagnostic readout — added because the old arrow-position and
 // notation-open bugs kept failing to reproduce in this file's own Playwright
@@ -2550,17 +2458,8 @@ function positionLandscapeMetroCluster(){
 // to below.
 function buildControls(){
   controls.innerHTML='';controlsLeft.innerHTML='';controlsRight.innerHTML=''; // clear any tiles from a previously-loaded mosaic (controlsLeft/Right are never populated any more — see below — but still cleared in case old content lingers)
-  // tileEls/muteBtns/soloBtns stay indexed by LOGICAL tile index (matching
-  // muted[i]/soloed[i]/NAMES[i] everywhere else), even though — Sep 7 2026 —
-  // the elements are now appended to #gridControls in DISPLAY (slot) order so
-  // the CSS grid's auto-placement lands each invisible tap/mute/solo hit-area
-  // on top of the correct on-screen square after a reorder. Pre-sized and
-  // assigned by index (not .push()) so that alignment holds regardless of
-  // append order.
-  tileEls=new Array(TILE_COUNT);muteBtns=new Array(TILE_COUNT);soloBtns=new Array(TILE_COUNT);
-  const order=currentTileOrder();
-  order.forEach(i=>{
-    const name=NAMES[i];
+  tileEls=[];muteBtns=[];soloBtns=[];
+  NAMES.forEach((name,i)=>{
     const t=document.createElement('div');t.className='tile';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
     // Solo is desktop/mouse-only (a precision mixing tool); touch just gets
@@ -2576,7 +2475,7 @@ function buildControls(){
     // grid now, on both mobile and desktop — see the CSS/markup comments
     // near .focus-column for why controlsLeft/controlsRight are unused.
     controls.appendChild(t);
-    tileEls[i]=t;muteBtns[i]=mute;soloBtns[i]=solo;
+    tileEls.push(t);muteBtns.push(mute);soloBtns.push(solo);
     tap.addEventListener('click',()=>selectTile(i));
     if(solo)solo.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();soloed[i]=!soloed[i];solo.setAttribute('aria-label',(soloed[i]?'Unsolo ':'Solo ')+name);refreshSoloMuteState();});
     mute.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();muted[i]=!muted[i];mute.setAttribute('aria-label',(muted[i]?'Unmute ':'Mute ')+name);refreshSoloMuteState();});
@@ -3751,7 +3650,6 @@ async function switchMosaic(id){
     muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
     soloed=Array(TILE_COUNT).fill(false);engine.soloDim=soloed.map(()=>false);
     engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
-    engine.tileOrder=currentTileOrder(); // new piece's own order (or identity) — see currentTileOrder()'s comment
     applyGridCanvasSize(); // no-op on mobile; keeps desktop's canvas resolution matching TILE_COLS/TILE_ROWS if a future piece's source shape ever differs
     prepared=false;fallbackMode=false;buffers=[];prefetchScheduled=false;
     // Tempo (and the loop-boundary resync tracker) must not carry over from the

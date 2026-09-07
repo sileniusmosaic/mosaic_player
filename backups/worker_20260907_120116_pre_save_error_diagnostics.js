@@ -22,10 +22,8 @@
 
 const KNOWN_MOSAIC_IDS = ['flipswing', 'abakua', 'congo'];
 
-// Stem/tile count per piece — one audio stem = one visual tile, so this one
-// count validates both stemGainDb (audio) and tileOrder (visual grid
-// position) below. Index-aligned with mosaic_webcodecs.html's MOSAICS[id]
-// .names/.stemFiles (stemGainDb[id][k]/tileOrder[id] entries refer to
+// Stem count per piece, in the exact tile order mosaic_webcodecs.html's
+// MOSAICS[id].names uses (index-aligned — stemGainDb[id][k] is the trim for
 // names[k]). Only the COUNT matters here for validation; admin.html keeps
 // its own copy of the actual names for display. If a piece's tile count ever
 // changes, update it in all three places (here, admin.html, and the MOSAICS
@@ -42,21 +40,10 @@ function defaultStemGainDb() {
   return out;
 }
 
-// tileOrder[id] is a permutation of 0..count-1 — tileOrder[id][slot] is which
-// tile (by its one true logical index, same as stemGainDb above) is drawn in
-// grid position `slot`. Identity (0,1,2,...) is "not reordered", same
-// convention as the default.
-function defaultTileOrder() {
-  const out = {};
-  for (const id of KNOWN_MOSAIC_IDS) out[id] = Array.from({ length: STEM_COUNTS[id] }, (_, i) => i);
-  return out;
-}
-
 const DEFAULT_CONFIG = {
   order: KNOWN_MOSAIC_IDS.slice(),
   metroOffsetMs: { flipswing: 0, abakua: 0, congo: 0 },
   stemGainDb: defaultStemGainDb(),
-  tileOrder: defaultTileOrder(),
 };
 
 function corsJson(data, status = 200) {
@@ -89,23 +76,6 @@ function normalizeConfig(raw) {
       return Math.round(clamped * 10) / 10; // 0.1dB precision is plenty
     });
   }
-  // Same "keep whatever's valid, fill in whatever's missing" shape as
-  // cfg.order above, just per-piece: drop out-of-range/duplicate entries,
-  // then append whichever indices didn't survive that filter, in their
-  // natural order — so a malformed or stale saved permutation always still
-  // normalizes to SOME valid permutation rather than ever being rejected.
-  cfg.tileOrder = {};
-  for (const id of KNOWN_MOSAIC_IDS) {
-    const count = STEM_COUNTS[id];
-    const rawArr = Array.isArray(raw?.tileOrder?.[id]) ? raw.tileOrder[id] : [];
-    const seen = new Set();
-    const valid = [];
-    for (const v of rawArr) {
-      if (Number.isInteger(v) && v >= 0 && v < count && !seen.has(v)) { seen.add(v); valid.push(v); }
-    }
-    for (let i = 0; i < count; i++) if (!seen.has(i)) valid.push(i);
-    cfg.tileOrder[id] = valid;
-  }
   return cfg;
 }
 
@@ -136,20 +106,9 @@ export default {
       } catch {
         return corsJson({ error: 'Invalid JSON body.' }, 400);
       }
-      // Sep 7 2026 (real report: admin.html Save showing a bare "check your
-      // connection" with no real cause): normalizeConfig()/KV .put() were
-      // previously unguarded here, so any bug in either one surfaced as an
-      // uncaught exception — Cloudflare's own generic error page, not JSON
-      // — which admin.html then had no useful message to show. Wrapping the
-      // actual write in try/catch means a real server-side failure comes
-      // back as a normal JSON error response instead.
-      try {
-        const cfg = normalizeConfig(body);
-        await env.ADMIN_CONFIG.put('config', JSON.stringify(cfg));
-        return corsJson(cfg);
-      } catch (e) {
-        return corsJson({ error: 'Server error while saving: ' + (e && e.message ? e.message : String(e)) }, 500);
-      }
+      const cfg = normalizeConfig(body);
+      await env.ADMIN_CONFIG.put('config', JSON.stringify(cfg));
+      return corsJson(cfg);
     }
 
     // Everything else (the player, the admin page, notation/audio/poster
