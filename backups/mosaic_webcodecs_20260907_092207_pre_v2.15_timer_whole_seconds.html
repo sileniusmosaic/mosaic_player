@@ -908,7 +908,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
         </svg>
       </button>
       <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
-      <span id="time" class="time">0 / 46</span>
+      <span id="time" class="time">0.000 / 45.600</span>
       <!-- Icon-only (Aug 30 2026) — the Unicode ⚙ glyph is replaced with a
            real SVG gear so it matches the play arrow / reset circular-arrow
            in weight and style (see the shared .settings-icon sizing rule
@@ -1006,7 +1006,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.15';
+const BUILD_VERSION='2.14';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -3967,7 +3967,7 @@ function updateUI(){
   // reflowing the Reset/timeline/time row (the range slider is flex:1, so
   // it visibly resized every time the fps text changed). Moved down to the
   // footer panel instead, where a changing width doesn't affect anything else.
-  timeEl.textContent=p.toFixed(0)+' / '+dur.toFixed(0);
+  timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3);
   if(playing&&shownFps!==null){fpsReadout.hidden=false;fpsReadout.textContent='Playing at '+shownFps+' fps.';}
   else{fpsReadout.hidden=true;}
   updateMetro();
@@ -4134,8 +4134,8 @@ document.addEventListener('keydown',(e)=>{
   toggleFromGesture();
 });
 function scrubValueFromClientX(clientX){const dur=videoCycle||LOOP_END;const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*dur,0,dur-.001)}
-function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(0)+' / '+dur.toFixed(0);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
-function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(0)+' / '+dur.toFixed(0);e.preventDefault()}
+function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
+function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);e.preventDefault()}
 async function endScrub(e){
   if(!scrubbing||e.pointerId!==scrubPointerId)return;moveScrub(e);scrubbing=false;pausedPos=scrubPos;
   if(engine.info)engine.seekTo(scrubPos);

@@ -4,25 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090b0d">
-<!-- Sep 5 2026, real report: on iPhone (tested in Chrome, but this is a
-     WebKit-level restriction — Apple requires EVERY iOS browser to use
-     WebKit under the hood, so Chrome/Firefox/Edge on iPhone all inherit
-     it) the standard Fullscreen API still only supports actual <video>
-     elements, not arbitrary page content — confirmed still true as of the
-     current iOS release via caniuse's Fullscreen API table (iOS Safari
-     shows only "partial support" across every version). No JavaScript can
-     work around that; the auto-fullscreen-on-landscape logic further down
-     (tryAutoFullscreen()) will keep failing silently on iPhone in any
-     browser, but works as intended on Android Chrome, which has full
-     support.
-     These two tags are the actual iPhone-compatible answer: they make the
-     page eligible for true chrome-free fullscreen — no address bar, no
-     tab bar, no Fullscreen API needed — but ONLY once added to the Home
-     Screen from Safari itself (Share ⇒ Add to Home Screen; Chrome-for-iOS
-     can't create that kind of launch icon, another WebKit/Apple platform
-     rule, not a bug here) and then reopened from that icon. -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Mosaic — Abakuá</title>
 <!-- Typeface direction (Aug 2026 redesign): Roboto Condensed everywhere,
      replacing the earlier Arial-everywhere pass. -->
@@ -908,7 +889,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
         </svg>
       </button>
       <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
-      <span id="time" class="time">0 / 46</span>
+      <span id="time" class="time">0.000 / 45.600</span>
       <!-- Icon-only (Aug 30 2026) — the Unicode ⚙ glyph is replaced with a
            real SVG gear so it matches the play arrow / reset circular-arrow
            in weight and style (see the shared .settings-icon sizing rule
@@ -1006,7 +987,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.15';
+const BUILD_VERSION='2.11';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1083,12 +1064,10 @@ const MOSAICS={
     progressiveVideo:true,
     notation:['Mosaic/Congo_Yambumba/congo_notation_1.png'],
     // See Abakuá's own comment above — same placeholder strip for now,
-    // except Cata, Erikundi, Quinto and Conga (indices 1-4 below — real
-    // per-tile notation strips for Congo, Sep 2026 — see notationStripByIndex
-    // and renderNotationStrip(); Conga added Sep 5 2026 replacing the
-    // generic placeholder for that tile).
+    // except Cata, Erikundi and Quinto (indices 1-3 below — real per-tile
+    // notation strips for Congo, Sep 2026 — see notationStripByIndex and renderNotationStrip()).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png',4:'Mosaic/Congo_Yambumba/05_conga_congoyambumba.png'},
+    notationStripByIndex:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png'},
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -1506,35 +1485,6 @@ window.matchMedia('(orientation: landscape) and (pointer: coarse)').addEventList
   landscapeClusterNeedsRecompute=true; // the ResizeObserver firing next (the square's size always changes across a real rotation) will pick this up and recompute
   setTimeout(()=>nudgeRepaint(landscapeNotation),250); // v1.7: works around a real report of the play/tempo row occasionally painting wrong right after a rotation — see nudgeRepaint()'s comment
 });
-// Auto-fullscreen on landscape (Sep 4 2026, real report: "force fullscreen
-// on landscape... without the user having to push a button"). The
-// Fullscreen API can only be invoked from a genuine user gesture — a device
-// rotation itself never counts as one, on any browser — so there's no way
-// to trigger it straight from the rotation listener above. Instead this
-// piggybacks on whatever the user taps next: a single document-wide
-// pointerdown listener opportunistically requests fullscreen whenever we're
-// already in landscape and not fullscreen yet — whether that next tap IS
-// Play (already landscape when pressed) or any other control tapped after
-// rotating from portrait mid-session (a tile, Mute, a tempo button, etc).
-// Net effect: no dedicated "Enter Fullscreen" button ever appears.
-// fsUserExited guards a real annoyance this would otherwise cause: if the
-// user (or the OS — e.g. Android's own swipe-to-reveal-chrome gesture)
-// backs OUT of fullscreen while still in landscape, don't re-trap them on
-// their very next tap; only retry once they've left landscape and rotated
-// back into it.
-let fsUserExited=false;
-function tryAutoFullscreen(){
-  try{
-    if(fsUserExited||document.fullscreenElement||!document.documentElement.requestFullscreen)return;
-    if(!window.matchMedia('(orientation: landscape) and (pointer: coarse)').matches)return;
-    document.documentElement.requestFullscreen().catch(()=>{});
-  }catch{}
-}
-document.addEventListener('pointerdown',tryAutoFullscreen,{passive:true});
-document.addEventListener('fullscreenchange',()=>{
-  if(!document.fullscreenElement&&window.matchMedia('(orientation: landscape) and (pointer: coarse)').matches)fsUserExited=true;
-});
-window.matchMedia('(orientation: landscape) and (pointer: coarse)').addEventListener('change',(e)=>{if(!e.matches)fsUserExited=false;});
 // Manuscript toggle: purely a visibility flip on the already-loaded
 // notationStrip <img> — no reload, no per-piece gating beyond what
 // renderNotationStrip() already applies (a piece with no notationStrip
@@ -3967,7 +3917,7 @@ function updateUI(){
   // reflowing the Reset/timeline/time row (the range slider is flex:1, so
   // it visibly resized every time the fps text changed). Moved down to the
   // footer panel instead, where a changing width doesn't affect anything else.
-  timeEl.textContent=p.toFixed(0)+' / '+dur.toFixed(0);
+  timeEl.textContent=p.toFixed(3)+' / '+dur.toFixed(3);
   if(playing&&shownFps!==null){fpsReadout.hidden=false;fpsReadout.textContent='Playing at '+shownFps+' fps.';}
   else{fpsReadout.hidden=true;}
   updateMetro();
@@ -4134,8 +4084,8 @@ document.addEventListener('keydown',(e)=>{
   toggleFromGesture();
 });
 function scrubValueFromClientX(clientX){const dur=videoCycle||LOOP_END;const r=timeline.getBoundingClientRect();return clamp(((clientX-r.left)/r.width)*dur,0,dur-.001)}
-function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(0)+' / '+dur.toFixed(0);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
-function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(0)+' / '+dur.toFixed(0);e.preventDefault()}
+function beginScrub(e){scrubbing=true;scrubWasPlaying=playing;scrubPointerId=e.pointerId;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);try{timeline.setPointerCapture(e.pointerId)}catch{}e.preventDefault()}
+function moveScrub(e){if(!scrubbing||e.pointerId!==scrubPointerId)return;scrubPos=scrubValueFromClientX(e.clientX);const dur=videoCycle||LOOP_END;timeline.value=String(scrubPos);timeEl.textContent=scrubPos.toFixed(3)+' / '+dur.toFixed(3);e.preventDefault()}
 async function endScrub(e){
   if(!scrubbing||e.pointerId!==scrubPointerId)return;moveScrub(e);scrubbing=false;pausedPos=scrubPos;
   if(engine.info)engine.seekTo(scrubPos);
