@@ -1006,7 +1006,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.21';
+const BUILD_VERSION='2.20';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1465,37 +1465,6 @@ metroBtnLandscape.addEventListener('click',()=>{
     selectTile(tileAtSlot(tileSlotOf(selected)+(dx<0?1:-1))); // swipe left = next tile, swipe right = previous tile
   },{passive:true});
   landscapeNotation.addEventListener('touchcancel',()=>{tracking=false;},{passive:true});
-})();
-// Portrait swipe-to-change-focus (Sep 7 2026, direct request — "same manner
-// as it is functioning in landscape"): identical gesture/thresholds/helper
-// (selectTile() + tileSlotOf()/tileAtSlot()) as the landscape swipe above,
-// just listening on #focusWrap (the big preview square) instead of
-// #landscapeNotation, since that's portrait's equivalent full-size view with
-// room for a swipe that isn't already claimed by a tap target — the small
-// grid tiles below keep their own tap-to-select buttons untouched, this only
-// adds a second way to reach the same selectTile() they already call. Same
-// "no display:none element receives touch events" reasoning as the landscape
-// version means this doesn't need an orientation guard either: #focusWrap
-// itself is hidden by CSS whenever the landscape view takes over, and the
-// landscape swipe above already covers that layout.
-(function(){
-  let startX=0,startY=0,tracking=false;
-  const MIN_SWIPE_PX=40;
-  const MAX_OFF_AXIS_PX=60;
-  focusWrap.addEventListener('touchstart',e=>{
-    if(e.touches.length!==1){tracking=false;return;}
-    tracking=true;startX=e.touches[0].clientX;startY=e.touches[0].clientY;
-  },{passive:true});
-  focusWrap.addEventListener('touchend',e=>{
-    if(!tracking)return;
-    tracking=false;
-    const t=e.changedTouches[0];
-    if(!t)return;
-    const dx=t.clientX-startX,dy=t.clientY-startY;
-    if(Math.abs(dx)<MIN_SWIPE_PX||Math.abs(dy)>MAX_OFF_AXIS_PX)return;
-    selectTile(tileAtSlot(tileSlotOf(selected)+(dx<0?1:-1))); // swipe left = next tile, swipe right = previous tile
-  },{passive:true});
-  focusWrap.addEventListener('touchcancel',()=>{tracking=false;},{passive:true});
 })();
 // Landscape square-navigation arrows (Sep 2026) — same selectTile() as the
 // swipe handler and the portrait tap handler, so all three ways of changing
