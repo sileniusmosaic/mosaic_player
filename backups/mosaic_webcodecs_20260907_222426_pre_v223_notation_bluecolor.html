@@ -31,23 +31,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#15100b;--panel:#1f1812;--panel2:#2a2117;--border:#3a2f22;--text:#f1e6d0;--muted:#c9bca3;--accent:#cf9f5f;--danger:#a3402a;--good:#8fae72;--brass:#b98a2e;--tile-border:#cbe0e6;
-/* Redesign accent (Aug 2026): a single accent color for selection/primary-
-   action highlights — piece-strip active thumbnail, Play/Reset, active tempo
-   button. Everything else (Mute blue, Solo yellow, the warm background
-   palette) is untouched.
-   Recolored Sep 7 2026 (real report: "replace all purple colour accents...
-   with this shade of blue [from] my iOS app logo") — sampled directly from
-   capacitor-app/ios/App/App/Assets.xcassets/AppIcon.appiconset's icon
-   (a gradient; this is its dominant mid-tone). Variable renamed
-   --accent-blue -> --accent-blue (and its -dim companion) to match, rather
-   than leaving a "purple" variable holding a blue value. Every rule below
-   that reads var(--accent-blue)/var(--accent-blue-dim) picks this up
-   automatically — nothing else needed changing. Older dated comments further
-   down that narrate a specific past request in terms of "purple" (e.g. "real
-   report: bring purple back") describe what was literally asked/true AT THE
-   TIME and are left as historical record; the color those comments are
-   about is this same variable, now blue. */
---accent-blue:#6dc5ff;--accent-blue-dim:#4984ab;--window-border:#000}
+/* Redesign accent (Aug 2026): purple for selection/primary-action highlights —
+   piece-strip active thumbnail, Play/Reset, active tempo button. Everything
+   else (Mute blue, Solo yellow, the warm background palette) is untouched. */
+--accent-purple:#8b5cf6;--accent-purple-dim:#5b3ea8;--window-border:#000}
 *{box-sizing:border-box;font-family:'Roboto Condensed',Arial,Helvetica,sans-serif!important}html,body{margin:0;background:var(--bg);color:var(--text)}
 /* Base font-size raised from the 16px browser default to 17.6px (Aug 30
    2026, +10% across the board per feedback) — every element below that
@@ -85,7 +72,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    right along with it. The name stays at full brightness/opacity in both
    states so it's always as readable as the active piece's name. */
 .piece-thumb{flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:5px 10px 5px 5px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel);cursor:pointer;transition:border-color .15s;-webkit-tap-highlight-color:transparent}
-.piece-thumb.active{border-color:var(--accent-blue);box-shadow:0 0 0 1px var(--accent-blue),0 0 10px rgba(109,197,255,.55)}
+.piece-thumb.active{border-color:var(--accent-purple);box-shadow:0 0 0 1px var(--accent-purple),0 0 10px rgba(139,92,246,.55)}
 .piece-thumb-img{width:36px;height:36px;border-radius:6px;background-color:#030405;background-repeat:no-repeat;flex:0 0 auto;opacity:.55;filter:brightness(.75);transition:opacity .15s,filter .15s}
 .piece-thumb.active .piece-thumb-img{opacity:1;filter:none}
 .piece-thumb-name{font-size:13.2px;font-weight:700;line-height:1.15;white-space:nowrap;color:var(--text)}
@@ -169,7 +156,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    its own distinct teal, untouched. */
 .muteBtn{right:4px}
 .soloBtn{left:4px}
-.muteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+.muteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
 /* Beat counter: top-right of the focus square (Aug 2026 — moved up from
    bottom-right so the notation overlay, now anchored to the bottom of the
@@ -210,7 +197,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 /* Active-ring (Aug 31 2026, recolored Sep 2026 — see the icon comment above;
    turned purple Sep 4 2026 per user request: metronome stays cream/white
    when OFF, purple ring+digits only when ON). */
-.metroBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+.metroBtn.is-active{border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .metroBtn.is-active .metro-icon{display:none}
 .metroBtn.is-active .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
@@ -232,7 +219,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .manuscriptBtn .manuscript-icon .note-stems{fill:none;stroke:var(--text);stroke-width:1.6;stroke-linecap:round}
 /* Selected/toggled-on state: purple circumference only — icon stays white,
    matching the app-wide "purple rim on selection" rule (Sep 4 2026). */
-.manuscriptBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+.manuscriptBtn.is-active{border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 .tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
 .tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
@@ -240,24 +227,22 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .tempo-strip{margin-top:6px}
 /* Desktop-only (Sep 7 2026, real report — full reasoning above on
    .is-desktop .focus-column): narrowed from the full app width down to
-   match .focus-column's own width (796px — see that rule's comment for the
-   exact breakdown, kept in lockstep with it) and centered the same way
-   .focus-column is (a box of a given width centered inside the same padded
-   .app content area lands at the same absolute x either way, whether
-   centered via flex — like .focus-column — or via margin:0 auto here — the
-   two methods agree as long as the widths match).
+   876px and centered the same way .focus-column is (an 876px box centered
+   inside the same padded .app content area lands at the same absolute x
+   either way, whether centered via flex — like .focus-column — or via
+   margin:0 auto here — the two methods agree as long as the widths match).
    Combined with the grid-template-columns override on #tempoButtons below,
    this puts Play flush against this box's left edge and 100% flush against
    its right edge — i.e. exactly the focus square's left edge and the tile
    grid's right edge, not just approximately near them. */
-.is-desktop .tempo-strip{width:796px;margin-left:auto;margin-right:auto}
+.is-desktop .tempo-strip{width:876px;margin-left:auto;margin-right:auto}
 .panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
 .transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 /* Desktop-only (Sep 7 2026, real report: "move reset button to the right and
    inline with the play button in the vertical plane... line the settings
    [button] vertically with the right hand edge of the new larger small
-   squares"): same width-matched, centered box as .is-desktop .tempo-strip
-   above, nested one level deeper inside .panel's own padding — centering a
+   squares"): same 876px-centered box as .is-desktop .tempo-strip above,
+   nested one level deeper inside .panel's own padding — centering an 876px
    box inside a symmetrically-padded container lands at the identical
    absolute x as centering it directly inside .app, so no extra offset math
    is needed to account for .panel's padding. Reset is this row's first
@@ -267,7 +252,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    box .transport occupies, so narrowing/centering the box alone is enough
    to land Reset directly under Play (same x) and Settings directly under
    100% (same x), no separate positioning rule required. */
-.is-desktop .transport{width:796px;margin-left:auto;margin-right:auto}
+.is-desktop .transport{width:876px;margin-left:auto;margin-right:auto}
 /* display:inline-flex (Aug 30 2026) — these buttons went icon-only (no more
    "Reset"/"Settings" text), so centering their single SVG child needs flex
    the same way the tempo-buttons row already centers its own content. */
@@ -354,7 +339,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 /* Active tempo (Sep 2026, real report: bring purple back, but only as a
    border+text ring rather than the old solid fill — background stays the
    same dark #0c0906 every circular button now shares). */
-.tempo-buttons button.active{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+.tempo-buttons button.active{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .tempo-buttons button:disabled{opacity:.4}
 /* Play (Sep 2026, real report: purple border+icon, still no fill — the dark
    background and circular shape stay exactly like every other button here,
@@ -364,7 +349,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 /* Play stays fully purple always (not gated by .active/selection like every
    other accent button) — rim, fill AND background purple; icon stays white
    for contrast against the solid purple fill (Sep 4 2026 request). */
-#play{background:var(--accent-blue);border-color:var(--accent-blue);color:var(--text)}
+#play{background:var(--accent-purple);border-color:var(--accent-purple);color:var(--text)}
 /* Play/pause icon (Aug 30 2026, now the button's ONLY content — no visible
    label): a triangle that swaps to two vertical bars while playing. Both
    shapes live in one SVG, toggled via the button's own is-playing class (set
@@ -397,8 +382,8 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    reset-instant briefly kills that transition so the fill can jump back to
    empty for next time without visibly draining back out. */
 .tempo-buttons button#play{position:relative;overflow:hidden;--play-progress:0}
-.tempo-buttons button#play::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-blue);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
-.tempo-buttons button#play.is-loading{background:var(--accent-blue-dim)}
+.tempo-buttons button#play::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
+.tempo-buttons button#play.is-loading{background:var(--accent-purple-dim)}
 .tempo-buttons button#play.reset-instant::before{transition:none!important}
 .status{font-size:14.3px;color:var(--muted);margin-top:8px;line-height:1.35}
 .status.good{color:var(--good)}.status.error{color:var(--danger)}
@@ -449,20 +434,17 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    overrides to a row instead, so the grid sits to the focus square's right. */
 .focus-column{display:flex;flex-direction:column;gap:8px}
 /* flex-basis tightened to exactly match its own content — 520px focus-wrap +
-   16px gap + the tile grid's own current width (Sep 7 2026; was a loose
-   900px, leaving slack to the right of the grid that made .viewer's
-   centering land the visible content off-true-center). Kept in lockstep
-   with .is-desktop #gridStageMobile and .is-desktop .focus-wrap below: if
-   either width ever changes, this sum must change with it, and so must the
-   matching width baked into .is-desktop .tempo-strip/.transport further
-   down — all four together are what make Play/Reset align with the focus
-   square's left edge and Settings/100% align with the grid's right edge
-   (see the real report on .is-desktop .tempo-strip: "line settings/100%
-   with the right-hand edge of the larger squares, same manner as play
-   relates to the focus square"). Currently 520+16+260=796px — the grid
-   width is 260px as of the .is-desktop #gridStageMobile bottom-alignment
-   fix below (Sep 7 2026, same day). */
-.is-desktop .focus-column{flex:0 1 796px;flex-direction:row;align-items:flex-start;gap:16px}
+   16px gap + 340px grid-stage (Sep 7 2026; was a loose 900px, leaving slack
+   to the right of the grid that made .viewer's centering land the visible
+   content off-true-center). Kept in lockstep with .is-desktop #gridStageMobile
+   and .is-desktop .focus-wrap below: if either width ever changes, this sum
+   must change with it, and so must the matching 876px width baked into
+   .is-desktop .tempo-strip/.transport further down — all four together are
+   what make Play/Reset align with the focus square's left edge and
+   Settings/100% align with the grid's right edge (see the real report on
+   .is-desktop .tempo-strip: "line settings/100% with the right-hand edge of
+   the larger squares, same manner as play relates to the focus square"). */
+.is-desktop .focus-column{flex:0 1 876px;flex-direction:row;align-items:flex-start;gap:16px}
 .is-desktop .focus-wrap{width:520px;flex:0 0 520px}
 /* Sep 2026: desktop's tile grid reads as 2 columns (top-to-bottom, left-to-
    right) instead of mobile's 4-across arrangement — narrower and taller
@@ -475,26 +457,14 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    below for the matching mute/solo overlay reflow.
    Doubled again Sep 7 2026 (real report: "double the size of each of the
    small squares in desktop") — flex-basis 170px -> 340px, so each of the 8
-   240x240-drawn tiles displayed at 170x170 CSS px instead of 85x85 (still
-   2 cols x 4 rows via aspect-ratio 1/2, just twice the linear size). This
-   box's width is also load-bearing for the transport-row alignment below it
-   — see the comment on .is-desktop .focus-column above and .is-desktop
-   .tempo-strip further down.
-   Changed again Sep 7 2026, same day (real report: "line up the bottom of
-   the small squares... with the focus square, currently they sit every so
-   slightly below that horizontal line") — 340px happened to make the grid
-   noticeably TALLER than the 520px-square focus square (4 rows of 170px =
-   680px), so their bottoms didn't match even though their tops (both
-   align-items:flex-start) did. Since this box is always exactly 2 cols x 4
-   rows of SQUARE cells, its height is always exactly double its width
-   (aspect-ratio:1/2, unchanged) — so matching its height to the focus
-   square's 520px height means its width has to be exactly half of that:
-   520/2 = 260px, not a free choice. The canvas's own backing resolution
-   tracks whatever this box's width actually renders at (see
-   applyGridCanvasSize() in the script, which measures it live rather than
-   hardcoding a multiplier) so this can change again in future without a
-   second constant to remember to update alongside it. */
-.is-desktop #gridStageMobile{flex:0 0 260px;margin-top:0;aspect-ratio:1/2}
+   240x240-drawn tiles now displays at 170x170 CSS px instead of 85x85 (still
+   2 cols x 4 rows via aspect-ratio 1/2, just twice the linear size). The
+   canvas's own backing resolution is bumped to match in applyGridCanvasSize()
+   (DESKTOP_GRID_CELL_PX) so the bigger squares don't look softer than
+   before. This box's width is also now load-bearing for the transport-row
+   alignment below it — see the comment on .is-desktop .focus-column above
+   and .is-desktop .tempo-strip further down. */
+.is-desktop #gridStageMobile{flex:0 0 340px;margin-top:0;aspect-ratio:1/2}
 /* The old two-side-column layout is retired but its markup stays in the DOM
    (see comment above) — keep it hidden on both mobile and desktop. */
 .grid-stage-side{display:none}
@@ -546,36 +516,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    flex column stays exactly where it is instead of dropping down into the
    space the image used to occupy. */
 .notation-strip.is-off{visibility:hidden}
-/* .focus-stack (Sep 7 2026) — see the markup comment above focusWrap for the
-   full reasoning. display:contents on mobile/by default means this wrapper
-   takes no part in layout at all: its two children (focusWrap and the
-   hidden #notationStripDesktop) act as if they were direct children of
-   .focus-column, exactly as focusWrap alone was before this wrapper
-   existed. */
-.focus-stack{display:contents}
-/* Desktop-only: becomes a real column flex container instead, stacking
-   focusWrap above #notationStripDesktop with NO gap, so the notation's own
-   top edge sits flush against the square's bottom edge (the literal ask:
-   "always have the top line of the notation stuck to the bottom line of
-   the focus square"). flex:0 0 520px matches focusWrap's own fixed width
-   (see .is-desktop .focus-wrap) — needed because focus-stack, not focusWrap
-   directly, is now .focus-column's flex child on desktop. */
-.is-desktop .focus-stack{display:flex;flex-direction:column;flex:0 0 520px}
-/* Desktop notation image — plain block flow, not an overlay: no
-   position:absolute, no clipping ancestor, so it renders at whatever height
-   its own aspect ratio needs ("dynamically take up different amounts of
-   vertical space") directly below the square rather than being clipped to
-   it. Same white-card look as the portrait #notationStrip it mirrors.
-   Hidden by default (mobile/no manuscriptOn/no notation configured — see
-   renderNotationStrip()); shown only on desktop via the rule below. */
-.notation-strip-desktop{display:none;width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0}
-.is-desktop .notation-strip-desktop:not([hidden]){display:block}
-/* The portrait overlay version is desktop's redundant twin now that this
-   exists — hidden on desktop so the two don't both try to show at once
-   (mobile is untouched: #notationStrip still renders there exactly as
-   before, .notation-strip-desktop stays a mobile no-op via display:none
-   above). */
-.is-desktop .notation-strip{display:none}
 /* Landscape-only full-notation view (Aug 31 2026) — see the markup comment
    on #landscapeNotation. pointer:coarse restricts this to touch devices
    (phones/tablets), same signal IS_DESKTOP itself is built on, so a desktop
@@ -760,7 +700,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 /* Active tempo (Sep 2026, real report: purple is back — see the matching
    .tempo-buttons button.active comment in portrait — still a ring, not a
    fill, so the dark background every button here shares stays put). */
-.landscape-transport button.active{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+.landscape-transport button.active{background:#0c0906;color:var(--text);border-color:var(--accent-purple);box-shadow:0 0 0 2px var(--accent-purple)}
 .landscape-transport button:disabled{opacity:.4}
 .landscape-transport .play-icon{width:22px;height:22px}
 /* Same loading-fill/is-loading/reset-instant treatment as the real #play
@@ -771,9 +711,9 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    real report — matches #play in portrait); background stays the same dark
    #0c0906 every circular button here shares. The loading-progress fill
    (::before, below) is the same purple regardless, so nothing changes there. */
-.landscape-transport .transportPlayBtn{background:var(--accent-blue);color:var(--text);border-color:var(--accent-blue);font-weight:750;position:relative;overflow:hidden;--play-progress:0}
-.landscape-transport .transportPlayBtn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-blue);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
-.landscape-transport .transportPlayBtn.is-loading{background:var(--accent-blue-dim)}
+.landscape-transport .transportPlayBtn{background:var(--accent-purple);color:var(--text);border-color:var(--accent-purple);font-weight:750;position:relative;overflow:hidden;--play-progress:0}
+.landscape-transport .transportPlayBtn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-purple);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
+.landscape-transport .transportPlayBtn.is-loading{background:var(--accent-purple-dim)}
 .landscape-transport .transportPlayBtn.reset-instant::before{transition:none!important}
 </style>
 </head>
@@ -966,26 +906,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
          or populated; see the CSS comment above .is-desktop .focus-column. -->
     <div class="grid-stage-side grid-stage-left"><canvas id="gridLeft" width="480" height="1920"></canvas><div id="gridControlsLeft" class="grid-controls-vert"></div></div>
     <div class="focus-column">
-      <!-- .focus-stack (Sep 7 2026, real report: "do not overlay the notation
-           across the focus square but rather display it below the focus
-           square... always have the top line of the notation stuck to the
-           bottom line of the focus square") — desktop-only wrapper around
-           focusWrap + a SEPARATE notation <img> (#notationStripDesktop,
-           below), so the notation can sit in normal document flow right
-           after the square instead of overlaid inside it (see
-           .focus-wrap's overflow:hidden — anything absolutely positioned
-           inside it, like the existing portrait #notationStrip, is clipped
-           to the square's own bounds and can't visually extend past its
-           bottom edge no matter what offset it's given; only a true
-           sibling, outside that box, can). display:contents on mobile (see
-           CSS) makes this wrapper invisible to mobile's flex layout — its
-           children behave exactly as if they were direct .focus-column
-           children, i.e. unchanged from before this existed. Kept in sync
-           with the existing portrait #notationStrip by renderNotationStrip()
-           in the script (same src, same on/off state — just a second
-           element, not a moved one, since mobile still needs the original
-           overlaid one). -->
-      <div class="focus-stack">
       <div id="focusWrap" class="focus-wrap">
         <canvas id="mosaicFocus" class="focus-video"></canvas>
         <div class="focus-dim"></div>
@@ -1047,17 +967,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
           <div id="focusLabel" class="focus-label">Clave</div>
           <img id="notationStrip" class="notation-strip" alt="" hidden>
         </div>
-      </div>
-      <!-- Desktop counterpart to #notationStrip above — see the .focus-stack
-           comment above focusWrap for why this needs to be a second element
-           rather than the same one moved. Plain block flow (no absolute
-           positioning, no overflow:hidden ancestor), so it just sits as tall
-           as its own image needs and stays flush against focusWrap's bottom
-           edge via .focus-stack's zero gap (see CSS) — "dynamically take up
-           different amounts of vertical space whilst always maintaining
-           contact with the focus square", per the request. Hidden by
-           default/on mobile; shown only via .is-desktop CSS. -->
-      <img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden>
       </div>
       <!-- All tiles as one 4x2 grid — shown on both mobile and desktop now
            (reverted Sep 2026). On mobile it sits below the focus square in
@@ -1179,7 +1088,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.23';
+const BUILD_VERSION='2.22';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1416,7 +1325,7 @@ async function fetchAdminConfig(){
 let LOOP_END=cfg.loopEnd, NAMES=cfg.names, TILE_COLS=cfg.cols, TILE_ROWS=cfg.rows, TILE_COUNT=cfg.tileCount;
 let VIDEO_SOURCES=videoSourcesFor(cfg), STEM_URLS=cfg.stemFiles;
 const $=s=>document.querySelector(s);
-const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false}), gridStageMobile=$('#gridStageMobile');
+const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$('#poster'), grid=$('#grid'), gctx=grid.getContext('2d',{alpha:false});
 // Desktop tile-grid reflow (Sep 2026): mobile draws the grid in the SOURCE
 // video's own native shape (TILE_COLS wide x TILE_ROWS tall, row-major —
 // tile 0..3 across the top, 4..7 across the bottom). Desktop instead reads
@@ -1460,27 +1369,21 @@ function tileAtSlot(slot){const o=currentTileOrder();const c=Math.max(0,Math.min
 // Called at load and again on every switchMosaic(), even though today all
 // three pieces share the same 4x2 source shape, so a future piece with a
 // different one stays correct.
-const GRID_CELL_PX=grid.width/TILE_COLS; // 240 — same on both axes since source tiles are square, mobile only
+const GRID_CELL_PX=grid.width/TILE_COLS; // 240 — same on both axes since source tiles are square
 // Sep 7 2026 (real report: "double the size of each of the small squares in
-// desktop", then again same day: "line up the bottom of the small squares
-// with the focus square"): the desktop grid's own CSS display size has
-// changed twice in one day (170 -> 340 -> 260px, see .is-desktop
-// #gridStageMobile) — a hardcoded canvas-resolution multiplier kept in a
-// separate constant here needed hand-updating every time that CSS number
-// moved, and silently goes soft/blurry the moment the two drift apart.
-// Measuring gridStageMobile's ACTUAL rendered CSS width here instead means
-// there's nothing left to keep in sync: whatever size a future layout tweak
-// picks, the canvas resolves it live and renders at a sharp
-// devicePixelRatio-scaled resolution to match. Capped at 3x devicePixelRatio
-// so an unusually high-DPI display doesn't blow the canvas up to an
-// excessive backing size for no visible benefit. Mobile is untouched — it
-// never calls into this function at all (see the IS_DESKTOP guard below).
+// desktop" — see the matching CSS on .is-desktop #gridStageMobile, 170px ->
+// 340px): doubling the CSS display size without also doubling the canvas's
+// own backing resolution would have meant scaling the same 240px-per-tile
+// bitmap up to 170 CSS px per tile instead of 85 — a soft/blurry upscale,
+// especially on a standard (non-Retina) display. DESKTOP_GRID_CELL_PX keeps
+// the same "backing pixels per displayed pixel" ratio the original 170px
+// squares had. Mobile is untouched — it still reads GRID_CELL_PX directly
+// below, only the desktop branch uses this.
+const DESKTOP_GRID_CELL_PX=GRID_CELL_PX*2; // 480
 function applyGridCanvasSize(){
   if(!IS_DESKTOP)return;
   const {cols:destCols,rows:destRows}=gridDestShape();
-  const cssW=gridStageMobile.getBoundingClientRect().width||destCols*GRID_CELL_PX;
-  const cellPx=(cssW/destCols)*Math.min(devicePixelRatio||1,3);
-  grid.width=Math.round(destCols*cellPx); grid.height=Math.round(destRows*cellPx);
+  grid.width=destCols*DESKTOP_GRID_CELL_PX; grid.height=destRows*DESKTOP_GRID_CELL_PX;
 }
 applyGridCanvasSize();
 // Retired split-grid canvases (see the CSS/markup for .grid-stage-side) —
@@ -1505,7 +1408,7 @@ function mirrorLandscapeFocus(){
   requestAnimationFrame(mirrorLandscapeFocus);
 }
 requestAnimationFrame(mirrorLandscapeFocus);
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), notationStripDesktop=$('#notationStripDesktop'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), resetBtnLandscape=$('#resetBtnLandscape'), landscapeFocusDim=$('#landscapeFocusDim'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), resetBtnLandscape=$('#resetBtnLandscape'), landscapeFocusDim=$('#landscapeFocusDim'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -3114,15 +3017,6 @@ function renderNotationStrip(){
     // (same rendered height, since it's still a real <img> with a real src)
     // so the label sitting above it in the same flex column never moves.
     notationStrip.classList.toggle('is-off',!manuscriptOn);
-    // Desktop's non-overlay counterpart (Sep 7 2026 — see the markup comment
-    // on #notationStripDesktop): kept in sync with the exact same src here,
-    // one line down from where the portrait version is set, so the two
-    // never drift. No is-off/visibility trick needed here — unlike the
-    // portrait overlay, nothing above this element depends on its box
-    // staying a fixed height while toggled off, so the plain hidden
-    // attribute (space collapses entirely) is simpler and is exactly what
-    // "dynamically take up different amounts of vertical space" calls for.
-    notationStripDesktop.src=src;notationStripDesktop.alt=cfg.label+' notation';notationStripDesktop.hidden=!manuscriptOn;
     // Deliberately NOT gated on manuscriptOn — the landscape view is meant
     // to show regardless of whether notation is toggled on in portrait.
     // See getNotationImage()'s comment above for why this loads through a
@@ -3168,7 +3062,6 @@ function renderNotationStrip(){
     // ships a notationStrip (see MOSAICS), so this branch is unreachable
     // in practice today.
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
-    notationStripDesktop.hidden=true;notationStripDesktop.removeAttribute('src');
     currentLandscapeNotationSrc=null;
     landscapeNotation.hidden=true;
     debugLog('renderNotationStrip() no-notation branch');

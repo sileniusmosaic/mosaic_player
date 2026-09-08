@@ -26,7 +26,7 @@ class WebCodecsVideoEngine {
   // half the tiles (desktop's "tiles flank the focus square" layout) — pass
   // whichever pair matches the layout actually in the DOM; the other stays
   // null and _draw() simply skips it.
-  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8, gridColumnMajor = false, gridDestCols = cols }) {
+  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8 }) {
     this.gridCtx = gridCanvas ? gridCanvas.getContext('2d', { alpha: false }) : null;
     this.gridLeftCtx = gridCanvasLeft ? gridCanvasLeft.getContext('2d', { alpha: false }) : null;
     this.gridRightCtx = gridCanvasRight ? gridCanvasRight.getContext('2d', { alpha: false }) : null;
@@ -59,26 +59,6 @@ class WebCodecsVideoEngine {
     // logic, same idea).
     this.tileOrder = null;
     this.cols = cols; this.rows = rows; this.tileCount = tileCount;
-    // Desktop grid reflow (Sep 7 2026 fix — real report: on desktop Chrome,
-    // the grid looked perfectly correct before Play (the poster/placeholder,
-    // drawn by mosaic_webcodecs.html's drawPoster()/gridDestShape(), already
-    // did this right) but fractured into vertical strips of mismatched
-    // content the moment real video started. Root cause: these two
-    // constructor options were being passed in from day one but never
-    // actually READ here — this class always drew every tile in the
-    // SOURCE's native row-major cols x rows shape (e.g. 4x2), regardless of
-    // what shape the destination canvas had actually been resized to
-    // (applyGridCanvasSize() resizes it to 2x4 column-major on desktop). The
-    // canvas ended up sized for a 2-wide layout but drawn with 4-wide math,
-    // so each of the CSS overlay's real 240x240 cells straddled two
-    // differently-positioned narrow slivers of video. gridColumnMajor/
-    // gridDestCols now drive a SEPARATE destination shape (_gridDestShape()
-    // below) used only for placement (dx/dy) — tileRect()'s cropping still
-    // always uses the true source cols/rows, unchanged, so this only ever
-    // changes where a tile is drawn, never what's cropped for it. Mirrors
-    // mosaic_webcodecs.html's own gridDestShape() exactly, on purpose.
-    this.gridColumnMajor = gridColumnMajor;
-    this.gridDestCols = gridDestCols;
     this.muted = new Array(tileCount).fill(false);
     // Tiles silenced as a SIDE EFFECT of some other tile being soloed (distinct
     // from `muted`, which is only ever true for a tile the user explicitly
@@ -94,15 +74,6 @@ class WebCodecsVideoEngine {
     this.destroyed = false;
     this.seeking = false;
     this._resetLapTracking();
-  }
-
-  // Same shape mosaic_webcodecs.html's own gridDestShape() computes for the
-  // poster — kept as its own method (rather than inlined into
-  // drawGridFromSource()) so setLayout() changing this.cols/rows mid-session
-  // (a piece switch) is automatically reflected without any extra plumbing.
-  _gridDestShape() {
-    if (!this.gridColumnMajor) return { cols: this.cols, rows: this.rows, columnMajor: false };
-    return { cols: this.gridDestCols, rows: Math.ceil((this.cols * this.rows) / this.gridDestCols), columnMajor: true };
   }
 
   // Switch grid geometry when the app loads a different mosaic. Does NOT touch
@@ -404,7 +375,7 @@ class WebCodecsVideoEngine {
     }
     this._offscreenCtx.drawImage(frame, 0, 0, w, h); // full-frame blit — no cropping here, universally safe
     if (this.gridCtx) {
-      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder, this._gridDestShape());
+      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder);
     }
     if (this.gridLeftCtx || this.gridRightCtx) {
       // Split layout: first half of the flat tile index list (reading order —
@@ -430,14 +401,8 @@ function tileRect(i, w, h, cols = 4, rows = 2) {
 // tileCount = how many of cols*rows cells are actually populated for this
 // mosaic (a piece with fewer tiles than cols*rows just never draws/selects
 // the remaining cell(s), which are left blank in the source video itself).
-// cols/rows here are the SOURCE shape (for tileRect() cropping only — the
-// physical layout baked into the video never changes); destShape (Sep 7 2026
-// fix, see the constructor's own comment) is the separate DESTINATION shape
-// placement actually uses, e.g. {cols:2,rows:4,columnMajor:true} on desktop
-// vs {cols,rows,columnMajor:false} (source shape, row-major) on mobile.
-function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape) {
-  const { cols: destCols, rows: destRows, columnMajor } = destShape || { cols, rows, columnMajor: false };
-  const S = ctx.canvas.width / destCols, Sh = ctx.canvas.height / destRows;
+function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder) {
+  const S = ctx.canvas.width / cols, Sh = ctx.canvas.height / rows;
   // tileOrder[slot] = logical tile index drawn at grid position `slot` (see
   // the constructor's own comment) — falls back to identity (slot === i,
   // today's original behavior) whenever it's absent or the wrong length.
@@ -445,8 +410,7 @@ function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows =
   for (let slot = 0; slot < tileCount; slot++) {
     const i = hasOrder ? tileOrder[slot] : slot;
     const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
-    const dx = columnMajor ? Math.floor(slot / destRows) * S : (slot % destCols) * S;
-    const dy = columnMajor ? (slot % destRows) * Sh : Math.floor(slot / destCols) * Sh;
+    const dx = (slot % cols) * S, dy = Math.floor(slot / cols) * Sh;
     ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
     // Explicit mute always wins the visual (black); a tile silenced only
     // because something ELSE is soloed gets the lighter grey "dimmed" wash.
