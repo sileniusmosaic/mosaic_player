@@ -1219,9 +1219,12 @@ const MOSAICS={
     // above, which is the full sheet-music page(s) shown further down the
     // page. Placeholder (Aug 29 2026): same one static image on all three
     // pieces for now — the real plan is 23 per-instrument strips (8 Abakuá +
-    // 8 Congo + 7 Flip Swing), swapped as the focused tile changes, once
-    // those are ready.
+    // 8 Congo + 7 Flip Swing), swapped as the focused tile changes. Clave
+    // and Bembé (indices 0-1 below — first real per-tile notation strips
+    // for Abakuá, Sep 9 2026) now replace the placeholder; Cata, Erikundi,
+    // Quinto, Conga, Tumba and Coro (indices 2-7) still fall back to it.
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
+    notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png'},
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
     // bundled into the git repo/Worker static assets while every other
