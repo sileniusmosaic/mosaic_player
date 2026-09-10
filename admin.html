@@ -248,8 +248,15 @@
     </div>
 
     <div class="card">
-      <p class="sub" id="notationIntro" style="margin-bottom:14px;">The sheet-music strip shown under the focus square for each instrument. Stage a file to preview it — it stays pinned above while you scroll the list — exactly as it'll appear in the app (mobile overlay vs desktop below-square). Nothing goes live until you press Save to live in the preview panel.</p>
       <div id="notationList"></div>
+    </div>
+
+    <!-- Explanatory copy (Sep 10 2026): moved down here, out of the sticky
+         preview panel and off the top of the page, so it doesn't eat into
+         the space the tile list has to scroll in. -->
+    <div class="card">
+      <p class="sub" id="notationIntro" style="margin-bottom:8px;">The sheet-music strip shown under the focus square for each instrument. Stage a file to preview it — it stays pinned above while you scroll the list — exactly as it'll appear in the app (mobile overlay vs desktop below-square). Nothing goes live until you press Save to live in the preview panel.</p>
+      <p class="sub" style="margin-bottom:0;">A tile's preview showing "Default (site fallback)" means nothing's been uploaded for it yet — stage a base image above to replace it.</p>
     </div>
   </div>
 
@@ -939,11 +946,11 @@
         });
       });
       actions.appendChild(del);
-    }else{
-      var note=document.createElement('div');note.className='notation-preview-note';
-      note.textContent='This is the site\'s built-in fallback image, not something uploaded here — stage a base image below to replace it.';
-      actions.appendChild(note);
     }
+    // (kind==='default': nothing to do here — no button, no note. The
+    // explanation of what "Default (site fallback)" means lives in the card
+    // at the very bottom of the page now, out of the sticky panel's way —
+    // see notationIntro's sibling paragraph.)
     wrap.appendChild(actions);
     wrap.appendChild(status);
 
