@@ -127,6 +127,18 @@
   .notation-preview-actions .neutral{background:#22232b;border:1px solid #33343d;color:#e8e8ec;}
   .notation-preview-note{font-size:12px;color:#9a9aa5;text-align:center;margin-top:8px;}
 
+  /* ---- Sticky mockup panel (Sep 10 2026): pins the live-look preview to the
+     top of the viewport while the tile list below it scrolls — so cycling
+     through variants no longer means scrolling up to check the result. Just
+     the preview panel sticks; the page title/back link above it scroll away
+     normally, same as any other sub-page. ---- */
+  .notation-sticky-wrap{position:sticky;top:0;z-index:5;background:#0b0c10;padding-bottom:12px;margin-bottom:6px;border-bottom:1px solid #22232b;}
+
+  /* ---- Piece settings hub (Sep 10 2026): tapping a piece now opens a short
+     menu of its settings pages instead of dumping every card on one long
+     page — same .menu-row look as the piece list on the home screen. ---- */
+  .hub-section-sub{font-size:12px;color:#9a9aa5;margin-top:2px;}
+
   .save-bar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:14px 0 0;background:#0b0c10;}
   #saveBtn{flex:1;background:#6c5ce7;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;}
   #saveBtn:disabled{opacity:.5;cursor:default;}
@@ -161,14 +173,14 @@
     <p class="sub">Changes here go live for everyone immediately once saved — there's no separate publish step.</p>
 
     <div class="card">
-      <h2>Play order</h2>
-      <div id="orderList"></div>
+      <h2>Pieces</h2>
+      <p class="sub" style="margin-bottom:0;">Tap a piece to open its settings — metronome offset, square order, stem volume, notation images.</p>
+      <div id="pieceMenuList"></div>
     </div>
 
     <div class="card">
-      <h2>Pieces</h2>
-      <p class="sub" style="margin-bottom:0;">Tap a piece to adjust its metronome nudge and per-stem volume.</p>
-      <div id="pieceMenuList"></div>
+      <h2>Play order</h2>
+      <div id="orderList"></div>
     </div>
 
     <div class="card">
@@ -177,34 +189,66 @@
     </div>
   </div>
 
-  <!-- Per-piece settings view -->
-  <div id="pieceView" hidden>
-    <button id="backBtn" type="button" class="back-link">← All pieces</button>
-    <h1 id="pieceTitle">Piece</h1>
-    <p class="sub"><a id="piecePreviewLink" class="preview-link" href="#" target="_blank" rel="noopener" style="margin:0;">Open live to test →</a></p>
+  <!-- Piece settings hub (Sep 10 2026): landing page for one piece — a short
+       menu to its four settings pages, rather than all of them stacked on
+       one long page. -->
+  <div id="pieceHubView" hidden>
+    <button id="hubBackBtn" type="button" class="back-link">← All pieces</button>
+    <h1 id="hubTitle">Piece</h1>
+    <p class="sub"><a id="hubPreviewLink" class="preview-link" href="#" target="_blank" rel="noopener" style="margin:0;">Open live to test →</a></p>
+
+    <div class="card">
+      <h2>Settings</h2>
+      <div id="pieceSectionMenu"></div>
+    </div>
+  </div>
+
+  <div id="pieceMetroView" hidden>
+    <button id="metroBackBtn" type="button" class="back-link">← Back</button>
+    <h1 id="metroTitle">Piece</h1>
 
     <div class="card">
       <h2>Metronome click nudge</h2>
       <p class="sub" style="margin-bottom:14px;">Milliseconds to shift the click earlier or later. Positive = click plays later; negative = click plays earlier. Doesn't change the tempo or the spacing between clicks, only when the very first one in the loop lands.</p>
       <div id="pieceNudgeRow"></div>
     </div>
+  </div>
+
+  <div id="pieceOrderView" hidden>
+    <button id="orderBackBtn" type="button" class="back-link">← Back</button>
+    <h1 id="orderTitle">Piece</h1>
 
     <div class="card">
       <h2>Square order</h2>
       <p class="sub" style="margin-bottom:14px;">Which grid position each square appears in. Doesn't touch the video or audio — the same source footage just gets drawn into a different cell, so this is free to change any time.</p>
       <div id="tileOrderList"></div>
     </div>
+  </div>
+
+  <div id="pieceStemsView" hidden>
+    <button id="stemsBackBtn" type="button" class="back-link">← Back</button>
+    <h1 id="stemsTitle">Piece</h1>
 
     <div class="card">
       <h2>Stem volume</h2>
       <p class="sub" style="margin-bottom:14px;">Trim each stem's playback level in dB, relative to its normal (0dB) level. Applies instantly to anyone already playing this piece.</p>
       <div id="stemList"></div>
     </div>
+  </div>
+
+  <!-- Notation images (Sep 10 2026): now its own page so the live-look mockup
+       can dock to the top of the viewport (.notation-sticky-wrap) while the
+       per-instrument list scrolls underneath it. -->
+  <div id="pieceNotationView" hidden>
+    <button id="notationBackBtn" type="button" class="back-link">← Back</button>
+    <h1 id="notationTitle">Piece</h1>
+
+    <div class="notation-sticky-wrap">
+      <div id="notationPreview"></div>
+    </div>
 
     <div class="card">
-      <h2>Notation images</h2>
-      <p class="sub" id="notationIntro" style="margin-bottom:14px;">The sheet-music strip shown under the focus square for each instrument. Stage a file to preview it here exactly as it'll appear in the app (mobile overlay vs desktop below-square) — nothing goes live until you press Save to live in the preview panel. Independent of Save &amp; publish below, which is for the other settings on this page.</p>
-      <div id="notationPreview"></div>
+      <p class="sub" id="notationIntro" style="margin-bottom:14px;">The sheet-music strip shown under the focus square for each instrument. Stage a file to preview it — it stays pinned above while you scroll the list — exactly as it'll appear in the app (mobile overlay vs desktop below-square). Nothing goes live until you press Save to live in the preview panel.</p>
       <div id="notationList"></div>
     </div>
   </div>
@@ -221,6 +265,15 @@
 
   var PIECE_LABELS={flipswing:'Flip Swing',abakua:'Abakuá',congo:'Congo Yambumba'};
   var KNOWN_IDS=Object.keys(PIECE_LABELS);
+  // Piece settings hub (Sep 10 2026) — the four sub-pages a piece's menu
+  // links to, in display order. `key` is also the hash segment
+  // (#/piece/<id>/<key>).
+  var PIECE_SECTIONS=[
+    {key:'metro',label:'Metronome offset',sub:'Nudge the click earlier or later.'},
+    {key:'order',label:'Square order',sub:'Which grid slot each square appears in.'},
+    {key:'stems',label:'Stem volume',sub:'Per-instrument dB trim.'},
+    {key:'notation',label:'Notation images',sub:'Sheet-music strips shown under the focus square.'}
+  ];
   // Index-aligned with each piece's MOSAICS[id].names in mosaic_webcodecs.html
   // — stemGainDb[id][k] is this piece's trim for STEM_NAMES[id][k]. Keep in
   // sync by hand if a piece's tile lineup ever changes (see worker.js's own
@@ -280,17 +333,44 @@
   var gateError=document.getElementById('gateError');
   var consoleEl=document.getElementById('console');
   var menuView=document.getElementById('menuView');
-  var pieceView=document.getElementById('pieceView');
   var orderList=document.getElementById('orderList');
   var pieceMenuList=document.getElementById('pieceMenuList');
-  var backBtn=document.getElementById('backBtn');
-  var pieceTitle=document.getElementById('pieceTitle');
-  var piecePreviewLink=document.getElementById('piecePreviewLink');
+
+  // Piece hub + four settings sub-pages (Sep 10 2026) — one view element and
+  // one back button per page; VIEWS lists every top-level view so showView()
+  // can hide the rest with one loop.
+  var pieceHubView=document.getElementById('pieceHubView');
+  var hubBackBtn=document.getElementById('hubBackBtn');
+  var hubTitle=document.getElementById('hubTitle');
+  var hubPreviewLink=document.getElementById('hubPreviewLink');
+  var pieceSectionMenu=document.getElementById('pieceSectionMenu');
+
+  var pieceMetroView=document.getElementById('pieceMetroView');
+  var metroBackBtn=document.getElementById('metroBackBtn');
+  var metroTitle=document.getElementById('metroTitle');
   var pieceNudgeRow=document.getElementById('pieceNudgeRow');
+
+  var pieceOrderView=document.getElementById('pieceOrderView');
+  var orderBackBtn=document.getElementById('orderBackBtn');
+  var orderTitle=document.getElementById('orderTitle');
   var tileOrderList=document.getElementById('tileOrderList');
+
+  var pieceStemsView=document.getElementById('pieceStemsView');
+  var stemsBackBtn=document.getElementById('stemsBackBtn');
+  var stemsTitle=document.getElementById('stemsTitle');
   var stemList=document.getElementById('stemList');
+
+  var pieceNotationView=document.getElementById('pieceNotationView');
+  var notationBackBtn=document.getElementById('notationBackBtn');
+  var notationTitle=document.getElementById('notationTitle');
   var notationPreview=document.getElementById('notationPreview');
   var notationList=document.getElementById('notationList');
+
+  var VIEWS={menu:menuView,hub:pieceHubView,metro:pieceMetroView,order:pieceOrderView,stems:pieceStemsView,notation:pieceNotationView};
+  function showView(name){
+    Object.keys(VIEWS).forEach(function(k){VIEWS[k].hidden=(k!==name);});
+  }
+
   var saveBtn=document.getElementById('saveBtn');
   var saveStatus=document.getElementById('saveStatus');
 
@@ -481,28 +561,36 @@
     var j=slot+dir;
     if(j<0||j>=arr.length)return;
     var tmp=arr[slot];arr[slot]=arr[j];arr[j]=tmp;
-    renderPiece(id);
+    renderPieceOrder(id);
   }
 
-  // ---- Routing (Sep 7 2026): plain hash routing so "click a piece -> its
-  // own settings page" is a real navigable URL (back button, reload, a
-  // bookmark to one piece's page all work) without adding a server route —
-  // worker.js just serves this one file for everything that isn't the two
-  // /api/... routes, same as always. ----
-  function currentPieceId(){
-    var m=/^#\/piece\/([a-z]+)/.exec(location.hash);
-    return (m&&KNOWN_IDS.indexOf(m[1])>=0)?m[1]:null;
+  // ---- Routing (Sep 7 2026, extended Sep 10 2026 with a per-piece settings
+  // hub): plain hash routing so every page — the piece hub and each of its
+  // four settings pages — is a real navigable URL (back button, reload, a
+  // bookmark all work) without adding a server route — worker.js just serves
+  // this one file for everything that isn't the two /api/... routes, same as
+  // always. #/piece/<id> is the hub; #/piece/<id>/<section> is one of
+  // PIECE_SECTIONS' keys. ----
+  var SECTION_KEYS=PIECE_SECTIONS.map(function(s){return s.key;});
+  function parseHash(){
+    var m=/^#\/piece\/([a-z]+)(?:\/([a-z]+))?/.exec(location.hash);
+    if(!m||KNOWN_IDS.indexOf(m[1])<0)return null;
+    var section=(m[2]&&SECTION_KEYS.indexOf(m[2])>=0)?m[2]:null;
+    return {id:m[1],section:section};
   }
   function renderRoute(){
-    var id=currentPieceId();
-    if(id){renderPiece(id);}
-    else{renderMenu();}
+    var r=parseHash();
+    if(!r){renderMenu();return;}
+    if(r.section==='metro'){renderPieceMetro(r.id);return;}
+    if(r.section==='order'){renderPieceOrder(r.id);return;}
+    if(r.section==='stems'){renderPieceStems(r.id);return;}
+    if(r.section==='notation'){renderPieceNotation(r.id);return;}
+    renderPieceHub(r.id);
   }
   window.addEventListener('hashchange',function(){if(configLoaded)renderRoute();});
-  backBtn.addEventListener('click',function(){location.hash='#/';});
 
   function renderMenu(){
-    pieceView.hidden=true;menuView.hidden=false;
+    showView('menu');
 
     orderList.innerHTML='';
     state.order.forEach(function(id,i){
@@ -535,10 +623,33 @@
     return Math.max(DB_MIN,Math.min(DB_MAX,v));
   }
 
-  function renderPiece(id){
-    menuView.hidden=true;pieceView.hidden=false;
-    pieceTitle.textContent=PIECE_LABELS[id]||id;
-    piecePreviewLink.href='/?mosaic='+id;
+  // Piece settings hub — a short menu to the four sub-pages below, replacing
+  // the old single long page. Each row navigates via location.hash, same
+  // pattern as the home screen's piece list.
+  function renderPieceHub(id){
+    showView('hub');
+    hubTitle.textContent=PIECE_LABELS[id]||id;
+    hubPreviewLink.href='/?mosaic='+id;
+    hubBackBtn.onclick=function(){location.hash='#/';};
+
+    pieceSectionMenu.innerHTML='';
+    PIECE_SECTIONS.forEach(function(sec){
+      var row=document.createElement('button');row.type='button';row.className='menu-row';
+      var info=document.createElement('div');
+      var name=document.createElement('div');name.className='piece-name';name.textContent=sec.label;
+      var sub=document.createElement('div');sub.className='hub-section-sub';sub.textContent=sec.sub;
+      info.appendChild(name);info.appendChild(sub);
+      var chevron=document.createElement('div');chevron.className='menu-chevron';chevron.textContent='›';
+      row.appendChild(info);row.appendChild(chevron);
+      row.addEventListener('click',function(){location.hash='#/piece/'+id+'/'+sec.key;});
+      pieceSectionMenu.appendChild(row);
+    });
+  }
+
+  function renderPieceMetro(id){
+    showView('metro');
+    metroTitle.textContent=PIECE_LABELS[id]||id;
+    metroBackBtn.onclick=function(){location.hash='#/piece/'+id;};
 
     // Metro nudge — same control as before, just now scoped to this one piece.
     pieceNudgeRow.innerHTML='';
@@ -561,6 +672,12 @@
       row.appendChild(name);row.appendChild(controls);
       pieceNudgeRow.appendChild(row);
     })();
+  }
+
+  function renderPieceOrder(id){
+    showView('order');
+    orderTitle.textContent=PIECE_LABELS[id]||id;
+    orderBackBtn.onclick=function(){location.hash='#/piece/'+id;};
 
     // Square order — same up/down-arrow list as "Play order" on the menu
     // (moveTileOrder() below is that same idea, scoped to one piece's own
@@ -582,6 +699,12 @@
       row.appendChild(name);row.appendChild(btns);
       tileOrderList.appendChild(row);
     });
+  }
+
+  function renderPieceStems(id){
+    showView('stems');
+    stemsTitle.textContent=PIECE_LABELS[id]||id;
+    stemsBackBtn.onclick=function(){location.hash='#/piece/'+id;};
 
     // Per-stem dB volume trim.
     stemList.innerHTML='';
@@ -610,7 +733,12 @@
       row.appendChild(name);row.appendChild(controls);
       stemList.appendChild(row);
     });
+  }
 
+  function renderPieceNotation(id){
+    showView('notation');
+    notationTitle.textContent=(PIECE_LABELS[id]||id)+' — notation images';
+    notationBackBtn.onclick=function(){location.hash='#/piece/'+id;};
     refreshNotationSection(id);
   }
 

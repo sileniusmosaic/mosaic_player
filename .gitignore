@@ -1,3 +1,4 @@
 capacitor-app/
 Mosaic/*/raw/
 .DS_Store
+.wrangler/
