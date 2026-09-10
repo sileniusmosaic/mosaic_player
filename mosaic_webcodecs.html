@@ -1244,11 +1244,22 @@ const MOSAICS={
     metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
     cols:4, rows:2, tileCount:8, loopEnd:24.000, // was 24.050 — the real recording measures exactly 24.000s (1,152,000 samples @ 48kHz, verified from the raw Clave master); the wrong-by-50ms value was padding every stem's loop buffer with 50ms of silence at the end, which is the double-hit/flam on loop
 
-    // Beat counter: given directly as 80 BPM rather than a bar count (BPM
-    // mode — see updateMetro(): with `bpm` set instead of `bars`, beat
-    // spacing is a fixed 60/bpm seconds, scaled by the current tempo
-    // control the same way the audio/video already are).
-    beatsPerBar:4, bpm:80,
+    // Beat counter: originally given as 80 BPM only (BPM mode — see
+    // updateMetro()'s bpm branch: beat spacing is a fixed 60/bpm seconds,
+    // scaled by the current tempo control the same way the audio/video
+    // already are). Sep 10 2026: also given an exact `bars` count (bar-count
+    // mode, same as Abakuá/Flip Swing) so per-bar notation overrides
+    // (notationStripByIndex/notationVariantsByIndex — see
+    // resolveNotationStripSrc()) work for Congo too, which needs a fixed
+    // total bar count to derive "which bar is this" from. 8 bars is not a
+    // guess: 24.000s loop x 80bpm/60 = 32 beats exactly, / 4 beats/bar = 8
+    // bars exactly (confirmed: computeMetroBeatTimes()'s two branches — the
+    // bars one used now, and the bpm one this replaces — resolve to the
+    // identical totalBeats=32 either way, so this changes nothing about the
+    // actual click schedule, only unlocks the bar-based notation feature).
+    // `bpm` kept alongside for reference; `bars` takes priority wherever both
+    // are checked (see cfg.bars-first branches throughout).
+    beatsPerBar:4, bpm:80, bars:8,
     // Progressive video streaming (Aug 29 2026) — see loadVideoForTempoZero()
     // and progressive-loader.js's own header comment for the mechanism.
     // Verified against the real production export

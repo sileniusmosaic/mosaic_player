@@ -46,14 +46,16 @@ const KNOWN_MOSAIC_IDS = ['flipswing', 'abakua', 'congo'];
 const STEM_COUNTS = { flipswing: 8, abakua: 8, congo: 8 };
 
 // Total bar count per piece, for admin.html's own UI hints only (e.g. "bars
-// 1-19") — mirrors mosaic_webcodecs.html's MOSAICS[id].bars. Congo runs in
-// BPM mode there (no fixed bar count — see updateMetro()'s two branches), so
-// it's null here: per-bar notation variants aren't meaningful for Congo
-// until/unless it's ever given a `bars` config too, only a base ("all")
-// image. Deliberately NOT hard-enforced server-side beyond "a positive
-// integer" (see validateBars() below) — a future piece's bar count can
-// change without this file needing a matching deploy just to accept it.
-const BAR_COUNTS = { flipswing: 12, abakua: 19, congo: null };
+// 1-19") — mirrors mosaic_webcodecs.html's MOSAICS[id].bars. Congo was BPM-
+// only (no fixed bar count) until Sep 10 2026, when it was given an exact
+// `bars:8` there too (24.000s loop x 80bpm/60 = 32 beats / 4 beats-per-bar =
+// 8 bars exactly, not a guess — see that file's own comment) specifically so
+// per-bar notation variants could work for it. null here would mean "no bar
+// count, base image only" for a future piece that hasn't been given one yet.
+// Deliberately NOT hard-enforced server-side beyond "a positive integer"
+// (see validateBars() below) — a bar count changing is a UI-hint update
+// only, never a reason a valid upload gets rejected.
+const BAR_COUNTS = { flipswing: 12, abakua: 19, congo: 8 };
 
 const STEM_GAIN_DB_MIN = -18;
 const STEM_GAIN_DB_MAX = 18;

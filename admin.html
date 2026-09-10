@@ -75,6 +75,7 @@
   .notation-variant button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;}
   .notation-variant button.danger{color:#ff6b6b;border-color:#4a2a2a;}
   .notation-add{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:10px;margin-top:4px;border-top:1px dashed #22232b;}
+  .notation-bars-hint{font-size:12px;color:#9a9aa5;white-space:nowrap;}
   .notation-add input[type=text]{width:110px;background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:8px;font-size:13px;}
   .notation-add input[type=file]{flex:1;min-width:140px;font-size:12px;color:#9a9aa5;}
   .notation-add button{background:#6c5ce7;color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
@@ -234,11 +235,14 @@
   var PASS_KEY='mosaicAdminPass';
   // Total bar count per piece (Sep 9 2026, notation-by-bar uploads) — mirrors
   // worker.js's own BAR_COUNTS and mosaic_webcodecs.html's MOSAICS[id].bars.
-  // null means "this piece has no fixed bar count" (Congo runs in BPM mode —
-  // see updateMetro()'s two branches there): its tiles can still take a base
-  // notation image, just not a per-bar one, so the bar-number input is
-  // hidden for it below (see renderNotationTile()).
-  var BAR_COUNTS={flipswing:12, abakua:19, congo:null};
+  // null would mean "this piece has no fixed bar count": its tiles could
+  // still take a base image, just not a per-bar one (the bar-number input is
+  // hidden for it below — see renderNotationTiles()). Congo was null until
+  // Sep 10 2026, when mosaic_webcodecs.html gave it an exact `bars:8` too
+  // (24s loop x 80bpm/60 = 32 beats / 4 beats-per-bar = 8, not a guess — see
+  // that file's own comment) specifically so per-bar notation would work
+  // for it as well.
+  var BAR_COUNTS={flipswing:12, abakua:19, congo:8};
   // Mirrors mosaic_webcodecs.html's MOSAICS[id] poster/cols/rows/notationStrip
   // /notationStripByIndex (Sep 10 2026, for the live-look preview below) —
   // same "no shared source of truth across these static files" situation as
@@ -734,7 +738,7 @@
 
     var modebar=document.createElement('div');modebar.className='notation-preview-modebar';
     var instrumentLabel=document.createElement('div');instrumentLabel.className='notation-preview-instrument';
-    instrumentLabel.textContent='Previewing: '+STEM_NAMES[id][tileIdx];
+    instrumentLabel.textContent='Previewing: '+STEM_NAMES[id][tileIdx]+(BAR_COUNTS[id]?' (piece has '+BAR_COUNTS[id]+' bars)':'');
     var toggle=document.createElement('div');toggle.className='notation-mode-toggle';
     var autoIsDesktop=resolvedPreviewMode('auto')==='desktop';
     [['auto','Auto ('+(autoIsDesktop?'Desktop':'Mobile')+')'],['mobile','Mobile'],['desktop','Desktop']].forEach(function(pair){
@@ -853,10 +857,12 @@
 
       var add=document.createElement('div');add.className='notation-add';
       var fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='image/png';
-      var barsInput=null;
+      var barsInput=null,barsHint=null;
       if(barCount){
+        barsHint=document.createElement('span');barsHint.className='notation-bars-hint';
+        barsHint.textContent='Bars (1–'+barCount+'):';
         barsInput=document.createElement('input');barsInput.type='text';
-        barsInput.placeholder='Bars e.g. 6,12 (blank = all)';
+        barsInput.placeholder='e.g. 2,4,6 (blank = all)';
         barsInput.title='This piece has '+barCount+' bars. Leave blank to stage a base image (used whenever no bar-specific one applies).';
       }
       var stageBtn=document.createElement('button');stageBtn.type='button';stageBtn.textContent='Stage for preview';
@@ -880,6 +886,7 @@
       });
 
       add.appendChild(fileInput);
+      if(barsHint)add.appendChild(barsHint);
       if(barsInput)add.appendChild(barsInput);
       add.appendChild(stageBtn);
       add.appendChild(status);
