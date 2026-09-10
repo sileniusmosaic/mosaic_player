@@ -12,5 +12,20 @@
       "binding": "ADMIN_CONFIG",
       "id": "a25a0f05fe4b4bcdaa5045ce29f8379e"
     }
+  ],
+  // Usage analytics (Sep 10 2026, see worker.js's own comment near
+  // ANALYTICS_HEARTBEAT_SECONDS) — anonymous session pings only (no IP, no
+  // device info, no names), so the admin console can show which pieces get
+  // played, for how long, at what speed, and what's muted. Provisioned
+  // directly via the Cloudflare API, not `wrangler d1 create` — already
+  // live on the account, this binding is what actually wires it into the
+  // Worker (needs a real deploy to take effect, same as any other code
+  // change here).
+  "d1_databases": [
+    {
+      "binding": "ANALYTICS_DB",
+      "database_name": "mosaic-analytics",
+      "database_id": "b2b0b7ad-9d01-43b5-b76e-80158d204fc8"
+    }
   ]
 }

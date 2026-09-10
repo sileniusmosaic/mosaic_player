@@ -163,6 +163,29 @@
   #saveStatus.err{color:#ff6b6b;}
 
   .parked{color:#6a6a75;font-size:13px;font-style:italic;}
+
+  /* ---- Usage analytics (Sep 10 2026) — see worker.js's ANALYTICS_DB
+     comment for what's actually tracked (anonymous session pings: piece,
+     tempo, mutes — no IP/device/identity) and mosaic_webcodecs.html's
+     sendAnalyticsPing() for how it's sent. This page just digests it. ---- */
+  .usage-stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;}
+  .usage-stat{flex:1 1 100px;background:#1a1b21;border:1px solid #24252e;border-radius:10px;padding:12px 10px;text-align:center;}
+  .usage-stat-num{font-size:22px;font-weight:700;line-height:1.1;}
+  .usage-stat-label{font-size:11px;color:#9a9aa5;margin-top:4px;}
+  .usage-piece{border-bottom:1px solid #22232b;padding:16px 0;}
+  .usage-piece:last-child{border-bottom:none;}
+  .usage-piece-name{font-size:15px;font-weight:700;margin-bottom:2px;}
+  .usage-piece-meta{font-size:12px;color:#9a9aa5;margin-bottom:12px;}
+  .usage-bar-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:5px;}
+  .usage-bar-label{width:38px;color:#9a9aa5;flex:0 0 auto;}
+  .usage-bar-track{flex:1;height:7px;background:#1a1b21;border:1px solid #24252e;border-radius:4px;overflow:hidden;}
+  .usage-bar-fill{height:100%;background:#6c5ce7;}
+  .usage-bar-count{width:30px;text-align:right;color:#9a9aa5;flex:0 0 auto;font-variant-numeric:tabular-nums;}
+  .usage-mute-title{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9a9aa5;margin:12px 0 6px;}
+  .usage-mute-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}
+  .usage-mute-name{color:#e8e8ec;}
+  .usage-mute-pct{color:#9a9aa5;font-variant-numeric:tabular-nums;}
+  .usage-empty{color:#6a6a75;font-size:13px;font-style:italic;}
 </style>
 </head>
 <body>
@@ -199,9 +222,24 @@
     </div>
 
     <div class="card">
+      <h2>Usage</h2>
+      <div id="usageMenuRow"></div>
+    </div>
+
+    <div class="card">
       <h2>Coming later</h2>
       <p class="parked">Drag-and-drop file upload for new pieces/assets — parked for now, not built yet.</p>
     </div>
+  </div>
+
+  <!-- Usage analytics (Sep 10 2026): a digest of the anonymous session pings
+       described in worker.js's ANALYTICS_DB comment — connections, which
+       pieces get played, for how long, at what tempo, what's muted. -->
+  <div id="usageView" hidden>
+    <button id="usageBackBtn" type="button" class="back-link">← All pieces</button>
+    <h1>Usage</h1>
+    <p class="sub">Anonymous only — no names, no IP addresses, no device info. Just how the app's actually being used.</p>
+    <div id="usageBody"><p class="sub">Loading…</p></div>
   </div>
 
   <!-- Piece settings hub (Sep 10 2026): landing page for one piece — a short
@@ -373,6 +411,7 @@
   var menuView=document.getElementById('menuView');
   var orderList=document.getElementById('orderList');
   var pieceMenuList=document.getElementById('pieceMenuList');
+  var usageMenuRow=document.getElementById('usageMenuRow');
 
   // Piece hub + four settings sub-pages (Sep 10 2026) — one view element and
   // one back button per page; VIEWS lists every top-level view so showView()
@@ -404,7 +443,11 @@
   var notationPreview=document.getElementById('notationPreview');
   var notationList=document.getElementById('notationList');
 
-  var VIEWS={menu:menuView,hub:pieceHubView,metro:pieceMetroView,order:pieceOrderView,stems:pieceStemsView,notation:pieceNotationView};
+  var usageView=document.getElementById('usageView');
+  var usageBackBtn=document.getElementById('usageBackBtn');
+  var usageBody=document.getElementById('usageBody');
+
+  var VIEWS={menu:menuView,hub:pieceHubView,metro:pieceMetroView,order:pieceOrderView,stems:pieceStemsView,notation:pieceNotationView,usage:usageView};
   function showView(name){
     Object.keys(VIEWS).forEach(function(k){VIEWS[k].hidden=(k!==name);});
   }
@@ -622,6 +665,7 @@
     return {id:m[1],section:section};
   }
   function renderRoute(){
+    if(location.hash==='#/usage'){renderUsage();return;}
     var r=parseHash();
     if(!r){renderMenu();return;}
     if(r.section==='metro'){renderPieceMetro(r.id);return;}
@@ -658,6 +702,19 @@
       row.addEventListener('click',function(){location.hash='#/piece/'+id;});
       pieceMenuList.appendChild(row);
     });
+
+    usageMenuRow.innerHTML='';
+    (function(){
+      var row=document.createElement('button');row.type='button';row.className='menu-row';
+      var info=document.createElement('div');
+      var name=document.createElement('div');name.className='piece-name';name.textContent='Connections, pieces played, tempo, mutes';
+      var sub=document.createElement('div');sub.className='hub-section-sub';sub.textContent='Anonymous usage digest';
+      info.appendChild(name);info.appendChild(sub);
+      var chevron=document.createElement('div');chevron.className='menu-chevron';chevron.textContent='›';
+      row.appendChild(info);row.appendChild(chevron);
+      row.addEventListener('click',function(){location.hash='#/usage';});
+      usageMenuRow.appendChild(row);
+    })();
   }
 
   function clampDb(v){
@@ -841,6 +898,89 @@
         if(!res.ok)throw new Error((data&&data.error)?data.error:('HTTP '+res.status));
         return data;
       });
+    });
+  }
+  // Same passphrase-header/401 convention as notationApi() above, just a
+  // GET with no body — used only by renderUsage() below.
+  function fetchAnalytics(){
+    return fetch('/api/admin/analytics',{headers:{'x-admin-passphrase':passphrase()},cache:'no-store'}).then(function(res){
+      return res.json().catch(function(){return{};}).then(function(data){
+        if(res.status===401){
+          sessionStorage.removeItem(PASS_KEY);
+          consoleEl.style.display='none';
+          gate.style.display='flex';
+          gateError.textContent='Incorrect passphrase — try again.';
+          throw new Error('unauthorized');
+        }
+        if(!res.ok)throw new Error((data&&data.error)?data.error:('HTTP '+res.status));
+        return data;
+      });
+    });
+  }
+  function formatMinutes(m){
+    if(m<1)return Math.round(m*60)+'s';
+    if(m<60)return (Math.round(m*10)/10)+' min';
+    var h=Math.floor(m/60),rem=Math.round(m%60);
+    return h+'h '+rem+'m';
+  }
+  function formatRelativeTime(ts){
+    if(!ts)return 'never';
+    var diffMs=Date.now()-ts,mins=Math.round(diffMs/60000);
+    if(mins<1)return 'just now';
+    if(mins<60)return mins+' min ago';
+    var hrs=Math.round(mins/60);
+    if(hrs<24)return hrs+'h ago';
+    var days=Math.round(hrs/24);
+    return days+'d ago';
+  }
+  function renderUsage(){
+    showView('usage');
+    usageBackBtn.onclick=function(){location.hash='#/';};
+    usageBody.innerHTML='<p class="sub">Loading…</p>';
+    fetchAnalytics().then(function(d){
+      var html='';
+      html+='<div class="card"><div class="usage-stats">'
+        +'<div class="usage-stat"><div class="usage-stat-num">'+(d.totalConnections||0)+'</div><div class="usage-stat-label">Connections (all time)</div></div>'
+        +'<div class="usage-stat"><div class="usage-stat-num">'+(d.connections30d||0)+'</div><div class="usage-stat-label">Last 30 days</div></div>'
+        +'<div class="usage-stat"><div class="usage-stat-num">'+formatRelativeTime(d.lastActivityAt)+'</div><div class="usage-stat-label">Last activity</div></div>'
+        +'</div></div>';
+
+      html+='<div class="card">';
+      var pieces=d.pieces||{};
+      var anyData=KNOWN_IDS.some(function(id){return pieces[id]&&(pieces[id].sessions>0);});
+      if(!anyData){
+        html+='<p class="usage-empty">No usage recorded yet — this fills in as people open and play the link.</p>';
+      }else{
+        KNOWN_IDS.forEach(function(id,idx){
+          var p=pieces[id]||{sessions:0,minutes:0,tempoBreakdown:{},muteFrequency:{}};
+          html+='<div class="usage-piece">';
+          html+='<div class="usage-piece-name">'+(PIECE_LABELS[id]||id)+'</div>';
+          html+='<div class="usage-piece-meta">'+p.sessions+' session'+(p.sessions===1?'':'s')+' · '+formatMinutes(p.minutes)+' played</div>';
+          if(p.sessions>0){
+            var maxTempo=Math.max(1,Math.max.apply(null,[25,50,75,100].map(function(t){return p.tempoBreakdown[t]||0;})));
+            [25,50,75,100].forEach(function(t){
+              var c=p.tempoBreakdown[t]||0,pct=Math.round((c/maxTempo)*100);
+              html+='<div class="usage-bar-row"><div class="usage-bar-label">'+t+'%</div><div class="usage-bar-track"><div class="usage-bar-fill" style="width:'+pct+'%"></div></div><div class="usage-bar-count">'+c+'</div></div>';
+            });
+            var muteEntries=Object.keys(p.muteFrequency||{}).map(function(k){return {idx:Number(k),count:p.muteFrequency[k]};}).sort(function(a,b){return b.count-a.count;}).slice(0,5);
+            if(muteEntries.length){
+              var totalHb=Math.max(1,p.heartbeats||0);
+              html+='<div class="usage-mute-title">Most muted</div>';
+              muteEntries.forEach(function(e){
+                var name=(STEM_NAMES[id]&&STEM_NAMES[id][e.idx])||('Tile '+e.idx);
+                var pct=Math.round((e.count/totalHb)*100);
+                html+='<div class="usage-mute-row"><div class="usage-mute-name">'+name+'</div><div class="usage-mute-pct">'+pct+'%</div></div>';
+              });
+            }
+          }
+          html+='</div>';
+        });
+      }
+      html+='</div>';
+      usageBody.innerHTML=html;
+    }).catch(function(e){
+      if(e.message==='unauthorized')return;
+      usageBody.innerHTML='<p class="sub" style="color:#ff6b6b;">Could not load usage data: '+e.message+'</p>';
     });
   }
   // ---- Local-disk mirror (Sep 10 2026) ----

@@ -57,6 +57,25 @@ const STEM_COUNTS = { flipswing: 8, abakua: 8, congo: 8 };
 // only, never a reason a valid upload gets rejected.
 const BAR_COUNTS = { flipswing: 12, abakua: 19, congo: 8 };
 
+// Usage analytics (Sep 10 2026) — anonymous session pings so the admin
+// console can show which pieces get played, for how long, at what tempo,
+// and what's muted. Deliberately minimal: ONE D1 table (pings, see
+// ANALYTICS_DB in wrangler.jsonc), no user identity beyond a random
+// per-visit sessionId the browser generates itself (see
+// mosaic_webcodecs.html) — no IP, no device info, no names. A 'start'
+// ping fires once on page load (so "connections" counts a visit even if
+// the person never presses play); 'heartbeat' pings fire roughly every
+// ANALYTICS_HEARTBEAT_SECONDS while something is actually playing, via
+// navigator.sendBeacon — fire-and-forget, off the audio/video path
+// entirely, so there's no perceptible overhead. Play time per piece/tempo
+// is then just (heartbeat count * this interval) at digest time — no
+// separate "session end" event needed (unreliable on mobile anyway), and a
+// dropped ping just slightly undercounts rather than breaking anything.
+const ANALYTICS_HEARTBEAT_SECONDS = 25;
+const ANALYTICS_TEMPOS = [25, 50, 75, 100];
+const ANALYTICS_KINDS = ['start', 'heartbeat'];
+const MAX_MUTED_TILES_FIELD = 64; // generous cap on the raw "0,3,5" string length
+
 const STEM_GAIN_DB_MIN = -18;
 const STEM_GAIN_DB_MAX = 18;
 
@@ -271,6 +290,34 @@ function checkPassphrase(request, env) {
   return !!env.ADMIN_PASSPHRASE && passphrase === env.ADMIN_PASSPHRASE;
 }
 
+// A random per-visit id the browser generates itself (see localStorage/
+// sessionStorage use in mosaic_webcodecs.html) — validated only for shape
+// (opaque token, not decoded/interpreted), never treated as identity.
+function validSessionId(s) {
+  return typeof s === 'string' && /^[a-z0-9]{12,40}$/i.test(s);
+}
+
+// "muted" on a ping is a comma-joined list of tile indices, e.g. "0,3,5", or
+// '' for none — deliberately a plain string (not a JSON array) to keep the
+// beacon payload tiny. Validated against the piece's own tile count so a
+// malformed/forged value can't silently pollute the digest with bogus tile
+// numbers; returns null (reject) rather than best-effort cleaning, since
+// this is cheap client-computed data with no reason to ever be malformed.
+function validMutedTiles(pieceId, s) {
+  if (s === '' || s == null) return '';
+  if (typeof s !== 'string' || s.length > MAX_MUTED_TILES_FIELD) return null;
+  const count = STEM_COUNTS[pieceId];
+  const parts = s.split(',');
+  const seen = new Set();
+  for (const p of parts) {
+    if (!/^\d{1,2}$/.test(p)) return null;
+    const n = Number(p);
+    if (n < 0 || n >= count || seen.has(n)) return null;
+    seen.add(n);
+  }
+  return Array.from(seen).sort((a, b) => a - b).join(',');
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -278,6 +325,47 @@ export default {
     if (url.pathname === '/api/config' && request.method === 'GET') {
       const cfg = await readConfig(env);
       return corsJson(withNotationImageUrls(cfg));
+    }
+
+    // Analytics ping — public, no auth (same trust level/shape as any other
+    // client telemetry beacon), write-only, tiny body. Body: { sessionId,
+    // kind: 'start'|'heartbeat', pieceId, tempoPct, mutedTiles }. Sent via
+    // navigator.sendBeacon so the request outlives page unload; a beacon
+    // body arrives as text/plain (sendBeacon can't set a custom content
+    // type), so this parses JSON regardless of what content-type the
+    // request actually carries. Every field is validated and the row is
+    // simply dropped (200, no error surfaced) on anything malformed —
+    // there's no user waiting on this response and no reason to ever let a
+    // bad ping break playback.
+    if (url.pathname === '/api/track' && request.method === 'POST') {
+      if (!env.ANALYTICS_DB) return corsJson({ ok: true }); // DB not yet bound in this deploy — no-op rather than error
+      let body;
+      try {
+        body = JSON.parse(await request.text());
+      } catch {
+        return corsJson({ ok: true });
+      }
+      const pieceId = body?.pieceId;
+      const tempoPct = Number(body?.tempoPct);
+      const kind = body?.kind;
+      const mutedTiles = validMutedTiles(pieceId, body?.mutedTiles);
+      if (
+        !validSessionId(body?.sessionId) ||
+        !ANALYTICS_KINDS.includes(kind) ||
+        !KNOWN_MOSAIC_IDS.includes(pieceId) ||
+        !ANALYTICS_TEMPOS.includes(tempoPct) ||
+        mutedTiles === null
+      ) {
+        return corsJson({ ok: true }); // silently drop — see comment above
+      }
+      try {
+        await env.ANALYTICS_DB.prepare(
+          'INSERT INTO pings (session_id, ts, piece_id, tempo_pct, muted_tiles, kind) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(body.sessionId, Date.now(), pieceId, tempoPct, mutedTiles, kind).run();
+      } catch {
+        // Best-effort — a transient D1 hiccup should never surface to the player.
+      }
+      return corsJson({ ok: true });
     }
 
     if (url.pathname === '/api/admin/config' && request.method === 'POST') {
@@ -407,6 +495,86 @@ export default {
         return corsJson(withNotationImageUrls(cfg));
       } catch (e) {
         return corsJson({ error: 'Server error while deleting: ' + (e && e.message ? e.message : String(e)) }, 500);
+      }
+    }
+
+    // Usage digest for admin.html's Usage page — admin-passphrase gated,
+    // same as every other /api/admin/* route. Does the aggregation in SQL
+    // (cheap, small volumes) except mute-frequency, which needs the raw
+    // muted_tiles strings split apart — done here in JS rather than a
+    // recursive-CTE query, simplest for the data volumes this will ever see.
+    if (url.pathname === '/api/admin/analytics' && request.method === 'GET') {
+      if (!checkPassphrase(request, env)) {
+        return corsJson({ error: 'Incorrect passphrase.' }, 401);
+      }
+      if (!env.ANALYTICS_DB) {
+        return corsJson({ error: 'Analytics database not bound yet — deploy after adding the D1 binding.' }, 500);
+      }
+      try {
+        const db = env.ANALYTICS_DB;
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+        const totalsQ = db.prepare(
+          `SELECT COUNT(DISTINCT session_id) AS allTime,
+                  SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END) AS recentPings
+           FROM pings WHERE kind = 'start'`
+        ).bind(thirtyDaysAgo);
+        const recentSessionsQ = db.prepare(
+          `SELECT COUNT(DISTINCT session_id) AS recent FROM pings WHERE kind = 'start' AND ts >= ?`
+        ).bind(thirtyDaysAgo);
+        const perPieceQ = db.prepare(
+          `SELECT piece_id,
+                  COUNT(DISTINCT session_id) AS sessions,
+                  SUM(CASE WHEN kind = 'heartbeat' THEN 1 ELSE 0 END) AS heartbeats
+           FROM pings GROUP BY piece_id`
+        );
+        const perTempoQ = db.prepare(
+          `SELECT piece_id, tempo_pct, COUNT(*) AS heartbeats
+           FROM pings WHERE kind = 'heartbeat' GROUP BY piece_id, tempo_pct`
+        );
+        const muteRowsQ = db.prepare(
+          `SELECT piece_id, muted_tiles FROM pings WHERE kind = 'heartbeat' AND muted_tiles != ''`
+        );
+        const lastActivityQ = db.prepare(`SELECT MAX(ts) AS lastTs FROM pings`);
+
+        const [totals, recentSessions, perPiece, perTempo, muteRows, lastActivity] = await Promise.all([
+          totalsQ.first(), recentSessionsQ.first(), perPieceQ.all(), perTempoQ.all(), muteRowsQ.all(), lastActivityQ.first(),
+        ]);
+
+        const pieces = {};
+        for (const id of KNOWN_MOSAIC_IDS) {
+          pieces[id] = { sessions: 0, heartbeats: 0, minutes: 0, tempoBreakdown: {}, muteFrequency: {} };
+          for (const t of ANALYTICS_TEMPOS) pieces[id].tempoBreakdown[t] = 0;
+        }
+        for (const row of perPiece.results || []) {
+          if (!pieces[row.piece_id]) continue;
+          pieces[row.piece_id].sessions = row.sessions || 0;
+          pieces[row.piece_id].heartbeats = row.heartbeats || 0;
+          pieces[row.piece_id].minutes = Math.round(((row.heartbeats || 0) * ANALYTICS_HEARTBEAT_SECONDS) / 60 * 10) / 10;
+        }
+        for (const row of perTempo.results || []) {
+          if (!pieces[row.piece_id]) continue;
+          pieces[row.piece_id].tempoBreakdown[row.tempo_pct] = row.heartbeats || 0;
+        }
+        for (const row of (muteRows.results || [])) {
+          const p = pieces[row.piece_id];
+          if (!p) continue;
+          for (const tileStr of row.muted_tiles.split(',')) {
+            if (tileStr === '') continue;
+            p.muteFrequency[tileStr] = (p.muteFrequency[tileStr] || 0) + 1;
+          }
+        }
+
+        return corsJson({
+          totalConnections: totals?.allTime || 0,
+          connections30d: recentSessions?.recent || 0,
+          lastActivityAt: lastActivity?.lastTs || null,
+          heartbeatSeconds: ANALYTICS_HEARTBEAT_SECONDS,
+          pieces,
+          generatedAt: Date.now(),
+        });
+      } catch (e) {
+        return corsJson({ error: 'Server error while reading analytics: ' + (e && e.message ? e.message : String(e)) }, 500);
       }
     }
 

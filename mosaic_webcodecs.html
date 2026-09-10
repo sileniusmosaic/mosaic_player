@@ -4661,6 +4661,35 @@ syncLandscapeMetroBtn();
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
+
+// Usage analytics (Sep 10 2026) — anonymous, minimal, off the playback path
+// entirely: a random id generated fresh on THIS load (nothing persisted —
+// each page load is its own "connection", there's no cross-visit identity
+// to correlate), one 'start' beacon now, then a 'heartbeat' beacon roughly
+// every ANALYTICS_HEARTBEAT_MS but ONLY while something is actually
+// playing (checked live off the existing `playing` flag — no new state,
+// no hooks added to switchMosaic()/tempo/mute code paths at all: each
+// heartbeat just reads whatever mosaicId/tempoPercent/muted[] already are
+// at that instant). sendBeacon is fire-and-forget and survives page
+// unload/navigation, so this can never block or delay anything the person
+// actually interacts with. See worker.js's matching comment near
+// ANALYTICS_HEARTBEAT_SECONDS (keep the two interval constants in sync)
+// and admin.html's Usage page for where this data actually gets read.
+const ANALYTICS_HEARTBEAT_MS=25000;
+const analyticsSessionId=(()=>{
+  try{return crypto.randomUUID().replace(/-/g,'');}
+  catch{return Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);}
+})();
+function sendAnalyticsPing(kind){
+  try{
+    const mutedTiles=muted.map((m,i)=>m?i:-1).filter(i=>i>=0).join(',');
+    const payload=JSON.stringify({sessionId:analyticsSessionId,kind,pieceId:mosaicId,tempoPct:tempoPercent,mutedTiles});
+    if(navigator.sendBeacon)navigator.sendBeacon('/api/track',payload);
+    else fetch('/api/track',{method:'POST',body:payload,keepalive:true}).catch(()=>{});
+  }catch{} // analytics must never be able to throw into any caller
+}
+sendAnalyticsPing('start');
+setInterval(()=>{if(playing)sendAnalyticsPing('heartbeat');},ANALYTICS_HEARTBEAT_MS);
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play to begin.');
 // The "first tap ANYWHERE starts playback" listener that used to live here
