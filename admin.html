@@ -63,6 +63,26 @@
   .stem-reset{width:auto!important;padding:0 10px!important;font-size:12px!important;color:#9a9aa5;}
   .stem-unit{color:#9a9aa5;font-size:13px;}
 
+  /* ---- Notation image uploads (Sep 9 2026) ---- */
+  .notation-tile{border-bottom:1px solid #22232b;padding:14px 0;}
+  .notation-tile:last-child{border-bottom:none;}
+  .notation-tile-name{font-size:15px;font-weight:600;margin-bottom:10px;}
+  .notation-variant{display:flex;align-items:center;gap:10px;padding:8px 0;}
+  .notation-thumb{width:52px;height:52px;border-radius:6px;background:#fff repeat;background-size:cover;background-position:center;border:1px solid #33343d;flex:0 0 auto;object-fit:cover;}
+  .notation-variant-info{flex:1;min-width:0;}
+  .notation-variant-bars{font-size:14px;font-weight:600;}
+  .notation-variant-sub{font-size:12px;color:#9a9aa5;}
+  .notation-variant button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;}
+  .notation-variant button.danger{color:#ff6b6b;border-color:#4a2a2a;}
+  .notation-add{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:10px;margin-top:4px;border-top:1px dashed #22232b;}
+  .notation-add input[type=text]{width:110px;background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:8px;font-size:13px;}
+  .notation-add input[type=file]{flex:1;min-width:140px;font-size:12px;color:#9a9aa5;}
+  .notation-add button{background:#6c5ce7;color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .notation-add button:disabled{opacity:.5;cursor:default;}
+  .notation-status{font-size:12px;color:#9a9aa5;margin-top:6px;min-height:16px;}
+  .notation-status.ok{color:#4cd964;}
+  .notation-status.err{color:#ff6b6b;}
+
   .save-bar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:14px 0 0;background:#0b0c10;}
   #saveBtn{flex:1;background:#6c5ce7;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;}
   #saveBtn:disabled{opacity:.5;cursor:default;}
@@ -136,6 +156,12 @@
       <p class="sub" style="margin-bottom:14px;">Trim each stem's playback level in dB, relative to its normal (0dB) level. Applies instantly to anyone already playing this piece.</p>
       <div id="stemList"></div>
     </div>
+
+    <div class="card">
+      <h2>Notation images</h2>
+      <p class="sub" id="notationIntro" style="margin-bottom:14px;">The sheet-music strip shown under the focus square for each instrument. Upload a base image that's always used, and optionally extra images that only appear during specific bars — each one uploads and goes live immediately, separately from Save &amp; publish below.</p>
+      <div id="notationList"></div>
+    </div>
   </div>
 
   <div class="save-bar">
@@ -162,6 +188,13 @@
   };
   var DB_MIN=-18, DB_MAX=18;
   var PASS_KEY='mosaicAdminPass';
+  // Total bar count per piece (Sep 9 2026, notation-by-bar uploads) — mirrors
+  // worker.js's own BAR_COUNTS and mosaic_webcodecs.html's MOSAICS[id].bars.
+  // null means "this piece has no fixed bar count" (Congo runs in BPM mode —
+  // see updateMetro()'s two branches there): its tiles can still take a base
+  // notation image, just not a per-bar one, so the bar-number input is
+  // hidden for it below (see renderNotationTile()).
+  var BAR_COUNTS={flipswing:12, abakua:19, congo:null};
 
   var gate=document.getElementById('gate');
   var gateInput=document.getElementById('gateInput');
@@ -178,6 +211,7 @@
   var pieceNudgeRow=document.getElementById('pieceNudgeRow');
   var tileOrderList=document.getElementById('tileOrderList');
   var stemList=document.getElementById('stemList');
+  var notationList=document.getElementById('notationList');
   var saveBtn=document.getElementById('saveBtn');
   var saveStatus=document.getElementById('saveStatus');
 
@@ -210,6 +244,18 @@
   var state={order:KNOWN_IDS.slice(),metroOffsetMs:{},stemGainDb:defaultStemGainDb(),tileOrder:defaultTileOrder()};
   KNOWN_IDS.forEach(function(id){state.metroOffsetMs[id]=0;});
   var configLoaded=false; // only ever fetch the starting values ONCE per page
+
+  // Notation image overrides (Sep 9 2026) — deliberately kept OUTSIDE `state`/
+  // the Save & publish flow: each upload or delete below is its own request
+  // that takes effect immediately (like an audio/video asset replace would),
+  // rather than something you stage and then Save. notationOverrides[id][tileIndex]
+  // is an array of {id, bars, updatedAt, url} straight from the server (see
+  // worker.js's withNotationImageUrls()) — always just mirrors whatever the
+  // server most recently confirmed, never edited in place locally.
+  var notationOverrides={};
+  function applyNotationOverrides(fromServer){
+    notationOverrides=(fromServer&&typeof fromServer==='object')?fromServer:{};
+  }
 
   function passphrase(){return sessionStorage.getItem(PASS_KEY)||'';}
 
@@ -271,6 +317,7 @@
           state.tileOrder[id]=sanitizeTileOrder(cfg.tileOrder[id],STEM_NAMES[id].length);
         });
       }
+      applyNotationOverrides(cfg.notationOverrides);
       renderRoute();
     }).catch(function(e){
       console.warn('Could not load current config, starting from defaults.',e);
@@ -424,6 +471,148 @@
       controls.appendChild(reset);controls.appendChild(minus);controls.appendChild(input);controls.appendChild(plus);controls.appendChild(unit);
       row.appendChild(name);row.appendChild(controls);
       stemList.appendChild(row);
+    });
+
+    renderNotationTiles(id);
+  }
+
+  // ---- Notation image uploads (Sep 9 2026) ----
+  // Parses a bars field like "6, 12" or "6 12" into a deduped array of
+  // positive integers, or null if the text doesn't parse as one at all
+  // (used to tell "typed something invalid" apart from "left it blank" —
+  // blank means "all bars", handled by the caller, not here).
+  function parseBarsInput(text){
+    text=(text||'').trim();
+    if(!text)return null;
+    var parts=text.split(/[,\s]+/).filter(Boolean);
+    var out=[];
+    for(var i=0;i<parts.length;i++){
+      var n=parseInt(parts[i],10);
+      if(!isFinite(n)||n<1||String(n)!==parts[i].replace(/^0+(?=\d)/,''))return null;
+      if(out.indexOf(n)<0)out.push(n);
+    }
+    return out.length?out:null;
+  }
+  function fileToDataUrl(file){
+    return new Promise(function(resolve,reject){
+      var reader=new FileReader();
+      reader.onload=function(){resolve(reader.result);};
+      reader.onerror=function(){reject(reader.error||new Error('Could not read file.'));};
+      reader.readAsDataURL(file);
+    });
+  }
+  // Same passphrase header/error-shape convention as the main Save button
+  // below, just its own tiny fetch wrapper since these calls happen one at a
+  // time, per row, rather than through the shared `state` blob.
+  function notationApi(path,body){
+    return fetch(path,{
+      method:'POST',
+      headers:{'content-type':'application/json','x-admin-passphrase':passphrase()},
+      body:JSON.stringify(body)
+    }).then(function(res){
+      return res.json().catch(function(){return{};}).then(function(data){
+        if(res.status===401){
+          sessionStorage.removeItem(PASS_KEY);
+          consoleEl.style.display='none';
+          gate.style.display='flex';
+          gateError.textContent='Incorrect passphrase — try again.';
+          throw new Error('unauthorized');
+        }
+        if(!res.ok)throw new Error((data&&data.error)?data.error:('HTTP '+res.status));
+        return data;
+      });
+    });
+  }
+  // One piece's worth of per-tile notation rows: each tile lists its current
+  // variants (base image first, then bar-specific ones in bar order) with a
+  // thumbnail and Delete, plus an upload row to add another. Re-rendered
+  // wholesale after every successful upload/delete — this list is short
+  // (one piece's tiles) so there's no need for anything more surgical.
+  function renderNotationTiles(id){
+    notationList.innerHTML='';
+    var barCount=BAR_COUNTS[id];
+    STEM_NAMES[id].forEach(function(stemName,tileIdx){
+      var tile=document.createElement('div');tile.className='notation-tile';
+      var title=document.createElement('div');title.className='notation-tile-name';title.textContent=stemName;
+      tile.appendChild(title);
+
+      var variants=(notationOverrides[id]&&notationOverrides[id][tileIdx])||[];
+      var sorted=variants.slice().sort(function(a,b){
+        if(a.bars==='all')return -1;
+        if(b.bars==='all')return 1;
+        return a.bars[0]-b.bars[0];
+      });
+      if(!sorted.length){
+        var none=document.createElement('div');none.className='notation-variant-sub';
+        none.style.padding='4px 0 2px';
+        none.textContent='No uploaded image yet — falls back to the piece default.';
+        tile.appendChild(none);
+      }
+      sorted.forEach(function(v){
+        var row=document.createElement('div');row.className='notation-variant';
+        var thumb=document.createElement('img');thumb.className='notation-thumb';thumb.src=v.url;thumb.alt=stemName+' notation preview';thumb.loading='lazy';
+        var info=document.createElement('div');info.className='notation-variant-info';
+        var barsLine=document.createElement('div');barsLine.className='notation-variant-bars';
+        barsLine.textContent=(v.bars==='all')?'Base (all bars)':('Bars '+v.bars.join(', '));
+        var sub=document.createElement('div');sub.className='notation-variant-sub';
+        sub.textContent='Updated '+new Date(v.updatedAt).toLocaleString();
+        info.appendChild(barsLine);info.appendChild(sub);
+        var del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete';
+        del.addEventListener('click',function(){
+          if(!confirm((v.bars==='all'?'Delete the base image':'Delete the bars '+v.bars.join(', ')+' image')+' for '+stemName+'?'))return;
+          del.disabled=true;
+          notationApi('/api/admin/notation-delete',{pieceId:id,tileIndex:tileIdx,variantId:v.id}).then(function(cfg){
+            applyNotationOverrides(cfg.notationOverrides);
+            renderNotationTiles(id);
+          }).catch(function(e){
+            if(e.message!=='unauthorized')alert('Delete failed: '+e.message);
+            del.disabled=false;
+          });
+        });
+        row.appendChild(thumb);row.appendChild(info);row.appendChild(del);
+        tile.appendChild(row);
+      });
+
+      var add=document.createElement('div');add.className='notation-add';
+      var fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='image/png';
+      var barsInput=null;
+      if(barCount){
+        barsInput=document.createElement('input');barsInput.type='text';
+        barsInput.placeholder='Bars e.g. 6,12 (blank = all)';
+        barsInput.title='This piece has '+barCount+' bars. Leave blank to upload/replace the base image used everywhere else.';
+      }
+      var uploadBtn=document.createElement('button');uploadBtn.type='button';uploadBtn.textContent='Upload';
+      var status=document.createElement('div');status.className='notation-status';status.style.flexBasis='100%';
+
+      uploadBtn.addEventListener('click',function(){
+        var file=fileInput.files&&fileInput.files[0];
+        if(!file){status.textContent='Choose a PNG file first.';status.className='notation-status err';return;}
+        var bars='all';
+        if(barsInput&&barsInput.value.trim()){
+          bars=parseBarsInput(barsInput.value);
+          if(bars===null){status.textContent='Bars must be numbers, e.g. "6,12".';status.className='notation-status err';return;}
+          var tooHigh=barCount&&bars.some(function(n){return n>barCount;});
+          if(tooHigh&&!confirm('This piece only has '+barCount+' bars — upload anyway?'))return;
+        }
+        uploadBtn.disabled=true;status.textContent='Uploading…';status.className='notation-status';
+        fileToDataUrl(file).then(function(dataUrl){
+          return notationApi('/api/admin/notation-upload',{pieceId:id,tileIndex:tileIdx,bars:bars,imageBase64:dataUrl});
+        }).then(function(cfg){
+          applyNotationOverrides(cfg.notationOverrides);
+          renderNotationTiles(id); // rebuilds this whole card, including a fresh (empty) file/bars input
+        }).catch(function(e){
+          if(e.message!=='unauthorized'){status.textContent='Upload failed: '+e.message;status.className='notation-status err';}
+          uploadBtn.disabled=false;
+        });
+      });
+
+      add.appendChild(fileInput);
+      if(barsInput)add.appendChild(barsInput);
+      add.appendChild(uploadBtn);
+      add.appendChild(status);
+      tile.appendChild(add);
+
+      notationList.appendChild(tile);
     });
   }
 

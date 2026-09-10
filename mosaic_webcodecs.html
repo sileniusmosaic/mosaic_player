@@ -1395,6 +1395,27 @@ async function fetchAdminConfig(){
       if(engine.decodedFrameCount>0)engine.render(currentPos()); // already playing/paused-on-video — repaint the live frame in the new layout
       else drawPoster();
     }
+    // Per-bar / per-tile notation overrides (Sep 9 2026, admin console
+    // upload panel) — see resolveNotationStripSrc() and worker.js's own
+    // notationOverrides/notationImgKey comments. Each variant already
+    // carries a ready-to-use `url` (worker.js's withNotationImageUrls()), so
+    // there's nothing to build here, just attach it to the matching piece.
+    let currentPieceNotationChanged=false;
+    if(remote.notationOverrides&&typeof remote.notationOverrides==='object'){
+      for(const id of Object.keys(MOSAICS)){
+        const byTile=remote.notationOverrides[id];
+        const next=(byTile&&typeof byTile==='object'&&Object.keys(byTile).length)?byTile:undefined;
+        if(JSON.stringify(next)!==JSON.stringify(MOSAICS[id].notationVariantsByIndex)){
+          MOSAICS[id].notationVariantsByIndex=next;
+          if(id===mosaicId)currentPieceNotationChanged=true;
+        }
+      }
+    }
+    if(currentPieceNotationChanged){
+      lastNotationBar=null;
+      renderNotationStrip();
+      preloadNotationStrips();
+    }
     // cfg is a live reference into MOSAICS[mosaicId] — patching the object
     // above already flowed the current piece's new offset through to every
     // reader of cfg.metroOffsetMs (computeMetroBeatTimes, updateMetro) with
@@ -1582,6 +1603,24 @@ function updateMetro(){
   const beatInBar=Math.floor(beatFloat%cfg.beatsPerBar)+1;
   metroNum.textContent=String(beatInBar);
   metroNumLandscape.textContent=String(beatInBar); // mirror into the landscape metro button (see syncLandscapeMetroBtn())
+}
+// Which bar (1-indexed, matching how a musician counts — "bar 6", not "bar
+// 5") playback is currently in, for pieces in bar-count mode (cfg.bars set —
+// see updateMetro()'s own two branches). Used by resolveNotationStripSrc()
+// below to pick a per-bar notation image (admin-uploaded, Sep 9 2026); NOT
+// gated on metroActive/metroReady like updateMetro() — the notation strip
+// should swap correctly whether or not the visual beat-counter digit is
+// turned on. Returns null for BPM-mode pieces (no fixed bar count to derive
+// from) or a piece with no beatsPerBar/bars set at all.
+function currentBarNumber(){
+  if(!cfg.beatsPerBar||!cfg.bars)return null;
+  const dur=videoCycle||LOOP_END;
+  const p=scrubbing?scrubPos:currentPos();
+  const offsetSec=(cfg.metroOffsetMs||0)/1000;
+  const pAdj=p-offsetSec;
+  const totalBeats=cfg.beatsPerBar*cfg.bars;
+  const beatFloat=(((pAdj/dur)*totalBeats)%totalBeats+totalBeats)%totalBeats;
+  return Math.floor(beatFloat/cfg.beatsPerBar)+1;
 }
 // Keeps #metroBtnLandscape's visuals (ring, disabled state, aria-label) in
 // step with the real #metroBtn — call after anything that changes metroBtn
@@ -2906,6 +2945,11 @@ function preloadNotationStrips(){
   const srcs=new Set();
   if(cfg.notationStrip)srcs.add(cfg.notationStrip);
   if(cfg.notationStripByIndex)Object.values(cfg.notationStripByIndex).forEach(s=>srcs.add(s));
+  // Admin-uploaded per-bar variants (Sep 9 2026) — same reasoning as the two
+  // lines above, just per-variant: preload every bar-specific/base image
+  // this tile could swap to mid-playback, not just whichever one happens to
+  // be showing right now, so a bar boundary never pops in late either.
+  if(cfg.notationVariantsByIndex)Object.values(cfg.notationVariantsByIndex).forEach(variants=>variants.forEach(v=>srcs.add(v.url)));
   srcs.forEach(src=>{
     // Sep 2026: routed through getNotationImage() (defined below — function
     // declarations are hoisted, so this earlier call site is fine) rather
@@ -3104,9 +3148,32 @@ function getNotationImage(src){
 // user has already switched to a different tile and overwriting the
 // canvas with the wrong (no-longer-selected) notation.
 let currentLandscapeNotationSrc=null;
+// Per-bar notation override lookup (Sep 9 2026 — see fetchAdminConfig(),
+// which populates cfg.notationVariantsByIndex from the admin console's
+// uploads). For the given tile index: if this piece/tile has any
+// admin-uploaded variants at all, prefer whichever one's bar list contains
+// the CURRENT bar (checked first, so a bar-specific image always wins over
+// the base one while that bar is playing), else fall back to that tile's
+// 'all' (base) variant. Only when there are no admin-uploaded variants for
+// this tile at all does this fall through to the piece's existing static
+// notationStripByIndex/notationStrip — so Congo and any tile nobody's
+// touched in admin.html yet behave exactly as before this feature existed.
+function resolveNotationStripSrc(tileIndex){
+  const variants=cfg.notationVariantsByIndex&&cfg.notationVariantsByIndex[tileIndex];
+  if(variants&&variants.length){
+    const bar=currentBarNumber();
+    if(bar!=null){
+      const specific=variants.find(v=>Array.isArray(v.bars)&&v.bars.includes(bar));
+      if(specific)return specific.url;
+    }
+    const base=variants.find(v=>v.bars==='all');
+    if(base)return base.url;
+  }
+  const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[tileIndex];
+  return perTile||cfg.notationStrip;
+}
 function renderNotationStrip(){
-  const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[selected];
-  const src=perTile||cfg.notationStrip;
+  const src=resolveNotationStripSrc(selected);
   debugLog('renderNotationStrip() called, src='+src);
   if(src){
     notationStrip.src=src;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;
@@ -3983,6 +4050,7 @@ async function switchMosaic(id){
     LOOP_END=cfg.loopEnd;NAMES=cfg.names;TILE_COLS=cfg.cols;TILE_ROWS=cfg.rows;TILE_COUNT=cfg.tileCount;
     VIDEO_SOURCES=videoSourcesFor(cfg);STEM_URLS=cfg.stemFiles;
     videoCycle=LOOP_END;pausedPos=0;selected=0;
+    lastNotationBar=null; // force a fresh per-bar notation check on the new piece (see maybeUpdateNotationForBar())
     muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
     soloed=Array(TILE_COUNT).fill(false);engine.soloDim=soloed.map(()=>false);
     engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
@@ -4326,6 +4394,24 @@ function updateUI(){
   if(playing&&shownFps!==null){fpsReadout.hidden=false;fpsReadout.textContent='Playing at '+shownFps+' fps.';}
   else{fpsReadout.hidden=true;}
   updateMetro();
+  maybeUpdateNotationForBar();
+}
+// Cheap per-frame check (Sep 9 2026) so a per-bar notation override (see
+// resolveNotationStripSrc()) actually swaps in live during playback, not
+// just when the focused tile changes. Deliberately NOT wired through
+// updateMetro() — that function is a no-op whenever the visual beat counter
+// is switched off (metroActive=false), but notation should keep swapping
+// regardless. Early-exits before doing any of the beat math whenever the
+// current piece/tile has no admin-uploaded variants at all — i.e. every
+// tile nobody's touched in admin.html yet — so this costs nothing on top of
+// the existing per-frame loop for the common case.
+let lastNotationBar=null;
+function maybeUpdateNotationForBar(){
+  if(!cfg.notationVariantsByIndex||!cfg.notationVariantsByIndex[selected])return;
+  const bar=currentBarNumber();
+  if(bar===lastNotationBar)return;
+  lastNotationBar=bar;
+  renderNotationStrip();
 }
 // Displayed-frame-rate readout: counts how often the PICTURE actually visibly
 // changes per second — not the video's encoded frame rate, and not how many
