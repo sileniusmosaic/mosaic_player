@@ -82,6 +82,49 @@
   .notation-status{font-size:12px;color:#9a9aa5;margin-top:6px;min-height:16px;}
   .notation-status.ok{color:#4cd964;}
   .notation-status.err{color:#ff6b6b;}
+  .notation-badge{display:inline-block;background:#3a2f10;color:#e8b34c;border:1px solid #5a4a1a;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:600;margin-left:6px;vertical-align:middle;}
+  .notation-preview-btn{background:#22232b;border:1px solid #33343d;color:#8a8fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;}
+
+  /* ---- Live-look notation preview (Sep 10 2026) — a scaled reproduction of
+     the actual player's focus square + notation strip composition, so a
+     bar-specific/base image can be checked for alignment/consistency right
+     here rather than needing the live app open in another tab. ---- */
+  .notation-preview{margin-bottom:18px;}
+  .notation-preview-modebar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  .notation-preview-instrument{font-size:14px;font-weight:700;}
+  .notation-mode-toggle{display:flex;gap:2px;background:#1a1b21;border:1px solid #33343d;border-radius:8px;padding:3px;}
+  .notation-mode-toggle button{background:none;border:none;color:#9a9aa5;font-size:11px;padding:6px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;}
+  .notation-mode-toggle button.active{background:#6c5ce7;color:#fff;}
+  .notation-preview-frame{max-width:320px;margin:0 auto;}
+  /* The square itself: overflow:hidden clips the overlay strip to match the
+     real .focus-wrap's rounded-corner clipping (see mosaic_webcodecs.html's
+     own CSS comment on .notation-strip). aspect-ratio:1/1 mirrors the real
+     focus square, which is always a literal square crop of the source video. */
+  .notation-preview-square{position:relative;width:100%;aspect-ratio:1/1;border-radius:14px;overflow:hidden;background:#111;border:1px solid #33343d;}
+  .notation-preview-poster{position:absolute;inset:0;width:100%;height:100%;background-repeat:no-repeat;}
+  .notation-preview-strip{background:#fff;border-top:2px solid #6c5ce7;}
+  .notation-preview-strip img{display:block;width:100%;height:auto;}
+  /* Mobile mode: overlaid on the BOTTOM of the square, clipped by the square's
+     own overflow:hidden — mirrors mosaic_webcodecs.html's real .notation-strip
+     (portrait), which is anchored over the bottom portion of the focus square. */
+  .notation-preview-strip-overlay{position:absolute;left:0;right:0;bottom:0;}
+  /* Desktop mode: plain block flow directly below the square, flush against
+     its bottom edge — mirrors the real .notation-strip-desktop. */
+  .notation-preview-strip-below{display:none;}
+  .notation-preview-frame.mode-desktop .notation-preview-strip-overlay{display:none;}
+  .notation-preview-frame.mode-desktop .notation-preview-strip-below{display:block;}
+  .notation-preview-frame.mode-mobile .notation-preview-strip-overlay{display:block;}
+  .notation-preview-frame.mode-mobile .notation-preview-strip-below{display:none;}
+  .notation-preview-cycler{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;}
+  .notation-preview-cycler button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;}
+  .notation-preview-cycler button:disabled{opacity:.35;cursor:default;}
+  .notation-preview-label{font-size:12px;color:#c8c8d0;text-align:center;min-width:140px;}
+  .notation-preview-actions{display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .notation-preview-actions button{border-radius:6px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+  .notation-preview-actions .primary{background:#6c5ce7;color:#fff;}
+  .notation-preview-actions .danger{background:none;border:1px solid #4a2a2a;color:#ff6b6b;}
+  .notation-preview-actions .neutral{background:#22232b;border:1px solid #33343d;color:#e8e8ec;}
+  .notation-preview-note{font-size:12px;color:#9a9aa5;text-align:center;margin-top:8px;}
 
   .save-bar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:14px 0 0;background:#0b0c10;}
   #saveBtn{flex:1;background:#6c5ce7;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;}
@@ -159,7 +202,8 @@
 
     <div class="card">
       <h2>Notation images</h2>
-      <p class="sub" id="notationIntro" style="margin-bottom:14px;">The sheet-music strip shown under the focus square for each instrument. Upload a base image that's always used, and optionally extra images that only appear during specific bars — each one uploads and goes live immediately, separately from Save &amp; publish below.</p>
+      <p class="sub" id="notationIntro" style="margin-bottom:14px;">The sheet-music strip shown under the focus square for each instrument. Stage a file to preview it here exactly as it'll appear in the app (mobile overlay vs desktop below-square) — nothing goes live until you press Save to live in the preview panel. Independent of Save &amp; publish below, which is for the other settings on this page.</p>
+      <div id="notationPreview"></div>
       <div id="notationList"></div>
     </div>
   </div>
@@ -195,6 +239,36 @@
   // notation image, just not a per-bar one, so the bar-number input is
   // hidden for it below (see renderNotationTile()).
   var BAR_COUNTS={flipswing:12, abakua:19, congo:null};
+  // Mirrors mosaic_webcodecs.html's MOSAICS[id] poster/cols/rows/notationStrip
+  // /notationStripByIndex (Sep 10 2026, for the live-look preview below) —
+  // same "no shared source of truth across these static files" situation as
+  // STEM_NAMES/BAR_COUNTS above. Only used to (a) crop the right instrument
+  // out of the piece's poster image for the preview square and (b) show what
+  // the CURRENT fallback notation image actually is for a tile with no admin
+  // override yet. If a piece's poster/grid shape/static notation ever
+  // changes, update it here too.
+  var PIECE_META={
+    flipswing:{
+      poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg', cols:4, rows:2,
+      notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
+      notationStripByIndex:{0:'Mosaic/Flip_Swing/01_bass_flipswing.png',1:'Mosaic/Flip_Swing/02_coro_flipswing.png',2:'Mosaic/Flip_Swing/02_coro_flipswing.png',3:'Mosaic/Flip_Swing/04_repenique_flipswing.png',4:'Mosaic/Flip_Swing/05_guitar1_flipswing.png',5:'Mosaic/Flip_Swing/06_guitar2_flipswing.png',6:'Mosaic/Flip_Swing/07_kit_flipswing.png',7:'Mosaic/Flip_Swing/08_agogo_flipswing.png'}
+    },
+    abakua:{
+      poster:'Mosaic/Abakua/poster_abakua.jpg', cols:4, rows:2,
+      notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
+      notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png'}
+    },
+    congo:{
+      poster:'Mosaic/Congo_Yambumba/poster_congo.jpg', cols:4, rows:2,
+      notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
+      notationStripByIndex:{0:'Mosaic/Congo_Yambumba/01_clave_congoyambumba.png',1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png',4:'Mosaic/Congo_Yambumba/05_conga_congoyambumba.png',5:'Mosaic/Congo_Yambumba/06_tumba_congoyambumba.png'}
+    }
+  };
+  function defaultNotationFor(id,tileIdx){
+    var meta=PIECE_META[id];
+    if(!meta)return null;
+    return (meta.notationStripByIndex&&meta.notationStripByIndex[tileIdx])||meta.notationStrip||null;
+  }
 
   var gate=document.getElementById('gate');
   var gateInput=document.getElementById('gateInput');
@@ -211,6 +285,7 @@
   var pieceNudgeRow=document.getElementById('pieceNudgeRow');
   var tileOrderList=document.getElementById('tileOrderList');
   var stemList=document.getElementById('stemList');
+  var notationPreview=document.getElementById('notationPreview');
   var notationList=document.getElementById('notationList');
   var saveBtn=document.getElementById('saveBtn');
   var saveStatus=document.getElementById('saveStatus');
@@ -255,6 +330,65 @@
   var notationOverrides={};
   function applyNotationOverrides(fromServer){
     notationOverrides=(fromServer&&typeof fromServer==='object')?fromServer:{};
+  }
+  // Local-only staged images (Sep 10 2026) — picking a file stages it here
+  // (an in-memory File + an object URL for instant local preview, no network
+  // request at all) rather than uploading right away. Nothing here reaches
+  // the server, and nothing goes live, until publishDraft() is called from
+  // the preview panel's "Save to live" button. drafts[pieceId][tileIndex] =
+  // {file, bars, barsText, objectUrl}. Lost on page reload — by design, this
+  // is a single-sitting review tool, not a second storage system.
+  var drafts={};
+  // Which tile/variant/mode each piece's preview panel is currently showing
+  // — kept per piece (previewState[id]) so switching pieces and back doesn't
+  // lose your place. mode: 'auto' (follows this admin session's own pointer
+  // type, same signal the player itself uses — see IS_DESKTOP in
+  // mosaic_webcodecs.html) | 'mobile' | 'desktop'.
+  var previewState={};
+  function getPreviewState(id){
+    if(!previewState[id])previewState[id]={tileIndex:0,variantIndex:0,mode:'auto'};
+    return previewState[id];
+  }
+  function resolvedPreviewMode(mode){
+    if(mode==='mobile'||mode==='desktop')return mode;
+    var fine=false;
+    try{fine=window.matchMedia&&matchMedia('(pointer:fine)').matches;}catch(e){}
+    return fine?'desktop':'mobile';
+  }
+  // The ordered list of images a tile could show right now: the site's
+  // built-in fallback first, then every admin-uploaded variant (base before
+  // bar-specific, bar-specific in bar order — same order as renderNotationTiles'
+  // own list), then a pending local draft last if one's staged for this tile.
+  // This ONE list backs both the preview cycler and (via effectiveLiveVariant()
+  // below) each tile row's thumbnail.
+  function previewCandidates(id,tileIdx){
+    var list=[];
+    var def=defaultNotationFor(id,tileIdx);
+    if(def)list.push({kind:'default',label:'Default (site fallback)',url:def});
+    var variants=((notationOverrides[id]&&notationOverrides[id][tileIdx])||[]).slice().sort(function(a,b){
+      if(a.bars==='all')return -1;
+      if(b.bars==='all')return 1;
+      return a.bars[0]-b.bars[0];
+    });
+    variants.forEach(function(v){
+      list.push({kind:'live',label:(v.bars==='all')?'Base (all bars)':('Bars '+v.bars.join(', ')),url:v.url,variant:v});
+    });
+    var draft=drafts[id]&&drafts[id][tileIdx];
+    if(draft){
+      list.push({kind:'draft',label:'Draft — '+(draft.bars==='all'?'base (all bars)':'bars '+draft.barsText)+' (unsaved)',url:draft.objectUrl,draft:draft});
+    }
+    return list;
+  }
+  // What's actually live right now for a tile, ignoring any unsaved draft —
+  // an admin base ("all bars") override if one exists (it outranks the site
+  // default on the real player too — see resolveNotationStripSrc() in
+  // mosaic_webcodecs.html), else the site default. Used for each tile row's
+  // thumbnail in the list below the preview panel.
+  function effectiveLiveUrl(id,tileIdx){
+    var variants=(notationOverrides[id]&&notationOverrides[id][tileIdx])||[];
+    var base=variants.filter(function(v){return v.bars==='all';})[0];
+    if(base)return base.url;
+    return defaultNotationFor(id,tileIdx);
   }
 
   function passphrase(){return sessionStorage.getItem(PASS_KEY)||'';}
@@ -473,7 +607,7 @@
       stemList.appendChild(row);
     });
 
-    renderNotationTiles(id);
+    refreshNotationSection(id);
   }
 
   // ---- Notation image uploads (Sep 9 2026) ----
@@ -523,55 +657,199 @@
       });
     });
   }
-  // One piece's worth of per-tile notation rows: each tile lists its current
-  // variants (base image first, then bar-specific ones in bar order) with a
-  // thumbnail and Delete, plus an upload row to add another. Re-rendered
-  // wholesale after every successful upload/delete — this list is short
-  // (one piece's tiles) so there's no need for anything more surgical.
+  function refreshNotationSection(id){
+    renderNotationPreview(id);
+    renderNotationTiles(id);
+  }
+
+  // Applies a just-picked file (and whatever's currently in the bars text
+  // field) as a local draft for one tile — no network request, just an
+  // object URL for instant preview — and jumps the preview panel to it.
+  // Re-used by both the per-row "Stage for preview" button and (indirectly)
+  // by publishDraft() clearing the slot again afterward.
+  function stageDraft(id,tileIdx,file,bars,barsText){
+    var prev=drafts[id]&&drafts[id][tileIdx];
+    if(prev&&prev.objectUrl)URL.revokeObjectURL(prev.objectUrl);
+    if(!drafts[id])drafts[id]={};
+    drafts[id][tileIdx]={file:file,bars:bars,barsText:barsText||'all',objectUrl:URL.createObjectURL(file)};
+    var ps=getPreviewState(id);
+    ps.tileIndex=tileIdx;
+    ps.variantIndex=previewCandidates(id,tileIdx).length-1; // the draft is always last
+  }
+  function clearDraft(id,tileIdx){
+    var prev=drafts[id]&&drafts[id][tileIdx];
+    if(!prev)return;
+    if(prev.objectUrl)URL.revokeObjectURL(prev.objectUrl);
+    delete drafts[id][tileIdx];
+  }
+  // Actually uploads the currently-staged draft for one tile and, on
+  // success, clears the draft and points the preview at the newly-live
+  // variant (matched by the variantId the server hands back) — this is the
+  // ONLY point in the whole notation-editing flow that makes a network
+  // request other than deleting an existing live image, i.e. the one "make
+  // it live" action the review workflow builds up to.
+  function publishDraft(id,tileIdx,statusEl,onDone){
+    var draft=drafts[id]&&drafts[id][tileIdx];
+    if(!draft)return;
+    if(statusEl){statusEl.textContent='Saving to live…';statusEl.className='notation-status';}
+    fileToDataUrl(draft.file).then(function(dataUrl){
+      return notationApi('/api/admin/notation-upload',{pieceId:id,tileIndex:tileIdx,bars:draft.bars,imageBase64:dataUrl});
+    }).then(function(cfg){
+      applyNotationOverrides(cfg.notationOverrides);
+      clearDraft(id,tileIdx);
+      var ps=getPreviewState(id);
+      var list=previewCandidates(id,tileIdx);
+      var publishedIdx=list.findIndex(function(c){return c.variant&&c.variant.id===cfg.savedVariantId;});
+      ps.tileIndex=tileIdx;
+      ps.variantIndex=publishedIdx>=0?publishedIdx:0;
+      if(statusEl){statusEl.textContent='Saved — live for everyone now.';statusEl.className='notation-status ok';}
+      refreshNotationSection(id);
+      if(onDone)onDone();
+    }).catch(function(e){
+      if(e.message!=='unauthorized'&&statusEl){statusEl.textContent='Save failed: '+e.message;statusEl.className='notation-status err';}
+    });
+  }
+
+  // The live-look preview panel: one instrument's focus square (a real crop
+  // of the piece's poster, same crop math the player uses for its tile
+  // thumbnails) with the currently-cycled notation image composed onto it
+  // exactly the way the real player would — overlaid over the square's
+  // bottom on mobile, or flush below it on desktop (see the CSS comments on
+  // .notation-preview-square/-strip-overlay/-strip-below). Rebuilt from
+  // scratch on every call; cheap (a handful of DOM nodes), called after
+  // every stage/save/delete/cycle/mode-change.
+  function renderNotationPreview(id){
+    notationPreview.innerHTML='';
+    var meta=PIECE_META[id];
+    var ps=getPreviewState(id);
+    var tileIdx=ps.tileIndex;
+    var candidates=previewCandidates(id,tileIdx);
+    if(!candidates.length)return; // shouldn't happen — every piece has at least a site-default fallback
+    if(ps.variantIndex>=candidates.length)ps.variantIndex=candidates.length-1;
+    if(ps.variantIndex<0)ps.variantIndex=0;
+    var current=candidates[ps.variantIndex];
+    var mode=resolvedPreviewMode(ps.mode);
+
+    var wrap=document.createElement('div');wrap.className='notation-preview';
+
+    var modebar=document.createElement('div');modebar.className='notation-preview-modebar';
+    var instrumentLabel=document.createElement('div');instrumentLabel.className='notation-preview-instrument';
+    instrumentLabel.textContent='Previewing: '+STEM_NAMES[id][tileIdx];
+    var toggle=document.createElement('div');toggle.className='notation-mode-toggle';
+    var autoIsDesktop=resolvedPreviewMode('auto')==='desktop';
+    [['auto','Auto ('+(autoIsDesktop?'Desktop':'Mobile')+')'],['mobile','Mobile'],['desktop','Desktop']].forEach(function(pair){
+      var btn=document.createElement('button');btn.type='button';btn.textContent=pair[1];
+      if(ps.mode===pair[0])btn.className='active';
+      btn.addEventListener('click',function(){ps.mode=pair[0];renderNotationPreview(id);});
+      toggle.appendChild(btn);
+    });
+    modebar.appendChild(instrumentLabel);modebar.appendChild(toggle);
+    wrap.appendChild(modebar);
+
+    var frame=document.createElement('div');frame.className='notation-preview-frame mode-'+mode;
+
+    var square=document.createElement('div');square.className='notation-preview-square';
+    var poster=document.createElement('div');poster.className='notation-preview-poster';
+    if(meta){
+      var col=tileIdx%meta.cols, row=Math.floor(tileIdx/meta.cols);
+      poster.style.backgroundImage='url('+meta.poster+')';
+      poster.style.backgroundSize=(meta.cols*100)+'% '+(meta.rows*100)+'%';
+      poster.style.backgroundPosition=(meta.cols>1?(col/(meta.cols-1)*100):0)+'% '+(meta.rows>1?(row/(meta.rows-1)*100):0)+'%';
+    }
+    square.appendChild(poster);
+    var overlayStrip=document.createElement('div');overlayStrip.className='notation-preview-strip notation-preview-strip-overlay';
+    var overlayImg=document.createElement('img');overlayImg.src=current.url;overlayImg.alt='';
+    overlayStrip.appendChild(overlayImg);
+    square.appendChild(overlayStrip);
+    frame.appendChild(square);
+
+    var belowStrip=document.createElement('div');belowStrip.className='notation-preview-strip notation-preview-strip-below';
+    var belowImg=document.createElement('img');belowImg.src=current.url;belowImg.alt='';
+    belowStrip.appendChild(belowImg);
+    frame.appendChild(belowStrip);
+
+    wrap.appendChild(frame);
+
+    var cycler=document.createElement('div');cycler.className='notation-preview-cycler';
+    var prevBtn=document.createElement('button');prevBtn.type='button';prevBtn.textContent='‹';prevBtn.disabled=candidates.length<2;
+    var label=document.createElement('div');label.className='notation-preview-label';
+    label.textContent=current.label+' ('+(ps.variantIndex+1)+'/'+candidates.length+')';
+    var nextBtn=document.createElement('button');nextBtn.type='button';nextBtn.textContent='›';nextBtn.disabled=candidates.length<2;
+    prevBtn.addEventListener('click',function(){ps.variantIndex=(ps.variantIndex-1+candidates.length)%candidates.length;renderNotationPreview(id);});
+    nextBtn.addEventListener('click',function(){ps.variantIndex=(ps.variantIndex+1)%candidates.length;renderNotationPreview(id);});
+    cycler.appendChild(prevBtn);cycler.appendChild(label);cycler.appendChild(nextBtn);
+    wrap.appendChild(cycler);
+
+    var actions=document.createElement('div');actions.className='notation-preview-actions';
+    var status=document.createElement('div');status.className='notation-status';status.style.textAlign='center';
+    if(current.kind==='draft'){
+      var save=document.createElement('button');save.type='button';save.className='primary';save.textContent='Save to live';
+      save.addEventListener('click',function(){save.disabled=true;publishDraft(id,tileIdx,status);});
+      var discard=document.createElement('button');discard.type='button';discard.className='neutral';discard.textContent='Discard draft';
+      discard.addEventListener('click',function(){
+        clearDraft(id,tileIdx);
+        ps.variantIndex=Math.max(0,previewCandidates(id,tileIdx).length-1);
+        refreshNotationSection(id);
+      });
+      actions.appendChild(save);actions.appendChild(discard);
+    }else if(current.kind==='live'){
+      var del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete this image';
+      del.addEventListener('click',function(){
+        if(!confirm((current.variant.bars==='all'?'Delete the base image':'Delete the bars '+current.variant.bars.join(', ')+' image')+' for '+STEM_NAMES[id][tileIdx]+'?'))return;
+        del.disabled=true;
+        notationApi('/api/admin/notation-delete',{pieceId:id,tileIndex:tileIdx,variantId:current.variant.id}).then(function(cfg){
+          applyNotationOverrides(cfg.notationOverrides);
+          ps.variantIndex=0;
+          refreshNotationSection(id);
+        }).catch(function(e){
+          if(e.message!=='unauthorized')alert('Delete failed: '+e.message);
+          del.disabled=false;
+        });
+      });
+      actions.appendChild(del);
+    }else{
+      var note=document.createElement('div');note.className='notation-preview-note';
+      note.textContent='This is the site\'s built-in fallback image, not something uploaded here — stage a base image below to replace it.';
+      actions.appendChild(note);
+    }
+    wrap.appendChild(actions);
+    wrap.appendChild(status);
+
+    notationPreview.appendChild(wrap);
+  }
+
+  // One piece's worth of per-tile rows below the preview panel: each shows
+  // the tile's current LIVE thumbnail (ignoring any unsaved draft — see
+  // effectiveLiveUrl()), a Preview button that points the panel above at
+  // this tile, how many bar-specific images it has (if any) plus a "Draft
+  // pending" badge, and the file/bars picker that STAGES a new draft
+  // (nothing uploads here — see stageDraft()/publishDraft()).
   function renderNotationTiles(id){
     notationList.innerHTML='';
     var barCount=BAR_COUNTS[id];
+    var ps=getPreviewState(id);
     STEM_NAMES[id].forEach(function(stemName,tileIdx){
       var tile=document.createElement('div');tile.className='notation-tile';
-      var title=document.createElement('div');title.className='notation-tile-name';title.textContent=stemName;
-      tile.appendChild(title);
 
+      var head=document.createElement('div');head.style.display='flex';head.style.alignItems='center';head.style.gap='10px';
+      var thumb=document.createElement('img');thumb.className='notation-thumb';thumb.loading='lazy';thumb.alt=stemName+' notation thumbnail';
+      var liveUrl=effectiveLiveUrl(id,tileIdx);
+      if(liveUrl)thumb.src=liveUrl;
+      var title=document.createElement('div');title.className='notation-tile-name';title.style.marginBottom='0';title.style.flex='1';
+      title.textContent=stemName;
       var variants=(notationOverrides[id]&&notationOverrides[id][tileIdx])||[];
-      var sorted=variants.slice().sort(function(a,b){
-        if(a.bars==='all')return -1;
-        if(b.bars==='all')return 1;
-        return a.bars[0]-b.bars[0];
+      var barSpecificCount=variants.filter(function(v){return v.bars!=='all';}).length;
+      if(barSpecificCount)title.textContent+=' — '+barSpecificCount+' bar-specific image'+(barSpecificCount>1?'s':'');
+      if(drafts[id]&&drafts[id][tileIdx]){var badge=document.createElement('span');badge.className='notation-badge';badge.textContent='Draft pending';title.appendChild(badge);}
+      var previewBtn=document.createElement('button');previewBtn.type='button';previewBtn.className='notation-preview-btn';previewBtn.textContent='Preview ↑';
+      previewBtn.addEventListener('click',function(){
+        ps.tileIndex=tileIdx;
+        ps.variantIndex=drafts[id]&&drafts[id][tileIdx]?previewCandidates(id,tileIdx).length-1:0;
+        renderNotationPreview(id);
+        notationPreview.scrollIntoView({behavior:'smooth',block:'start'});
       });
-      if(!sorted.length){
-        var none=document.createElement('div');none.className='notation-variant-sub';
-        none.style.padding='4px 0 2px';
-        none.textContent='No uploaded image yet — falls back to the piece default.';
-        tile.appendChild(none);
-      }
-      sorted.forEach(function(v){
-        var row=document.createElement('div');row.className='notation-variant';
-        var thumb=document.createElement('img');thumb.className='notation-thumb';thumb.src=v.url;thumb.alt=stemName+' notation preview';thumb.loading='lazy';
-        var info=document.createElement('div');info.className='notation-variant-info';
-        var barsLine=document.createElement('div');barsLine.className='notation-variant-bars';
-        barsLine.textContent=(v.bars==='all')?'Base (all bars)':('Bars '+v.bars.join(', '));
-        var sub=document.createElement('div');sub.className='notation-variant-sub';
-        sub.textContent='Updated '+new Date(v.updatedAt).toLocaleString();
-        info.appendChild(barsLine);info.appendChild(sub);
-        var del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete';
-        del.addEventListener('click',function(){
-          if(!confirm((v.bars==='all'?'Delete the base image':'Delete the bars '+v.bars.join(', ')+' image')+' for '+stemName+'?'))return;
-          del.disabled=true;
-          notationApi('/api/admin/notation-delete',{pieceId:id,tileIndex:tileIdx,variantId:v.id}).then(function(cfg){
-            applyNotationOverrides(cfg.notationOverrides);
-            renderNotationTiles(id);
-          }).catch(function(e){
-            if(e.message!=='unauthorized')alert('Delete failed: '+e.message);
-            del.disabled=false;
-          });
-        });
-        row.appendChild(thumb);row.appendChild(info);row.appendChild(del);
-        tile.appendChild(row);
-      });
+      head.appendChild(thumb);head.appendChild(title);head.appendChild(previewBtn);
+      tile.appendChild(head);
 
       var add=document.createElement('div');add.className='notation-add';
       var fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='image/png';
@@ -579,36 +857,31 @@
       if(barCount){
         barsInput=document.createElement('input');barsInput.type='text';
         barsInput.placeholder='Bars e.g. 6,12 (blank = all)';
-        barsInput.title='This piece has '+barCount+' bars. Leave blank to upload/replace the base image used everywhere else.';
+        barsInput.title='This piece has '+barCount+' bars. Leave blank to stage a base image (used whenever no bar-specific one applies).';
       }
-      var uploadBtn=document.createElement('button');uploadBtn.type='button';uploadBtn.textContent='Upload';
+      var stageBtn=document.createElement('button');stageBtn.type='button';stageBtn.textContent='Stage for preview';
       var status=document.createElement('div');status.className='notation-status';status.style.flexBasis='100%';
 
-      uploadBtn.addEventListener('click',function(){
+      stageBtn.addEventListener('click',function(){
         var file=fileInput.files&&fileInput.files[0];
         if(!file){status.textContent='Choose a PNG file first.';status.className='notation-status err';return;}
-        var bars='all';
+        var bars='all',barsText='all';
         if(barsInput&&barsInput.value.trim()){
           bars=parseBarsInput(barsInput.value);
           if(bars===null){status.textContent='Bars must be numbers, e.g. "6,12".';status.className='notation-status err';return;}
           var tooHigh=barCount&&bars.some(function(n){return n>barCount;});
-          if(tooHigh&&!confirm('This piece only has '+barCount+' bars — upload anyway?'))return;
+          if(tooHigh&&!confirm('This piece only has '+barCount+' bars — stage anyway?'))return;
+          barsText=bars.join(', ');
         }
-        uploadBtn.disabled=true;status.textContent='Uploading…';status.className='notation-status';
-        fileToDataUrl(file).then(function(dataUrl){
-          return notationApi('/api/admin/notation-upload',{pieceId:id,tileIndex:tileIdx,bars:bars,imageBase64:dataUrl});
-        }).then(function(cfg){
-          applyNotationOverrides(cfg.notationOverrides);
-          renderNotationTiles(id); // rebuilds this whole card, including a fresh (empty) file/bars input
-        }).catch(function(e){
-          if(e.message!=='unauthorized'){status.textContent='Upload failed: '+e.message;status.className='notation-status err';}
-          uploadBtn.disabled=false;
-        });
+        status.textContent='';status.className='notation-status';
+        stageDraft(id,tileIdx,file,bars,barsText);
+        refreshNotationSection(id);
+        notationPreview.scrollIntoView({behavior:'smooth',block:'start'});
       });
 
       add.appendChild(fileInput);
       if(barsInput)add.appendChild(barsInput);
-      add.appendChild(uploadBtn);
+      add.appendChild(stageBtn);
       add.appendChild(status);
       tile.appendChild(add);
 
