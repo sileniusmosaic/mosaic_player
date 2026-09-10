@@ -152,13 +152,15 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
-/* Desktop override (Sep 2026): same buttons, same DOM order (tile 0..N-1 —
-   see buildControls()), just reflowed into 2 columns of 4 via
-   grid-auto-flow:column so tile 0-3 fill column 1 top-to-bottom and tile 4+
-   fill column 2 — matching the canvas's own column-major redraw below,
-   cell-for-cell, so the invisible mute/solo hit-areas stay aligned with
-   what's actually drawn underneath them. */
-.is-desktop .grid-controls{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr);grid-auto-flow:column}
+/* Desktop override: same buttons, same DOM order (tile 0..N-1 — see
+   buildControls()), reflowed into 2 columns of 4. grid-auto-flow is row
+   (the default — no longer explicitly "column", changed Sep 10 2026 per
+   real feedback: squares should "read like a book", left-to-right then
+   top-to-bottom, i.e. 1 2 / 3 4 / 5 6 / 7 8, not top-to-bottom down one
+   column then the next) — matching gridDestShape()'s now-row-major canvas
+   redraw below, cell-for-cell, so the invisible mute/solo hit-areas stay
+   aligned with what's actually drawn underneath them. */
+.is-desktop .grid-controls{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr)}
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
 .focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
 .dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 13.2px -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;line-height:1}
@@ -1482,7 +1484,15 @@ const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$
 const GRID_DEST_COLS_DESKTOP=2;
 function gridDestShape(){
   if(!IS_DESKTOP)return {cols:TILE_COLS,rows:TILE_ROWS,columnMajor:false};
-  return {cols:GRID_DEST_COLS_DESKTOP,rows:Math.ceil((TILE_COLS*TILE_ROWS)/GRID_DEST_COLS_DESKTOP),columnMajor:true};
+  // columnMajor forced false here (Sep 10 2026, was true) — mirrors the
+  // same change in wc-engine.js's _gridDestShape(). Desktop still reshapes
+  // into GRID_DEST_COLS_DESKTOP (2) columns, but the tiles now fill that
+  // shape "like a book" — row-major, left-to-right then top-to-bottom
+  // (1 2 / 3 4 / 5 6 / 7 8) — instead of the old top-to-bottom-per-column
+  // order. This function's output feeds drawPoster()'s dx/dy math below,
+  // and .is-desktop .grid-controls (grid-auto-flow:row, not column) mirrors
+  // it for the tap/mute/solo overlay.
+  return {cols:GRID_DEST_COLS_DESKTOP,rows:Math.ceil((TILE_COLS*TILE_ROWS)/GRID_DEST_COLS_DESKTOP),columnMajor:false};
 }
 // Tile display order (Sep 7 2026, admin-console "reorder the squares"
 // feature): a per-piece permutation of tile indices — currentTileOrder()[slot]
@@ -2547,8 +2557,9 @@ function drawPoster(){
   // both mobile and desktop — see the engine-construction comment above for
   // why gctxLeft/gctxRight are never used any more. Destination placement
   // (dx/dy) follows gridDestShape() — mobile stays row-major in the source's
-  // own TILE_COLS x TILE_ROWS shape, desktop reflows column-major into 2
-  // columns (see the comment on gridDestShape() itself). tileSource() below
+  // own TILE_COLS x TILE_ROWS shape, desktop reflows (also row-major, "like
+  // a book" — see the comment on gridDestShape() itself) into 2 columns.
+  // tileSource() below
   // (called inside drawOneTile) always crops from the real TILE_COLS/
   // TILE_ROWS regardless, since that's the source video/poster's actual shape.
   const {cols:destCols,rows:destRows,columnMajor}=gridDestShape();

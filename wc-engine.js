@@ -102,7 +102,14 @@ class WebCodecsVideoEngine {
   // (a piece switch) is automatically reflected without any extra plumbing.
   _gridDestShape() {
     if (!this.gridColumnMajor) return { cols: this.cols, rows: this.rows, columnMajor: false };
-    return { cols: this.gridDestCols, rows: Math.ceil((this.cols * this.rows) / this.gridDestCols), columnMajor: true };
+    // columnMajor forced false here (Sep 10 2026, was true): the desktop
+    // reshape into gridDestCols columns is still in effect (that's what
+    // gridColumnMajor/gridDestCols select), but the FILL order within that
+    // shape is now always row-major — "read like a book", left-to-right
+    // then top-to-bottom (1 2 / 3 4 / 5 6 / 7 8) — instead of the old
+    // top-to-bottom-per-column order. See drawGridFromSource()'s dx/dy math
+    // below, which branches on this same field.
+    return { cols: this.gridDestCols, rows: Math.ceil((this.cols * this.rows) / this.gridDestCols), columnMajor: false };
   }
 
   // Switch grid geometry when the app loads a different mosaic. Does NOT touch
@@ -433,8 +440,12 @@ function tileRect(i, w, h, cols = 4, rows = 2) {
 // cols/rows here are the SOURCE shape (for tileRect() cropping only — the
 // physical layout baked into the video never changes); destShape (Sep 7 2026
 // fix, see the constructor's own comment) is the separate DESTINATION shape
-// placement actually uses, e.g. {cols:2,rows:4,columnMajor:true} on desktop
-// vs {cols,rows,columnMajor:false} (source shape, row-major) on mobile.
+// placement actually uses, e.g. {cols:2,rows:4,columnMajor:false} on desktop
+// vs {cols,rows,columnMajor:false} (source shape) on mobile — both row-major
+// (Sep 10 2026 — desktop's fill order used to be columnMajor:true, i.e.
+// top-to-bottom down one column then the next; changed to read "like a
+// book" instead, left-to-right then top-to-bottom, same as mobile).
+// columnMajor stays a live option below in case a future layout wants it.
 function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape) {
   const { cols: destCols, rows: destRows, columnMajor } = destShape || { cols, rows, columnMajor: false };
   const S = ctx.canvas.width / destCols, Sh = ctx.canvas.height / destRows;
