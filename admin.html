@@ -139,6 +139,14 @@
      page — same .menu-row look as the piece list on the home screen. ---- */
   .hub-section-sub{font-size:12px;color:#9a9aa5;margin-top:2px;}
 
+  /* ---- Local-disk mirror (Sep 10 2026): Chrome/Edge-only File System
+     Access status strip on the notation page — see the big JS comment on
+     writeLocalMirror() for what this actually does. ---- */
+  .local-sync-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#15161c;border:1px solid #24252e;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:#9a9aa5;}
+  .local-sync-bar .ok{color:#4cd964;}
+  .local-sync-bar .warn{color:#e8b34c;}
+  .local-sync-bar button{background:#22232b;border:1px solid #33343d;color:#8a8fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap;}
+
   .save-bar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:14px 0 0;background:#0b0c10;}
   #saveBtn{flex:1;background:#6c5ce7;color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;}
   #saveBtn:disabled{opacity:.5;cursor:default;}
@@ -242,6 +250,8 @@
   <div id="pieceNotationView" hidden>
     <button id="notationBackBtn" type="button" class="back-link">← Back</button>
     <h1 id="notationTitle">Piece</h1>
+
+    <div class="local-sync-bar" id="localSyncBar"></div>
 
     <div class="notation-sticky-wrap">
       <div id="notationPreview"></div>
@@ -513,6 +523,11 @@
     if(passphrase())showConsole();
   })();
 
+  // Local-disk mirror (Sep 10 2026): try to pick back up a previously-
+  // connected repo folder handle, independent of the passphrase gate —
+  // pure client-side IndexedDB/File System Access state, no server call.
+  restoreLocalSync();
+
   function loadConfig(){
     fetch('/api/config',{cache:'no-store'}).then(function(res){
       if(!res.ok)throw new Error('config fetch failed: '+res.status);
@@ -750,21 +765,32 @@
   }
 
   // ---- Notation image uploads (Sep 9 2026) ----
-  // Parses a bars field like "6, 12" or "6 12" into a deduped array of
-  // positive integers, or null if the text doesn't parse as one at all
+  // Parses a bars field like "6, 12" or "1-3, 6, 9" into a deduped, sorted
+  // array of positive integers, or null if the text doesn't parse at all
   // (used to tell "typed something invalid" apart from "left it blank" —
-  // blank means "all bars", handled by the caller, not here).
+  // blank means "all bars", handled by the caller, not here). A token can be
+  // a single number OR a "lo-hi" range (Sep 10 2026) — the range expands to
+  // every bar in between; the underlying data stored is always just the
+  // flat list of bar numbers, ranges are purely an input-typing convenience.
   function parseBarsInput(text){
     text=(text||'').trim();
     if(!text)return null;
     var parts=text.split(/[,\s]+/).filter(Boolean);
     var out=[];
     for(var i=0;i<parts.length;i++){
-      var n=parseInt(parts[i],10);
-      if(!isFinite(n)||n<1||String(n)!==parts[i].replace(/^0+(?=\d)/,''))return null;
-      if(out.indexOf(n)<0)out.push(n);
+      var part=parts[i];
+      var range=/^(\d+)-(\d+)$/.exec(part);
+      if(range){
+        var lo=parseInt(range[1],10),hi=parseInt(range[2],10);
+        if(!isFinite(lo)||!isFinite(hi)||lo<1||hi<lo)return null;
+        for(var n=lo;n<=hi;n++)if(out.indexOf(n)<0)out.push(n);
+        continue;
+      }
+      var v=parseInt(part,10);
+      if(!isFinite(v)||v<1||String(v)!==part.replace(/^0+(?=\d)/,''))return null;
+      if(out.indexOf(v)<0)out.push(v);
     }
-    return out.length?out:null;
+    return out.length?out.sort(function(a,b){return a-b;}):null;
   }
   function fileToDataUrl(file){
     return new Promise(function(resolve,reject){
@@ -796,9 +822,202 @@
       });
     });
   }
+  // ---- Local-disk mirror (Sep 10 2026) ----
+  // Chrome/Edge only (File System Access API). Once he's picked his
+  // mosaic_player repo folder once, every image published through the
+  // preview panel's "Save to live" ALSO gets written straight into the
+  // matching Mosaic/<Piece>/ folder on disk — so it shows up in GitHub
+  // Desktop as a new/changed file ready to commit, without a separate
+  // manual export step. Purely a convenience mirror: the KV upload in
+  // publishDraft() is what actually goes live; this never blocks or
+  // reverses that even if the local write fails.
+  var LOCAL_SYNC_SUPPORTED=typeof window.showDirectoryPicker==='function';
+  var LOCAL_SYNC_DB='mosaicAdminLocalSync',LOCAL_SYNC_STORE='handles',LOCAL_SYNC_KEY='repoRoot';
+  var localSyncHandle=null; // FileSystemDirectoryHandle once connected, else null
+  var localSyncStatus=LOCAL_SYNC_SUPPORTED?'disconnected':'unsupported'; // 'disconnected'|'connected'|'needs-permission'|'unsupported'
+
+  function idbOpen(){
+    return new Promise(function(resolve,reject){
+      var req=indexedDB.open(LOCAL_SYNC_DB,1);
+      req.onupgradeneeded=function(){req.result.createObjectStore(LOCAL_SYNC_STORE);};
+      req.onsuccess=function(){resolve(req.result);};
+      req.onerror=function(){reject(req.error);};
+    });
+  }
+  function idbGet(key){
+    return idbOpen().then(function(db){
+      return new Promise(function(resolve,reject){
+        var r=db.transaction(LOCAL_SYNC_STORE,'readonly').objectStore(LOCAL_SYNC_STORE).get(key);
+        r.onsuccess=function(){resolve(r.result);};
+        r.onerror=function(){reject(r.error);};
+      });
+    });
+  }
+  function idbSet(key,val){
+    return idbOpen().then(function(db){
+      return new Promise(function(resolve,reject){
+        var tx=db.transaction(LOCAL_SYNC_STORE,'readwrite');
+        tx.objectStore(LOCAL_SYNC_STORE).put(val,key);
+        tx.oncomplete=function(){resolve();};
+        tx.onerror=function(){reject(tx.error);};
+      });
+    });
+  }
+
+  // Encodes a bars selection into a short filename-safe suffix, per his own
+  // spec (Sep 10 2026): a run of CONSECUTIVE bars becomes "start-end" (a
+  // range); one or more non-consecutive single bars become "b1_b2_b3" (a
+  // list); multiple such pieces are joined with "&", in bar order.
+  //   [1,2,3,6,9]  -> "1-3&6_9"   (bars 1 through 3, AND bars 6 and 9)
+  //   [6,9]        -> "6_9"       (bars 6 and 9 only)
+  //   [6,7,8,9]    -> "6-9"       (bars 6 through 9)
+  //   [5]          -> "5"         (bar 5 only)
+  // 'all'/no bars -> '' (no suffix at all — a bare filename is the
+  // whole-piece default, matching the existing static files' convention).
+  function encodeBarsForFilename(bars){
+    if(bars==='all'||!Array.isArray(bars)||!bars.length)return '';
+    var sorted=bars.slice().sort(function(a,b){return a-b;});
+    var runs=[];
+    sorted.forEach(function(n){
+      var last=runs[runs.length-1];
+      if(last&&n===last[last.length-1]+1)last.push(n);
+      else runs.push([n]);
+    });
+    var tokens=[],pending=[];
+    function flush(){if(pending.length){tokens.push(pending.join('_'));pending=[];}}
+    runs.forEach(function(run){
+      if(run.length>=2){flush();tokens.push(run[0]+'-'+run[run.length-1]);}
+      else pending.push(run[0]);
+    });
+    flush();
+    return tokens.join('&');
+  }
+  function slugifyStemName(name){
+    // strips combining diacritics (U+0300-U+036F) after NFD decomposition,
+    // e.g. "Bembé" -> "bembe" — the range below is written as literal
+    // characters rather than \u escapes, but is the same U+0300-U+036F span.
+    return (name||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+  }
+  // Same directory a piece's poster/static notation files already live in
+  // (derived from PIECE_META so there's one place to update if that ever
+  // changes, not a second hand-maintained map).
+  function pieceFolder(id){
+    var p=PIECE_META[id]&&PIECE_META[id].poster;
+    if(!p)return null;
+    var i=p.lastIndexOf('/');
+    return i>=0?p.slice(0,i):null;
+  }
+  // A base ("all bars") image lands on the EXACT filename the static config
+  // already points at — so publishing a new base through admin also updates
+  // the traditional default, one less thing to keep in sync by hand. A
+  // bar-specific variant gets a new file alongside it, same naming
+  // convention as the existing files, with a bars suffix.
+  function localMirrorFilename(id,tileIdx,bars){
+    var meta=PIECE_META[id];
+    var barsPart=encodeBarsForFilename(bars);
+    if(!barsPart&&meta&&meta.notationStripByIndex&&meta.notationStripByIndex[tileIdx]){
+      var existing=meta.notationStripByIndex[tileIdx];
+      return existing.slice(existing.lastIndexOf('/')+1);
+    }
+    var idx=String(tileIdx+1).padStart(2,'0');
+    var slug=slugifyStemName(STEM_NAMES[id][tileIdx]);
+    return idx+'_'+slug+'_'+id+(barsPart?('_bars'+barsPart):'')+'.png';
+  }
+
+  function setLocalSyncStatus(s){localSyncStatus=s;renderLocalSyncBar();}
+  function renderLocalSyncBar(){
+    var bar=document.getElementById('localSyncBar');
+    if(!bar)return;
+    bar.innerHTML='';
+    var label=document.createElement('div');
+    if(localSyncStatus==='unsupported'){
+      label.textContent='Local disk mirror needs Chrome or Edge — not available in this browser.';
+      bar.appendChild(label);
+    }else if(localSyncStatus==='connected'){
+      label.className='ok';label.textContent='Local disk mirror: connected — images saved to live also land in your repo folder.';
+      var dbtn=document.createElement('button');dbtn.type='button';dbtn.textContent='Disconnect';
+      dbtn.addEventListener('click',disconnectLocalSync);
+      bar.appendChild(label);bar.appendChild(dbtn);
+    }else if(localSyncStatus==='needs-permission'){
+      label.className='warn';label.textContent='Local disk mirror: permission needs refreshing.';
+      var rbtn=document.createElement('button');rbtn.type='button';rbtn.textContent='Reconnect';
+      rbtn.addEventListener('click',connectLocalSync);
+      bar.appendChild(label);bar.appendChild(rbtn);
+    }else{
+      label.textContent='Local disk mirror: not connected — images saved to live only go to Cloudflare, not your repo.';
+      var cbtn=document.createElement('button');cbtn.type='button';cbtn.textContent='Connect folder…';
+      cbtn.addEventListener('click',connectLocalSync);
+      bar.appendChild(label);bar.appendChild(cbtn);
+    }
+  }
+  function disconnectLocalSync(){
+    localSyncHandle=null;
+    idbSet(LOCAL_SYNC_KEY,null).catch(function(){});
+    setLocalSyncStatus('disconnected');
+  }
+  // Must be called from a real click (File System Access requires a user
+  // gesture) — both the "Connect folder…" and "Reconnect" buttons above
+  // call this directly. Verifies the picked folder actually looks like the
+  // repo (has a "Mosaic" subfolder) before accepting it.
+  function connectLocalSync(){
+    if(!LOCAL_SYNC_SUPPORTED)return;
+    window.showDirectoryPicker({id:'mosaic-repo',mode:'readwrite'}).then(function(handle){
+      return handle.getDirectoryHandle('Mosaic',{create:false}).then(function(){
+        localSyncHandle=handle;
+        return idbSet(LOCAL_SYNC_KEY,handle);
+      }).then(function(){
+        setLocalSyncStatus('connected');
+      });
+    }).catch(function(e){
+      if(e&&e.name==='AbortError')return; // he cancelled the picker
+      alert('That folder doesn\'t look like the mosaic_player repo (no "Mosaic" subfolder found) — pick the repo\'s root folder.');
+    });
+  }
+  // Restores a previously-connected handle on page load. queryPermission()
+  // works without a user gesture; requestPermission() does not, so a lapsed
+  // permission surfaces as a Reconnect button rather than an auto-prompt.
+  function restoreLocalSync(){
+    if(!LOCAL_SYNC_SUPPORTED)return;
+    idbGet(LOCAL_SYNC_KEY).then(function(handle){
+      if(!handle)return;
+      return handle.queryPermission({mode:'readwrite'}).then(function(perm){
+        localSyncHandle=handle;
+        setLocalSyncStatus(perm==='granted'?'connected':'needs-permission');
+      });
+    }).catch(function(){});
+  }
+  // Writes one just-published file into its matching Mosaic/<Piece>/
+  // folder. Best-effort and non-blocking: publishDraft() has already
+  // succeeded (the image is live) by the time this runs, so a failure here
+  // only means the local copy didn't get written — never re-tried
+  // automatically, surfaced in the status line instead.
+  function writeLocalMirror(id,tileIdx,bars,file){
+    if(!localSyncHandle||localSyncStatus!=='connected')return Promise.resolve({skipped:true});
+    var folder=pieceFolder(id);
+    if(!folder)return Promise.resolve({skipped:true});
+    var parts=folder.split('/');
+    var dirPromise=Promise.resolve(localSyncHandle);
+    parts.forEach(function(part){
+      dirPromise=dirPromise.then(function(dir){return dir.getDirectoryHandle(part,{create:false});});
+    });
+    var filename=localMirrorFilename(id,tileIdx,bars);
+    return dirPromise.then(function(dir){
+      return dir.getFileHandle(filename,{create:true});
+    }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(writable){
+      return file.arrayBuffer().then(function(buf){return writable.write(buf).then(function(){return writable.close();});});
+    }).then(function(){
+      return {skipped:false,ok:true,filename:filename,folder:folder};
+    }).catch(function(e){
+      return {skipped:false,ok:false,error:(e&&e.message)?e.message:String(e)};
+    });
+  }
+
   function refreshNotationSection(id){
     renderNotationPreview(id);
     renderNotationTiles(id);
+    renderLocalSyncBar();
   }
 
   // Applies a just-picked file (and whatever's currently in the bars text
@@ -831,8 +1050,9 @@
     var draft=drafts[id]&&drafts[id][tileIdx];
     if(!draft)return;
     if(statusEl){statusEl.textContent='Saving to live…';statusEl.className='notation-status';}
-    fileToDataUrl(draft.file).then(function(dataUrl){
-      return notationApi('/api/admin/notation-upload',{pieceId:id,tileIndex:tileIdx,bars:draft.bars,imageBase64:dataUrl});
+    var draftFile=draft.file,draftBars=draft.bars;
+    fileToDataUrl(draftFile).then(function(dataUrl){
+      return notationApi('/api/admin/notation-upload',{pieceId:id,tileIndex:tileIdx,bars:draftBars,imageBase64:dataUrl});
     }).then(function(cfg){
       applyNotationOverrides(cfg.notationOverrides);
       clearDraft(id,tileIdx);
@@ -841,8 +1061,25 @@
       var publishedIdx=list.findIndex(function(c){return c.variant&&c.variant.id===cfg.savedVariantId;});
       ps.tileIndex=tileIdx;
       ps.variantIndex=publishedIdx>=0?publishedIdx:0;
-      if(statusEl){statusEl.textContent='Saved — live for everyone now.';statusEl.className='notation-status ok';}
+      // refreshNotationSection() below rebuilds the whole preview panel from
+      // scratch for the newly-live image (draft's Save/Discard buttons swap
+      // for the live view's Delete button) — that rebuild replaces `statusEl`
+      // itself, so the final status message is written onto the FRESH status
+      // element it creates, once we also know the local-mirror outcome,
+      // rather than onto the now-detached one passed into this function.
       refreshNotationSection(id);
+      return writeLocalMirror(id,tileIdx,draftBars,draftFile).then(function(res){
+        var freshStatus=notationPreview.querySelector('.notation-status');
+        if(!freshStatus)return;
+        if(res.skipped){
+          freshStatus.textContent='Saved — live for everyone now.';freshStatus.className='notation-status ok';
+        }else if(res.ok){
+          freshStatus.textContent='Saved — live for everyone now. Also saved to '+res.folder+'/'+res.filename+'.';freshStatus.className='notation-status ok';
+        }else{
+          freshStatus.textContent='Saved — live for everyone now. (Local disk mirror failed: '+res.error+')';freshStatus.className='notation-status err';
+        }
+      });
+    }).then(function(){
       if(onDone)onDone();
     }).catch(function(e){
       if(e.message!=='unauthorized'&&statusEl){statusEl.textContent='Save failed: '+e.message;statusEl.className='notation-status err';}
@@ -997,8 +1234,8 @@
         barsHint=document.createElement('span');barsHint.className='notation-bars-hint';
         barsHint.textContent='Bars (1–'+barCount+'):';
         barsInput=document.createElement('input');barsInput.type='text';
-        barsInput.placeholder='e.g. 2,4,6 (blank = all)';
-        barsInput.title='This piece has '+barCount+' bars. Leave blank to stage a base image (used whenever no bar-specific one applies).';
+        barsInput.placeholder='e.g. 1-3, 6, 9 (blank = all)';
+        barsInput.title='This piece has '+barCount+' bars. Ranges allowed (1-3 = bars 1 through 3). Leave blank to stage a base image (used whenever no bar-specific one applies).';
       }
       var stageBtn=document.createElement('button');stageBtn.type='button';stageBtn.textContent='Stage for preview';
       var status=document.createElement('div');status.className='notation-status';status.style.flexBasis='100%';
