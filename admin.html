@@ -90,13 +90,20 @@
      the actual player's focus square + notation strip composition, so a
      bar-specific/base image can be checked for alignment/consistency right
      here rather than needing the live app open in another tab. ---- */
-  .notation-preview{margin-bottom:18px;}
-  .notation-preview-modebar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-  .notation-preview-instrument{font-size:14px;font-weight:700;}
-  .notation-mode-toggle{display:flex;gap:2px;background:#1a1b21;border:1px solid #33343d;border-radius:8px;padding:3px;}
+  .notation-preview{margin-bottom:14px;}
+  /* Sep 10 2026: square + strip sit beside the instrument/mode/sync info
+     instead of below it (was a stacked column eating vertical space before
+     the scrolling tile list even starts) — wraps back to stacked on a
+     narrow viewport since the side column has a min-width. Frame is sized
+     to 75% of its original 320px per his request, freeing more room below. */
+  .notation-preview-body{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;}
+  .notation-preview-side{flex:1 1 150px;min-width:150px;display:flex;flex-direction:column;gap:8px;}
+  .notation-preview-modebar{display:flex;flex-direction:column;align-items:flex-start;gap:6px;}
+  .notation-preview-instrument{font-size:13px;font-weight:700;}
+  .notation-mode-toggle{display:flex;gap:2px;background:#1a1b21;border:1px solid #33343d;border-radius:8px;padding:3px;flex-wrap:wrap;}
   .notation-mode-toggle button{background:none;border:none;color:#9a9aa5;font-size:11px;padding:6px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;}
   .notation-mode-toggle button.active{background:#6c5ce7;color:#fff;}
-  .notation-preview-frame{max-width:320px;margin:0 auto;}
+  .notation-preview-frame{max-width:240px;flex:0 0 240px;}
   /* The square itself: overflow:hidden clips the overlay strip to match the
      real .focus-wrap's rounded-corner clipping (see mosaic_webcodecs.html's
      own CSS comment on .notation-strip). aspect-ratio:1/1 mirrors the real
@@ -142,7 +149,7 @@
   /* ---- Local-disk mirror (Sep 10 2026): Chrome/Edge-only File System
      Access status strip on the notation page — see the big JS comment on
      writeLocalMirror() for what this actually does. ---- */
-  .local-sync-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#15161c;border:1px solid #24252e;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:#9a9aa5;}
+  .local-sync-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:#15161c;border:1px solid #24252e;border-radius:10px;padding:8px 10px;margin:0;font-size:11px;color:#9a9aa5;}
   .local-sync-bar .ok{color:#4cd964;}
   .local-sync-bar .warn{color:#e8b34c;}
   .local-sync-bar button{background:#22232b;border:1px solid #33343d;color:#8a8fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap;}
@@ -1094,6 +1101,28 @@
   // .notation-preview-square/-strip-overlay/-strip-below). Rebuilt from
   // scratch on every call; cheap (a handful of DOM nodes), called after
   // every stage/save/delete/cycle/mode-change.
+  // Opens a plain file picker and, once a file's chosen, stages it as a
+  // draft for the given tile/bars and re-renders — used by the "Replace
+  // image"/"Add a base image" buttons below so an ALREADY-LIVE (or the
+  // site's static default) image can be swapped for a new one directly,
+  // without deleting it first. Publishing still goes through the normal
+  // staged-draft review (Save to live/Discard) — this only skips the
+  // separate delete step, not the preview-before-publish step.
+  function promptReplaceImage(id,tileIdx,bars){
+    var input=document.createElement('input');
+    input.type='file';input.accept='image/png';input.style.display='none';
+    input.addEventListener('change',function(){
+      var file=input.files&&input.files[0];
+      input.remove();
+      if(!file)return;
+      var barsText=(bars==='all')?'all':bars.join(', ');
+      stageDraft(id,tileIdx,file,bars,barsText);
+      refreshNotationSection(id);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
   function renderNotationPreview(id){
     notationPreview.innerHTML='';
     var meta=PIECE_META[id];
@@ -1107,20 +1136,7 @@
     var mode=resolvedPreviewMode(ps.mode);
 
     var wrap=document.createElement('div');wrap.className='notation-preview';
-
-    var modebar=document.createElement('div');modebar.className='notation-preview-modebar';
-    var instrumentLabel=document.createElement('div');instrumentLabel.className='notation-preview-instrument';
-    instrumentLabel.textContent='Previewing: '+STEM_NAMES[id][tileIdx]+(BAR_COUNTS[id]?' (piece has '+BAR_COUNTS[id]+' bars)':'');
-    var toggle=document.createElement('div');toggle.className='notation-mode-toggle';
-    var autoIsDesktop=resolvedPreviewMode('auto')==='desktop';
-    [['auto','Auto ('+(autoIsDesktop?'Desktop':'Mobile')+')'],['mobile','Mobile'],['desktop','Desktop']].forEach(function(pair){
-      var btn=document.createElement('button');btn.type='button';btn.textContent=pair[1];
-      if(ps.mode===pair[0])btn.className='active';
-      btn.addEventListener('click',function(){ps.mode=pair[0];renderNotationPreview(id);});
-      toggle.appendChild(btn);
-    });
-    modebar.appendChild(instrumentLabel);modebar.appendChild(toggle);
-    wrap.appendChild(modebar);
+    var body=document.createElement('div');body.className='notation-preview-body';
 
     var frame=document.createElement('div');frame.className='notation-preview-frame mode-'+mode;
 
@@ -1144,7 +1160,33 @@
     belowStrip.appendChild(belowImg);
     frame.appendChild(belowStrip);
 
-    wrap.appendChild(frame);
+    body.appendChild(frame);
+
+    // Side column (Sep 10 2026): sync status + instrument/mode info sit
+    // BESIDE the square now instead of stacked above it — #localSyncBar is
+    // an existing persistent element (see the HTML skeleton), re-parented
+    // in here each render rather than recreated; renderLocalSyncBar() still
+    // finds it fine via getElementById regardless of where it's nested.
+    var side=document.createElement('div');side.className='notation-preview-side';
+    var syncBarEl=document.getElementById('localSyncBar');
+    if(syncBarEl)side.appendChild(syncBarEl);
+
+    var modebar=document.createElement('div');modebar.className='notation-preview-modebar';
+    var instrumentLabel=document.createElement('div');instrumentLabel.className='notation-preview-instrument';
+    instrumentLabel.textContent='Previewing: '+STEM_NAMES[id][tileIdx]+(BAR_COUNTS[id]?' (piece has '+BAR_COUNTS[id]+' bars)':'');
+    var toggle=document.createElement('div');toggle.className='notation-mode-toggle';
+    var autoIsDesktop=resolvedPreviewMode('auto')==='desktop';
+    [['auto','Auto ('+(autoIsDesktop?'Desktop':'Mobile')+')'],['mobile','Mobile'],['desktop','Desktop']].forEach(function(pair){
+      var btn=document.createElement('button');btn.type='button';btn.textContent=pair[1];
+      if(ps.mode===pair[0])btn.className='active';
+      btn.addEventListener('click',function(){ps.mode=pair[0];renderNotationPreview(id);});
+      toggle.appendChild(btn);
+    });
+    modebar.appendChild(instrumentLabel);modebar.appendChild(toggle);
+    side.appendChild(modebar);
+    body.appendChild(side);
+
+    wrap.appendChild(body);
 
     var cycler=document.createElement('div');cycler.className='notation-preview-cycler';
     var prevBtn=document.createElement('button');prevBtn.type='button';prevBtn.textContent='‹';prevBtn.disabled=candidates.length<2;
@@ -1169,6 +1211,12 @@
       });
       actions.appendChild(save);actions.appendChild(discard);
     }else if(current.kind==='live'){
+      // Sep 10 2026: replacing an already-live image no longer requires
+      // deleting it first — pick a new file for the SAME bars and it
+      // stages as a draft ready for its own Save to live, same review step
+      // as any other upload, just without the delete-then-recreate detour.
+      var replace=document.createElement('button');replace.type='button';replace.className='neutral';replace.textContent='Replace image…';
+      replace.addEventListener('click',function(){promptReplaceImage(id,tileIdx,current.variant.bars);});
       var del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete this image';
       del.addEventListener('click',function(){
         if(!confirm((current.variant.bars==='all'?'Delete the base image':'Delete the bars '+current.variant.bars.join(', ')+' image')+' for '+STEM_NAMES[id][tileIdx]+'?'))return;
@@ -1182,12 +1230,15 @@
           del.disabled=false;
         });
       });
-      actions.appendChild(del);
+      actions.appendChild(replace);actions.appendChild(del);
+    }else{
+      // kind==='default': the site's built-in fallback, nothing in KV to
+      // delete or replace — but he can establish a base override for this
+      // tile right here too, same no-delete-needed path as above.
+      var addBase=document.createElement('button');addBase.type='button';addBase.className='neutral';addBase.textContent='Add a base image…';
+      addBase.addEventListener('click',function(){promptReplaceImage(id,tileIdx,'all');});
+      actions.appendChild(addBase);
     }
-    // (kind==='default': nothing to do here — no button, no note. The
-    // explanation of what "Default (site fallback)" means lives in the card
-    // at the very bottom of the page now, out of the sticky panel's way —
-    // see notationIntro's sibling paragraph.)
     wrap.appendChild(actions);
     wrap.appendChild(status);
 
