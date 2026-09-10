@@ -1189,6 +1189,15 @@ document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v
 // in the source video), audio stem filenames, and the R2 base path the
 // tempo-variant videos live under. Adding a new mosaic is just adding an
 // entry here — nothing else in this file is piece-specific.
+// Global "no notation configured at all" safety net (Sep 10 2026) — a
+// branded Mosaic wordmark, NOT the old generic music-staff graphic. Every
+// piece below already sets notationStrip to this exact path as its
+// per-piece fallback, so this constant mostly just names that same file
+// explicitly; it also covers any future piece that forgets to set
+// notationStrip at all. See resolveNotationStripSrc() below, and the
+// matching GLOBAL_NOTATION_FALLBACK in admin.html — keep both in sync if
+// this file ever moves.
+const GLOBAL_NOTATION_FALLBACK='Mosaic/Shared/notation_strip_placeholder.png';
 const MOSAICS={
   abakua:{
     id:'abakua', label:'Abakuá', poster:'Mosaic/Abakua/poster_abakua.jpg',
@@ -3181,7 +3190,7 @@ function resolveNotationStripSrc(tileIndex){
     if(base)return base.url;
   }
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[tileIndex];
-  return perTile||cfg.notationStrip;
+  return perTile||cfg.notationStrip||GLOBAL_NOTATION_FALLBACK;
 }
 function renderNotationStrip(){
   const src=resolveNotationStripSrc(selected);
@@ -3243,11 +3252,11 @@ function renderNotationStrip(){
     else entry.waiters.push(applyLandscapeNotationImage);
     landscapeNotation.hidden=false;
   }else{
-    // No notationStrip configured for this piece at all — collapse for
-    // real (the hidden attribute takes it fully out of layout), since
-    // there's no "space above it" worth preserving. Every piece currently
-    // ships a notationStrip (see MOSAICS), so this branch is unreachable
-    // in practice today.
+    // Collapse for real (the hidden attribute takes it fully out of
+    // layout), since there's no "space above it" worth preserving. Dead
+    // in practice as of Sep 10 2026: resolveNotationStripSrc() always
+    // returns at least GLOBAL_NOTATION_FALLBACK now, so src is never
+    // falsy here — kept only as a defensive last resort.
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
     notationStripDesktop.hidden=true;notationStripDesktop.removeAttribute('src');
     currentLandscapeNotationSrc=null;

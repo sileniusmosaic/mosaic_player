@@ -320,6 +320,15 @@
   // that file's own comment) specifically so per-bar notation would work
   // for it as well.
   var BAR_COUNTS={flipswing:12, abakua:19, congo:8};
+  // Global "no notation configured at all" safety net (Sep 10 2026) — a
+  // branded Mosaic wordmark, NOT the old generic music-staff graphic. Every
+  // piece below already sets notationStrip to this exact path as its
+  // per-piece fallback, so in practice this constant is just naming that
+  // same file explicitly; it also covers any future piece that forgets to
+  // set notationStrip at all. See defaultNotationFor() and the matching
+  // GLOBAL_NOTATION_FALLBACK in mosaic_webcodecs.html — keep both in sync
+  // if this file ever moves.
+  var GLOBAL_NOTATION_FALLBACK='Mosaic/Shared/notation_strip_placeholder.png';
   // Mirrors mosaic_webcodecs.html's MOSAICS[id] poster/cols/rows/notationStrip
   // /notationStripByIndex (Sep 10 2026, for the live-look preview below) —
   // same "no shared source of truth across these static files" situation as
@@ -347,8 +356,8 @@
   };
   function defaultNotationFor(id,tileIdx){
     var meta=PIECE_META[id];
-    if(!meta)return null;
-    return (meta.notationStripByIndex&&meta.notationStripByIndex[tileIdx])||meta.notationStrip||null;
+    if(!meta)return GLOBAL_NOTATION_FALLBACK;
+    return (meta.notationStripByIndex&&meta.notationStripByIndex[tileIdx])||meta.notationStrip||GLOBAL_NOTATION_FALLBACK;
   }
 
   var gate=document.getElementById('gate');
