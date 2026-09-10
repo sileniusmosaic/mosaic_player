@@ -346,7 +346,12 @@
     abakua:{
       poster:'Mosaic/Abakua/poster_abakua.jpg', cols:4, rows:2,
       notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-      notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png'}
+      // Clave/Bembé static entries removed Sep 10 2026 — the underlying
+      // files were deleted from the repo, so these were dead links (see
+      // matching note in mosaic_webcodecs.html's MOSAICS.abakua). Mirror
+      // that file's PIECE_META here so this admin preview matches what's
+      // actually live.
+      notationStripByIndex:{}
     },
     congo:{
       poster:'Mosaic/Congo_Yambumba/poster_congo.jpg', cols:4, rows:2,

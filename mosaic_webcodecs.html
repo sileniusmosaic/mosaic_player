@@ -1233,7 +1233,16 @@ const MOSAICS={
     // for Abakuá, Sep 9 2026) now replace the placeholder; Cata, Erikundi,
     // Quinto, Conga, Tumba and Coro (indices 2-7) still fall back to it.
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png'},
+    // Clave/Bembé entries removed Sep 10 2026 — 01_clave_abakua.png and
+    // 02_bembe_abakua.png were deleted from the repo (his own commit
+    // 0659cd9), so these were pointing at 404s and rendering as broken
+    // images on the live site (browser alt-text box) instead of falling
+    // through to notationStrip. Leaving this empty lets both correctly
+    // fall through to notationStrip -> GLOBAL_NOTATION_FALLBACK (the
+    // Mosaic wordmark) below until real per-tile art replaces it — Bembé
+    // still gets its admin-uploaded bars 6+19 KV variant via
+    // cfg.notationVariantsByIndex ahead of this, just no 'all' base yet.
+    notationStripByIndex:{},
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
     // bundled into the git repo/Worker static assets while every other
@@ -3192,10 +3201,23 @@ function resolveNotationStripSrc(tileIndex){
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[tileIndex];
   return perTile||cfg.notationStrip||GLOBAL_NOTATION_FALLBACK;
 }
+// Belt-and-suspenders for GLOBAL_NOTATION_FALLBACK (Sep 10 2026): a
+// *configured* src can still 404 at runtime — a deleted/renamed static file,
+// a bad path — which without this shows the browser's broken-image icon
+// instead of falling back gracefully. Swaps to the Mosaic placeholder the
+// moment the browser reports the image failed to actually load, on top of
+// resolveNotationStripSrc()'s own null-safety above. Bails out if the
+// FALLBACK itself is what failed, so a bad fallback can't loop forever.
+function notationSrcFallback(imgEl,failedSrc){
+  if(failedSrc===GLOBAL_NOTATION_FALLBACK)return;
+  imgEl.src=GLOBAL_NOTATION_FALLBACK;
+}
 function renderNotationStrip(){
   const src=resolveNotationStripSrc(selected);
   debugLog('renderNotationStrip() called, src='+src);
   if(src){
+    notationStrip.onerror=function(){notationSrcFallback(notationStrip,src);};
+    notationStripDesktop.onerror=function(){notationSrcFallback(notationStripDesktop,src);};
     notationStrip.src=src;notationStrip.alt=cfg.label+' notation';notationStrip.hidden=false;
     // Toggled off (manuscriptBtn) now uses visibility, not the hidden
     // attribute (Aug 30 2026) — per feedback, the instrument label above it
