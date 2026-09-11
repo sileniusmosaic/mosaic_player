@@ -570,21 +570,48 @@
     else{renderRoute();}
   }
 
-  // Passphrase is only checked for real on the server (worker.js), on every
-  // write — this gate is just so you're not staring at a blank page. Getting
-  // the passphrase wrong here just means the first Save comes back 401 and
-  // you're bounced back to the gate.
+  // Passphrase used to only be checked for real on the server on every
+  // write — this gate just stored whatever you typed and let you straight
+  // into the console, so a wrong passphrase wasn't caught until the first
+  // Save/fetch came back 401. Fixed (Sep 2026): verify against the cheap,
+  // side-effect-free /api/admin/ping route right here at the gate, so a
+  // wrong passphrase never gets past this screen in the first place.
+  function verifyPassphrase(v){
+    return fetch('/api/admin/ping',{headers:{'x-admin-passphrase':v},cache:'no-store'}).then(function(res){
+      return res.ok;
+    });
+  }
   gateBtn.addEventListener('click',function(){
     var v=gateInput.value;
     if(!v){gateError.textContent='Enter a passphrase.';return;}
-    sessionStorage.setItem(PASS_KEY,v);
-    gateError.textContent='';
-    showConsole();
+    gateBtn.disabled=true;
+    gateError.textContent='Checking…';
+    verifyPassphrase(v).then(function(ok){
+      gateBtn.disabled=false;
+      if(!ok){
+        gateError.textContent='Incorrect passphrase — try again.';
+        sessionStorage.removeItem(PASS_KEY);
+        return;
+      }
+      sessionStorage.setItem(PASS_KEY,v);
+      gateError.textContent='';
+      showConsole();
+    }).catch(function(){
+      gateBtn.disabled=false;
+      gateError.textContent='Could not reach the server — check your connection and try again.';
+    });
   });
   gateInput.addEventListener('keydown',function(e){if(e.key==='Enter')gateBtn.click();});
 
   (function checkExistingPass(){
-    if(passphrase())showConsole();
+    var v=passphrase();
+    if(!v)return;
+    // A passphrase already sitting in sessionStorage (e.g. a refresh) is
+    // re-verified too, not trusted blindly — same reasoning as above.
+    verifyPassphrase(v).then(function(ok){
+      if(ok)showConsole();
+      else sessionStorage.removeItem(PASS_KEY);
+    }).catch(function(){}); // offline/unreachable: fall back to the gate, don't lock anyone out
   })();
 
   // Local-disk mirror (Sep 10 2026): try to pick back up a previously-

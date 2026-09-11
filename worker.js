@@ -62,9 +62,11 @@ const BAR_COUNTS = { flipswing: 12, abakua: 19, congo: 8 };
 // and what's muted. Deliberately minimal: ONE D1 table (pings, see
 // ANALYTICS_DB in wrangler.jsonc), no user identity beyond a random
 // per-visit sessionId the browser generates itself (see
-// mosaic_webcodecs.html) — no IP, no device info, no names. A 'start'
-// ping fires once on page load (so "connections" counts a visit even if
-// the person never presses play); 'heartbeat' pings fire roughly every
+// mosaic_webcodecs.html) — no IP, no device info, no names. A 'start' ping
+// fires once the first time playback actually begins in that session (a
+// page load that never presses Play sends nothing, and isn't a
+// "connection" — see mosaic_webcodecs.html's own comment, revised Sep 11
+// 2026); 'heartbeat' pings fire roughly every
 // ANALYTICS_HEARTBEAT_SECONDS while something is actually playing, via
 // navigator.sendBeacon — fire-and-forget, off the audio/video path
 // entirely, so there's no perceptible overhead. Play time per piece/tempo
@@ -496,6 +498,19 @@ export default {
       } catch (e) {
         return corsJson({ error: 'Server error while deleting: ' + (e && e.message ? e.message : String(e)) }, 500);
       }
+    }
+
+    // Passphrase verification (Sep 2026) — admin.html's login gate used to
+    // accept ANY typed passphrase and only discover it was wrong on the
+    // first real write (a stale/incorrect passphrase let you all the way
+    // into the console before failing). This is a deliberately cheap,
+    // side-effect-free route (no KV/D1 touch) the gate can call right at
+    // login to check for real before showing the console at all.
+    if (url.pathname === '/api/admin/ping' && request.method === 'GET') {
+      if (!checkPassphrase(request, env)) {
+        return corsJson({ error: 'Incorrect passphrase.' }, 401);
+      }
+      return corsJson({ ok: true });
     }
 
     // Usage digest for admin.html's Usage page — admin-passphrase gated,
