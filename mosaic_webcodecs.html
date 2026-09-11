@@ -1118,8 +1118,11 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     <!-- Load log (Aug 2026): a running, session-only record of every load —
          see makeLoadProgress()/renderLoadLogEntry(). Newest entry on top;
          wiped only on a real page refresh, not between loads, so it can be
-         used to compare load times/sizes across a testing session. -->
-    <div id="loadLog" class="load-log"></div>
+         used to compare load times/sizes across a testing session. Hidden by
+         default (Sep 2026) — this is a debug/diagnostic tool, not something
+         normal visitors should see. Revealed only with ?debug=1 on the URL,
+         same convention as DEBUG_LANDSCAPE/debugLog() below. -->
+    <div id="loadLog" class="load-log" hidden></div>
     <p class="note" id="noteText">Tap a square to select focus. Mute (M) and Solo (S) are instantaneous — Solo silences every other square without changing their own Mute state. Tempo presets are pitch-correct: 50, 75 and 100%.</p>
     <div id="fpsReadout" class="note" hidden></div>
     <div id="badge" class="badge" hidden>Ready to start</div>
@@ -1131,7 +1134,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     <label for="menuToggle" class="menu-close">✕</label>
     <div class="menu-links">
       <a class="active">Free</a>
-      <a>Membership</a>
+      <a href="/admin.html" target="_blank" rel="noopener">Admin</a>
       <a>Log in</a>
     </div>
     <div class="menu-sub">
@@ -1349,6 +1352,13 @@ function videoSourcesFor(c){return {100:c.videoBase+'100.mp4',75:c.videoBase+'75
 let mosaicId=(new URLSearchParams(location.search).get('mosaic')||'flipswing').toLowerCase();
 if(!MOSAICS[mosaicId])mosaicId='flipswing';
 let cfg=MOSAICS[mosaicId];
+// Debug mode (Sep 2026): ?debug=1 is the one existing "debug version of the
+// player" convention (already used below by DEBUG_LANDSCAPE/debugLog()).
+// Reused here to gate the on-screen Load Log and fps readout so normal
+// visitors never see diagnostic output, while ?debug=1 still shows it all
+// for testing.
+const IS_DEBUG_MODE=new URLSearchParams(location.search).get('debug')==='1';
+if(IS_DEBUG_MODE&&loadLog)loadLog.hidden=false;
 // Admin console settings (Sep 2026): the player renders immediately with the
 // hardcoded defaults above (order + metroOffsetMs:0 everywhere) exactly as
 // before, so the site works even if this fetch is slow, blocked, or the
@@ -2681,7 +2691,7 @@ function syncLandscapeArrows(){
 // built to chase are gone, since it's cheap and may still be useful for
 // whatever comes next. Activated ONLY by adding ?debug=1 to the URL — normal
 // use is completely unaffected (debugLog() is a no-op otherwise).
-const DEBUG_LANDSCAPE=new URLSearchParams(location.search).get('debug')==='1';
+const DEBUG_LANDSCAPE=IS_DEBUG_MODE;
 let debugLandscapeEl=null;
 let debugLandscapeLines=[];
 let debugLandscapeExpanded=false; // Bug fixed Sep 2026 (real report: "still broken" after a fix the log itself proved had worked) — the very first version of this overlay spanned nearly the full screen width/height by default, which on a real phone sat directly on top of the arrows and video area THIS TOOL EXISTS TO INSPECT, making it impossible to tell whether a fix visually worked from a screenshot. Now it starts collapsed to a small tappable "DBG (n)" tab that can't obscure anything meaningful; tapping it expands the full log, tapping again collapses it back — so a screenshot with it collapsed shows the real UI, and a second tap-then-screenshot shows the numbers, without the two ever fighting for the same screen space.
@@ -4444,7 +4454,7 @@ function updateUI(){
   // it visibly resized every time the fps text changed). Moved down to the
   // footer panel instead, where a changing width doesn't affect anything else.
   timeEl.textContent=p.toFixed(0)+' / '+dur.toFixed(0);
-  if(playing&&shownFps!==null){fpsReadout.hidden=false;fpsReadout.textContent='Playing at '+shownFps+' fps.';}
+  if(IS_DEBUG_MODE&&playing&&shownFps!==null){fpsReadout.hidden=false;fpsReadout.textContent='Playing at '+shownFps+' fps.';}
   else{fpsReadout.hidden=true;}
   updateMetro();
   maybeUpdateNotationForBar();
