@@ -1135,7 +1135,6 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
     <div class="menu-links">
       <a class="active">Free</a>
       <a href="/admin.html" target="_blank" rel="noopener">Admin</a>
-      <a>Log in</a>
     </div>
     <div class="menu-sub">
       <p class="rail-title">Mosaics</p>
@@ -4624,6 +4623,20 @@ playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('c
 // screen yet, just another way in until the menu panel grows its own
 // Settings/Notation Library/Latency/Help/About sections.
 if(settingsBtn)settingsBtn.addEventListener('click',()=>{const mt=document.getElementById('menuToggle');if(mt)mt.checked=true;});
+// Tap-anywhere-blank-to-close (Sep 2026): the menu-panel already covers the
+// full screen while open, so it doubles as its own backdrop — no separate
+// overlay element needed. Close on any click that isn't on a real control
+// (a menu link, the ✕ label, or a Mosaics rail item), so tapping empty space
+// closes it exactly like pressing ✕ does, without swallowing real taps.
+(function(){
+  const menuPanelEl=document.querySelector('.menu-panel');
+  if(!menuPanelEl)return;
+  menuPanelEl.addEventListener('click',(e)=>{
+    if(e.target.closest('a,label,#mosaicRail *'))return;
+    const mt=document.getElementById('menuToggle');
+    if(mt)mt.checked=false;
+  });
+})();
 // Spacebar always starts/stops playback, full stop — regardless of which
 // button was last clicked/focused. Without this, the browser's own default
 // behaviour re-activates whatever control currently has focus on a space
