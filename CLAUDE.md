@@ -6,44 +6,84 @@ every session. Product/design decisions and history live in Claude's own
 persistent memory, not here — this file is specifically about how a change
 actually gets shipped.
 
-## Deploy pipeline (there is no CI / no auto-deploy-on-push)
+## Two builds: staging (internal) and live (production)
 
-- Live site: https://mosaic-player.silenius.workers.dev
-- This is a Cloudflare Worker with static assets (`wrangler.jsonc`), **not**
-  classic Cloudflare Pages. There is no GitHub Actions workflow in this repo
-  and nothing deploys automatically when you push.
-- GitHub (`sileniusmosaic/mosaic_player`) is the code's backup/history.
-  **Pushing to GitHub does not update the live site.** `wrangler deploy`
-  publishes straight from the local working directory, not from GitHub.
+- **Live site** (what testers already use): https://mosaic-player.silenius.workers.dev
+- **Staging site** (internal/in-progress work): https://mosaic-player-staging.silenius.workers.dev
+- Both are the SAME Cloudflare Worker codebase, deployed as two separate
+  named environments in `wrangler.jsonc` (`env.staging`, plus the unnamed
+  top-level env for production) — not classic Cloudflare Pages, no GitHub
+  Actions, nothing deploys automatically on push.
+- Staging has its own separate `ADMIN_CONFIG` KV namespace (admin-console
+  edits there never touch live config/notation data) and no `ADMIN_PASSPHRASE`
+  requirement at all (dropped on purpose — zero friction for dev/admin work).
+  It also has no `ANALYTICS_DB` binding, so staging traffic never pollutes
+  real usage analytics.
 
-So shipping a change is always two independent steps, in either order:
+## Deploy pipeline — READ THIS BEFORE SUGGESTING A DEPLOY COMMAND
 
-1. `git push origin main` — backs the change up to GitHub (Pat's usual tool
-   for this is GitHub Desktop; plain `git push` does the same thing).
-2. `npx wrangler deploy` — actually publishes the change live.
+**Default assumption: new/changed code goes to staging. Live only gets
+updated when Pat explicitly asks for it — never as the automatic "next
+step" after a change, even one that looks small or safe.** A session once
+handed over the live-deploy command as the default "ship it" step right
+after a feature build, which pushed untested work straight to the live URL
+by mistake — that must not happen again.
 
-A quick one-liner for both at once, from the repo root:
+- `git push origin main` backs the change up to GitHub — safe to suggest any
+  time, doesn't affect either site.
+- `npx wrangler deploy --env staging` publishes to the staging URL — safe to
+  suggest any time Pat wants to test something; no gate on this one.
+- Deploying to LIVE (`wrangler deploy` targeting the top-level/production
+  environment) must **only** happen through `./deploy-live.sh` at the repo
+  root — never hand over a raw `npx wrangler deploy --env=""` command
+  directly, even if Pat seems to be asking for a normal deploy; point him at
+  the script instead. `deploy-live.sh` will not actually deploy unless the
+  correct passphrase is typed first — a plain local passphrase, completely
+  separate from `ADMIN_PASSPHRASE`, stored only in `.live_deploy_passphrase`
+  (gitignored + asset-ignored, never committed, never read or asked for by
+  Claude). Set/change it with `./set-live-deploy-passphrase.sh`. This exists
+  specifically as a safety catch against exactly the mistake above — treat
+  the passphrase gate as intentional friction, not an obstacle to route
+  around.
+- Note that `wrangler deploy` — for either environment — now requires an
+  explicit `--env` flag once more than one environment exists in the config
+  (a newer Wrangler version added this safety prompt): `--env staging` for
+  staging, `--env=""` for the top-level/production config. `deploy-live.sh`
+  already has this baked in; only worth remembering if giving a raw command
+  for some other reason (staging, mainly).
+- Watch `.assetsignore` if a deploy ever fails with "asset too large" — it
+  needs to mirror `.gitignore` for anything under `Mosaic/*/raw/` (raw
+  masters and ffmpeg build artifacts easily exceed Workers' 25MiB per-asset
+  cap).
+
+### If Pat asks to go live
+
+Confirm that's really what he wants (not "deploy" in the generic sense —
+staging is the default target), then hand him:
 
 ```bash
-git push origin main && npx wrangler deploy
+git push origin main && ./deploy-live.sh
 ```
 
-Watch `.assetsignore` if a deploy ever fails with "asset too large" — it
-needs to mirror `.gitignore` for anything under `Mosaic/*/raw/` (raw masters
-and ffmpeg build artifacts easily exceed Workers' 25MiB per-asset cap).
+He'll be prompted for the live-deploy passphrase; nothing goes live unless
+he enters it correctly.
 
 ## What Claude can and can't do directly in this repo
 
 - **Editing files**: yes, directly (e.g. via a device-bridge connection to
   his Mac), matching the existing file's mtime so there's no silent
   overwrite of unseen edits. No need to ask first.
-- **`git commit`**: yes — but always ask first and wait for an explicit
-  go-ahead. This is a standing preference, not specific to this repo.
-- **`git push` / `npx wrangler deploy`**: Claude cannot run either of these
-  from a sandboxed cloud/device-bridge session — both github.com and the
-  npm/Cloudflare registries are network-blocked from there (confirmed: 403
-  from the proxy on both). Don't keep retrying — hand over the one-liner
-  above for Pat to paste into his own Terminal instead.
+- **`git commit`**: yes, automatically, no need to ask first (updated Sep 10
+  2026 — supersedes an earlier "always ask first" rule that used to live
+  here; this is a standing preference, not specific to this repo).
+- **`git push` / `npx wrangler deploy` / `./deploy-live.sh`**: Claude cannot
+  run any of these from a sandboxed cloud/device-bridge session — both
+  github.com and the npm/Cloudflare registries are network-blocked from
+  there (confirmed: 403 from the proxy on both), and `deploy-live.sh`
+  specifically needs an interactive passphrase prompt only Pat should ever
+  see/answer. Don't keep retrying — hand the right command over for Pat to
+  run in his own Terminal instead (staging or GitHub push: give the raw
+  command directly; live: give `./deploy-live.sh`, per the section above).
 
 ## Admin console / config backend
 
@@ -52,5 +92,7 @@ and ffmpeg build artifacts easily exceed Workers' 25MiB per-asset cap).
   offset, per-stem volume trim, tile order, and (Sep 2026) per-tile notation
   image overrides. Changes made through `admin.html` go live immediately via
   Cloudflare KV — no commit/push/deploy needed for those.
-- Admin write routes require the `ADMIN_PASSPHRASE` Worker secret (set via
-  `wrangler secret put ADMIN_PASSPHRASE`, never committed to the repo).
+- On the LIVE site, admin write routes require the `ADMIN_PASSPHRASE` Worker
+  secret (set via `wrangler secret put ADMIN_PASSPHRASE`, never committed to
+  the repo). On STAGING, there is no admin passphrase at all (see above) —
+  do not confuse the two, or assume one implies anything about the other.

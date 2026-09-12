@@ -13,3 +13,11 @@ Claude outputs
 # Raw video masters + build outputs (never served directly — see .gitignore,
 # same exclusion) added Sep 4 2026 after a deploy failed on a 134MiB .mov here.
 Mosaic/*/raw
+
+# Deploy scripts + the live-deploy passphrase gate (Sep 12 2026) — the .sh
+# files contain no secrets but have no reason to be publicly downloadable
+# from the live site either; the passphrase file is already gitignored, this
+# is defense in depth in case it's ever present on disk unexpectedly.
+deploy-live.sh
+set-live-deploy-passphrase.sh
+.live_deploy_passphrase
