@@ -307,8 +307,14 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    turned purple Sep 4 2026 per user request: metronome stays cream/white
    when OFF, purple ring+digits only when ON). Ring alone marks "metronome
    enabled" regardless of icon vs number — see the comment on
-   .is-counting-in just below for what actually swaps the icon/number. */
-.metroBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+   .is-counting-in just below for what actually swaps the icon/number.
+   Extended to .is-count-in-armed (Sep 12 2026, real request): the button
+   was showing the "1, ready to go" digit with a plain cream border whenever
+   the metronome itself happened to be off, which read as inconsistent next
+   to the digit itself — the ring should mark "something's about to happen
+   here" just as much as "the metronome is on", so armed now gets the same
+   ring regardless of .is-active. */
+.metroBtn.is-active,.metroBtn.is-count-in-armed{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 /* Icon <-> number swap, reworked a second time (Sep 12 2026, real request):
    the previous rework (same day) made ONLY .is-counting-in swap the icon
    for the live digit, on the theory that the running-beat-during-playback
@@ -1450,7 +1456,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.42';
+const BUILD_VERSION='2.43';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -4861,7 +4867,27 @@ async function playFromGesture(){
     await startPlaybackNow();
   }finally{startingPlayback=false;}
 }
-function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();setPlayBtnLabel('Play');badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI();syncMetroDisplayMode()}
+function pause(){
+  if(!playing)return;
+  pausedPos=currentPos();
+  playing=false;
+  if(fallbackMode)fallbackAudio.pause();else stopStems();
+  setPlayBtnLabel('Play');badge.textContent='Paused';
+  cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
+  // Sep 12 2026, real request: with Count-in on, playFromGesture() already
+  // snaps pausedPos back to 0 (and repaints frame 0) the instant the NEXT
+  // Play is tapped, right before running the count-in — so Pause-then-Play
+  // always restarted from the top anyway. But the picture sat wherever it
+  // was actually paused until that snap ran, which looked wrong next to the
+  // metro button's own "1, ready to go" armed indicator (syncMetroDisplayMode(),
+  // just below) appearing immediately. Doing the exact same snap here too
+  // means the big square, the small grid AND the "1" all agree the instant
+  // you pause — not a new behavior, just showing the already-guaranteed
+  // reset earlier instead of waiting for the next Play tap.
+  if(countInActive()){pausedPos=0;paintAt(0);}
+  updateUI();
+  syncMetroDisplayMode();
+}
 // A tap during the count-in itself (playing is still false at that point,
 // so this would otherwise fall to the playFromGesture() branch and just be
 // silently swallowed by its startingPlayback guard) cancels it instead —
