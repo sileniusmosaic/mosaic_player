@@ -27,5 +27,45 @@
       "database_name": "mosaic-analytics",
       "database_id": "b2b0b7ad-9d01-43b5-b76e-80158d204fc8"
     }
-  ]
+  ],
+
+  // Staging build (Sep 12 2026) — a second, independent Worker for internal
+  // testers, deployed with `npx wrangler deploy --env staging`. It lives at
+  // its own URL (mosaic-player-staging.silenius.workers.dev) and never
+  // touches the live one — the URL that's already out there only changes
+  // when someone runs the plain `npx wrangler deploy` (no --env), same as
+  // always.
+  //
+  // Deliberately has its OWN kv_namespaces entry rather than reusing the
+  // production ADMIN_CONFIG id above: admin-console edits (play order,
+  // notation images, per-piece offsets) write straight to KV, so sharing
+  // the namespace would mean testing on staging could silently change what
+  // real users see. One-time setup still needed before this works, from a
+  // normal Terminal (this can't be run from Claude's sandbox — Cloudflare's
+  // API is network-blocked there):
+  //   1. npx wrangler kv namespace create ADMIN_CONFIG_STAGING
+  //      (prints an "id" — paste it in below, replacing the placeholder)
+  //   2. npx wrangler secret put ADMIN_PASSPHRASE --env staging
+  //      (secrets are per-environment; this can be the same passphrase)
+  //   3. npx wrangler deploy --env staging
+  //
+  // No d1_databases entry here on purpose — worker.js already no-ops
+  // gracefully when ANALYTICS_DB isn't bound (see its "DB not yet bound"
+  // comments), so staging traffic never lands in the real usage analytics.
+  "env": {
+    "staging": {
+      "name": "mosaic-player-staging",
+      "assets": {
+        "directory": "./",
+        "not_found_handling": "404-page",
+        "binding": "ASSETS"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "ADMIN_CONFIG",
+          "id": "REPLACE_WITH_STAGING_KV_ID"
+        }
+      ]
+    }
+  }
 }
