@@ -153,14 +153,16 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    CSS transform, since every qualifying tile in the shared grid canvas
    mirrors independently (Sep 12 2026 — no longer gated on selection); see
    wc-engine.js's shouldFlipSelectedTile.
-   .flip-exempt-current (Sep 2026, real request): kit, bass and coro/vocal
-   tiles never mirror even when flip view is on, across all three pieces —
-   flipping a two-handed instrument that isn't about left/right hand
-   positioning (or has no hands at all, for the vocal tiles) doesn't help and
-   can confuse. Toggled per-tile in JS (see syncFlipExemption(), near
-   FLIP_EXEMPT_RE) whenever the focused tile changes, not baked into any
-   per-piece config, so it applies uniformly to Abakuá/Congo/Flip Swing and
-   to anything named similarly in a future piece too. */
+   .flip-exempt-current (Sep 2026, real request; extended Sep 12 2026 to also
+   cover guitar): kit, bass, coro/vocal and guitar tiles never mirror even
+   when flip view is on, across all three pieces — flipping a two-handed
+   instrument that isn't about left/right hand positioning (or has no hands
+   at all, for the vocal tiles), or a fretted instrument where mirroring
+   would misrepresent which hand does what, doesn't help and can confuse.
+   Toggled per-tile in JS (see syncFlipExemption(), near FLIP_EXEMPT_RE)
+   whenever the focused tile changes, not baked into any per-piece config,
+   so it applies uniformly to Abakuá/Congo/Flip Swing and to anything named
+   similarly in a future piece too. */
 html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 /* Build version badge (Sep 2026, per direct request): a small, always-on
@@ -296,9 +298,10 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    used to be, rather than switching to the new white — it needed its own
    color now that the icon itself went white, and brass reads clearly
    against both the dark idle button and the white active-ring below. */
-/* metro-num only ever renders while .is-active is present (display:block is
-   set below), so this single unconditional color applies purely to the ON
-   state — no separate .is-active-scoped override needed. */
+/* metro-num only ever renders while .is-active/.is-counting-in/
+   .is-count-in-armed is present (display:block is set below, on whichever
+   applies), so this single unconditional color applies purely to those ON
+   states — no separate per-class color override needed. */
 .metroBtn .metro-num{display:none;color:var(--text)}
 /* Active-ring (Aug 31 2026, recolored Sep 2026 — see the icon comment above;
    turned purple Sep 4 2026 per user request: metronome stays cream/white
@@ -306,20 +309,39 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    enabled" regardless of icon vs number — see the comment on
    .is-counting-in just below for what actually swaps the icon/number. */
 .metroBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-/* Icon <-> number swap (Sep 12 2026 rework, real request): the button used
-   to show the live running beat digit throughout ALL of active playback
-   (the old `.is-active .metro-num{display:block}` rule, removed here) —
-   now it shows the digit ONLY while a count-in is actually counting,
-   reverting to the plain icon both before Play (metronome enabled but
-   idle — the purple ring above already says "on") and once real playback
-   begins after the count-in ends. `.is-active` alone no longer touches
-   .metro-icon/.metro-num at all; .is-counting-in below is the only thing
-   that does. updateMetro() (see the script) keeps computing the live beat
-   number into the (now hidden outside count-in) #metroNum span regardless
-   — harmless, and keeps the number ready if a later request wants it
-   visible again during playback too. */
+/* Icon <-> number swap, reworked a second time (Sep 12 2026, real request):
+   the previous rework (same day) made ONLY .is-counting-in swap the icon
+   for the live digit, on the theory that the running-beat-during-playback
+   look was accidental — turned out that WAS a real, wanted feature and
+   needed reinstating, not replacing. So three states now share the swap,
+   each independent and never overlapping in practice (see metroArmed()/
+   syncMetroDisplayMode() in the script for how #2 and #3 are kept apart):
+   1. .is-active — the metronome/beat counter is switched on. Shows the live
+      digit continuously, during real playback AND even while paused (it
+      just reflects wherever the paused position falls) — this is the
+      original "visual beat counter" behavior, restored.
+   2. .is-counting-in — an actual count-in is counting right now. Always
+      shows the live count-in digit regardless of whether the metronome
+      itself (.is-active) is on or off — a count-in's own clicks/numbers are
+      Count-in Settings' thing (runCountIn() ignores metroActive entirely).
+   3. .is-count-in-armed — Count-in is on and about to run on the very next
+      Play tap (genuinely paused, not already counting in — see
+      metroArmed()). Shows a static "1", again regardless of whether the
+      metronome itself is on or off, since the count-in will sound either
+      way. This is the new one, added specifically so the button reads
+      "ready to count in" before Play is even pressed, not just once it's
+      already under way.
+   All three set the exact same display:none/block pair, so it's harmless
+   for more than one to be true at once (e.g. armed AND is-active) — the
+   script (metroArmed()'s early-return in updateMetro(), and
+   syncMetroDisplayMode() forcing the text to "1") is what keeps the DIGIT
+   itself correct in that overlap, not the CSS. */
+.metroBtn.is-active .metro-icon{display:none}
+.metroBtn.is-active .metro-num{display:block}
 .metroBtn.is-counting-in .metro-icon{display:none}
 .metroBtn.is-counting-in .metro-num{display:block}
+.metroBtn.is-count-in-armed .metro-icon{display:none}
+.metroBtn.is-count-in-armed .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
 /* Manuscript toggle (Aug 2026): top-left of the focus square, mirroring the
    beat counter at top-right. Turns the notation overlay (now anchored to
@@ -1428,7 +1450,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.41';
+const BUILD_VERSION='2.42';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1869,7 +1891,34 @@ let metroActive=false; // defaults OFF (Aug 30 2026 — was ON) — tap to turn 
 // switching pieces, since nothing asked for switch-reset behavior here.
 let manuscriptOn=false; // defaults OFF (Aug 31 2026 — was ON) — tap to turn on, per user request
 function metroReady(){return !!(cfg.beatsPerBar&&(cfg.bars||cfg.bpm));}
+// "Armed" (Sep 12 2026, real request): true whenever the very next Play tap
+// is about to run a count-in — genuinely paused/stopped (not already
+// playing, not already mid count-in), with Count-in itself actually able to
+// run (countInActive() — on, this piece has beat data, not in fallbackMode).
+// Deliberately independent of metroActive/is-active: a count-in's own
+// clicks/numbers are Count-in Settings' thing (runCountIn() already ignores
+// metroActive entirely), so the button should show it's about to count in
+// even if the live metronome/beat-counter is currently switched off for
+// playback itself. See syncMetroDisplayMode() just below for what actually
+// applies this, and its CSS (.is-count-in-armed, near .is-counting-in) for
+// how it wins the icon/number swap over a merely-.is-active idle digit.
+function metroArmed(){return !playing&&!countingIn&&countInActive();}
+// Single place that keeps the metro button's armed-vs-not visual in sync —
+// called from every spot that can change whether we're "armed" (pause(),
+// playFromGesture(), reset(), switchMosaic(), cancelCountIn(), the initial
+// page load, and the Count-in Settings toggle itself). Idempotent — safe to
+// call defensively even when nothing actually changed.
+function syncMetroDisplayMode(){
+  const armed=metroArmed();
+  metroBtn.classList.toggle('is-count-in-armed',armed);
+  metroBtnLandscape.classList.toggle('is-count-in-armed',armed);
+  if(armed){metroNum.textContent='1';metroNumLandscape.textContent='1';}
+}
 function updateMetro(){
+  // While armed (see metroArmed() above), the static "1" owns the digit —
+  // don't let a stray updateUI()/scrub call (paused, well before Play) stomp
+  // it with whatever beat the paused position happens to fall on.
+  if(metroArmed())return;
   if(!metroReady()||!metroActive)return; // idle look (metronome icon) is pure CSS via .is-active
   const dur=videoCycle||LOOP_END;
   const p=scrubbing?scrubPos:currentPos();
@@ -2258,6 +2307,15 @@ let flipViewOn=(()=>{
   // explicit '1' — only the "never set" case flips.
   try{return localStorage.getItem('mosaicFlipView')!=='0';}catch{return true;}
 })();
+// Moved up alongside countInOn/flipViewOn (Sep 12 2026, same TDZ hazard as
+// both of those — see flipViewOn's comment just above for the full story):
+// the new metroArmed()/syncMetroDisplayMode() (see updateMetro(), well
+// below) reads `countingIn` from inside updateMetro(), which the page's own
+// initial setMetroActive() call — synchronous, near the bottom of this
+// script — invokes before this line would otherwise have run, if it were
+// left down where the rest of the count-in code naturally lives (it used to
+// sit right before runCountIn(), far below). Left a pointer comment there.
+let countingIn=false, countInTimers=[], countInSources=[], countInResolve=null;
 let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 // Tracks whichever load (ensurePrepared() or changeTempo()) currently owns
 // the network — Reset and switchMosaic() both need to be able to break a
@@ -2924,11 +2982,12 @@ function selectTile(i){
   tileEls.forEach((el,j)=>{if(el)el.classList.toggle('is-selected',j===selected);});
   updateFocusUI();
 }
-// Flip-view exemption (Sep 2026, real request): kit, bass and any coro/vocal
-// tile never mirror even with flip view on — matched by name, not by index,
-// so it's the same rule across Abakuá/Congo/Flip Swing (and any future
-// piece) without per-piece config. See the CSS comment on .flip-exempt-current.
-const FLIP_EXEMPT_RE=/kit|bass|coro/i;
+// Flip-view exemption (Sep 2026, real request; extended Sep 12 2026 to also
+// cover guitar): kit, bass, any coro/vocal tile, and any guitar tile never
+// mirror even with flip view on — matched by name, not by index, so it's
+// the same rule across Abakuá/Congo/Flip Swing (and any future piece)
+// without per-piece config. See the CSS comment on .flip-exempt-current.
+const FLIP_EXEMPT_RE=/kit|bass|coro|guitar/i;
 function syncFlipExemption(){
   document.documentElement.classList.toggle('flip-exempt-current',FLIP_EXEMPT_RE.test(NAMES[selected]));
   // iOS WebKit repaint nudge (Sep 12 2026) — see applyFlipView()'s matching
@@ -4742,6 +4801,7 @@ async function switchMosaic(id){
     // switch is unchanged.
     if(countInOn)setStatus(cfg.label+' ready — tap Play to start.','good');
     else await startPlaybackNow();
+    syncMetroDisplayMode(); // playing is now settled either way — armed if Count-in's on and we didn't autoplay, not otherwise
   }catch(err){
     // A newer switch may already have taken over by the time the
     // withTimeout() above gives up on this one (Aug 30 2026) — id!==mosaicId
@@ -4801,7 +4861,7 @@ async function playFromGesture(){
     await startPlaybackNow();
   }finally{startingPlayback=false;}
 }
-function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();setPlayBtnLabel('Play');badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI()}
+function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();setPlayBtnLabel('Play');badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI();syncMetroDisplayMode()}
 // A tap during the count-in itself (playing is still false at that point,
 // so this would otherwise fall to the playFromGesture() branch and just be
 // silently swallowed by its startingPlayback guard) cancels it instead —
@@ -4911,6 +4971,7 @@ async function reset(){
     resetBtn.disabled=false;
   }
   updateUI();
+  syncMetroDisplayMode(); // playing is settled by every branch above (success/cancelled/failed) by the time we get here
 }
 // Where the audio genuinely is right now — the one and only clock in this app.
 function wrappedAudioPos(){
@@ -5180,6 +5241,7 @@ if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
 // prior in-session state yet to preserve.
 metroBtn.disabled=!metroReady();
 setMetroActive(countInOn&&metroReady());
+syncMetroDisplayMode(); // arms the "1" immediately if this fresh load already has Count-in on (a returning visitor's saved preference)
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
@@ -5385,9 +5447,11 @@ if(countInToggle){
     // uses (piece switch, Reset, initial page load — see there), so they
     // can never drift out of sync with each other or with a real tap.
     if(countInOn&&metroReady()&&!metroActive)setMetroActive(true);
+    syncMetroDisplayMode(); // toggling Count-in while paused should arm/disarm the "1" immediately, not wait for the next Play
   });
 }
-let countingIn=false, countInTimers=[], countInSources=[], countInResolve=null;
+// `let countingIn=...` used to live here — moved up alongside
+// countInOn/flipViewOn (see that comment, well above) to dodge a TDZ crash.
 // Real-time cancel, not just "stop scheduling more" — a fast double-tap of
 // Play/Pause, or a tempo/piece change/Reset landing mid-count (see the
 // cancelCountIn() calls at the top of changeTempo()/switchMosaic()/reset())
@@ -5405,6 +5469,7 @@ function cancelCountIn(){
   countInSources.forEach(s=>{try{s.stop()}catch{}try{s.disconnect()}catch{}});countInSources=[];
   metroBtn.classList.remove('is-counting-in');metroBtnLandscape.classList.remove('is-counting-in');
   if(countInResolve){const r=countInResolve;countInResolve=null;r();}
+  syncMetroDisplayMode(); // cancelled back to paused/ready — re-arm the "1" if Count-in would still run on the next Play
 }
 // Returns true when playFromGesture() should go ahead and actually start
 // playback, false when the count-in was cancelled mid-way (see
@@ -5441,6 +5506,7 @@ async function runCountIn(){
   }
   countingIn=true;
   metroBtn.classList.add('is-counting-in');metroBtnLandscape.classList.add('is-counting-in');
+  syncMetroDisplayMode(); // no longer armed — a real count-in is now under way, its own per-beat digit below owns the button
   const lead=0.05; // small fixed head start, same idea as startStems()'s own +0.02s
   const startCtx=ctx.currentTime+lead;
   const startWall=performance.now()+lead*1000;
