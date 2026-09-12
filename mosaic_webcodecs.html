@@ -845,7 +845,15 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    shows for one frame before positionLandscapeMetroCluster() (script)
    overrides it with the real, layout-measured value. Ring-based is-solo
    look (not a fill) — see the .soloBtn.is-solo CSS comment for why. */
-.soloBtn.soloBtn-landscape{top:var(--mute-top);right:max(85px,calc(env(safe-area-inset-right) + 79px))}
+/* left:auto (Sep 12 2026 fix) — .soloBtn (the per-tile small-square solo
+   badge, shared base class) sets left:4px; without overriding it here, that
+   left value won — not the right above — since this element also has a
+   fixed width (see the shared width rule below), and left+right+width can't
+   all be honored at once (left wins, right is silently dropped). Landed the
+   button pinned near the LEFT edge of the screen (right next to the tempo
+   preset buttons) instead of in its intended spot in the reset/metro/solo/
+   mute cluster on the right. */
+.soloBtn.soloBtn-landscape{top:var(--mute-top);left:auto;right:max(85px,calc(env(safe-area-inset-right) + 79px))}
 /* Reset (Sep 2026, offset corrected) — see the markup comment on
    #resetBtnLandscape. The real #reset button has no shared class of its
    own to hook into (unlike mute/metro), so this is .dawBtn (the plain
@@ -1390,7 +1398,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.30';
+const BUILD_VERSION='2.31';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1887,9 +1895,14 @@ function syncLandscapeMetroBtn(){
   metroBtnLandscape.disabled=metroBtn.disabled;
   metroBtnLandscape.setAttribute('aria-label',metroBtn.getAttribute('aria-label'));
 }
-metroBtn.addEventListener('click',()=>{
-  if(!metroReady())return;
-  metroActive=!metroActive;
+// Single source of truth for turning the beat counter/metronome on or off —
+// originally just the button's own click-handler body, pulled out (Sep 12
+// 2026) so every other place that needs to set a DEFAULT (piece switch,
+// Reset, initial page load, turning the Count-in setting on — see each) can
+// call the exact same state+sound+visual update a real tap would, instead
+// of re-deriving a slightly-different copy of it at each call site.
+function setMetroActive(on){
+  metroActive=on;
   metroBtn.classList.toggle('is-active',metroActive);
   metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
   // Sound follows the same on/off flag as the number — toggling one toggles
@@ -1907,6 +1920,10 @@ metroBtn.addEventListener('click',()=>{
   }
   updateMetro();
   syncLandscapeMetroBtn();
+}
+metroBtn.addEventListener('click',()=>{
+  if(!metroReady())return;
+  setMetroActive(!metroActive);
 });
 // Landscape metronome button (Aug 31 2026): just forwards to the real
 // button's own click() so metroActive/scheduling has exactly one source of
@@ -2184,6 +2201,16 @@ let selected=0, muted=Array(TILE_COUNT).fill(false);
 // rebuilt every time buildControls() runs.
 let soloed=Array(TILE_COUNT).fill(false);
 let tileEls=[], muteBtns=[], soloBtns=[];
+// Read early (Sep 12 2026 — was declared much further down, near the rest of
+// the count-in code) specifically so the page's OWN initial metronome-default
+// setup, far below, can see the real localStorage value on the very first
+// piece load too, not just on later piece switches/Resets/toggling the
+// setting itself. The Count-in *toggle*'s own DOM wiring (reading/writing
+// this variable from then on) still lives with the rest of the count-in code
+// further down — only the initial read moved.
+let countInOn=(()=>{
+  try{return localStorage.getItem('mosaicCountIn')==='1';}catch{return false;}
+})();
 let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 // Tracks whichever load (ensurePrepared() or changeTempo()) currently owns
 // the network — Reset and switchMosaic() both need to be able to break a
@@ -4419,12 +4446,14 @@ async function switchMosaic(id){
     lastLoopPos=null;
     // Beat counter defaults to OFF for every piece switch (Aug 30 2026 — was
     // defaulting ON) — tap to switch it on. Still disabled outright for a
-    // piece with no beat data at all.
-    metroActive=false;
-    metroBtn.classList.toggle('is-active',metroActive);
+    // piece with no beat data at all. Sep 12 2026: EXCEPT when Count-in is
+    // enabled — then the metronome defaults back ON for the new piece too
+    // (matching the same default the Count-in toggle itself applies), so a
+    // piece switch doesn't quietly undo it. Still just a default: the user
+    // switching it off manually sticks for the rest of that piece, same as
+    // always — only a fresh piece/Reset/re-toggling Count-in resets it.
     metroBtn.disabled=!metroReady();
-    metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
-    syncLandscapeMetroBtn();
+    setMetroActive(countInOn&&metroReady());
     if(ctx)ensureGains(true);
 
     document.title='Mosaic — '+cfg.label;
@@ -4445,6 +4474,23 @@ async function switchMosaic(id){
     focusCtx.fillStyle='#030405';focusCtx.fillRect(0,0,focusCanvas.width,focusCanvas.height);
 
     buildControls();buildMosaicRail();buildPieceStrip();
+    // Sep 12 2026 fix: buildControls() just rebuilt tileEls/muteBtns/soloBtns
+    // fresh for the new piece, but the muted/soloed arrays were already
+    // zeroed further up (before those elements even existed) — nothing had
+    // applied that cleared state to the NEW elements' classes yet, so a tile
+    // that was muted/soloed in the OLD piece kept showing its M/S badge (and
+    // the focus/landscape mute+solo buttons kept showing "on") in the new
+    // piece even though the underlying state (and the audio) was correctly
+    // already off. refreshSoloMuteState() re-applies the (all-false) state
+    // to every visual in one pass. Its trailing updateFocusUI() call also
+    // fixes a second bug: syncFlipExemption() (which sets the CSS class the
+    // focus square's flip depends on) was never called during a piece switch
+    // at all before this, so returning to a piece whose selected tile is
+    // flip-exempt (e.g. Flip Swing's Bass) could show the OLD piece's
+    // exemption state until something else happened to re-select a tile.
+    // The small grid tile never had this bug — its flip check re-reads
+    // NAMES[selected] fresh on every single draw, not just on a sync call.
+    refreshSoloMuteState();
     // Avoid calling engine.render() here — engine.info/frameQueue still belong
     // to the OLD mosaic until loadVideoForTempo() below finishes, and its cols/
     // rows/tileCount have already been switched to the new layout, so a render
@@ -4619,14 +4665,20 @@ async function playFromGesture(){
   startingPlayback=true;
   try{
     if(!prepared){const ok=await ensurePrepared();if(!ok)return;}
-    const proceed=await runCountIn(); // no-op (resolves true immediately) unless the count-in setting is on — see runCountIn()
-    if(!proceed)return; // cancelled mid count-in (see cancelCountIn()) — don't start playback
     // Count-in always leads into playback from the very top (Sep 12 2026) —
     // a Pause then Play resumes from pausedPos everywhere else, but with
     // Count-in on that would land the beat-1 click somewhere in the middle
     // of a bar instead of on it. Mute/solo (muted/soloed arrays) are
-    // untouched here, exactly as before.
-    if(countInActive())pausedPos=0;
+    // untouched here, exactly as before. Snapping pausedPos AND the visuals
+    // (progress bar via updateUI(), focus square + every small grid tile via
+    // paintAt()) to zero now, before the count-in even starts, means the
+    // play-head is already sitting at the start by the time real playback
+    // begins a moment later — without this, the picture stayed on the old
+    // paused frame throughout the whole count-in and then visibly jumped
+    // back to zero the instant playback actually started.
+    if(countInActive()){pausedPos=0;updateUI();paintAt(0);}
+    const proceed=await runCountIn(); // no-op (resolves true immediately) unless the count-in setting is on — see runCountIn()
+    if(!proceed)return; // cancelled mid count-in (see cancelCountIn()) — don't start playback
     await startPlaybackNow();
   }finally{startingPlayback=false;}
 }
@@ -4665,17 +4717,15 @@ async function reset(){
   muted=Array(TILE_COUNT).fill(false);
   soloed=Array(TILE_COUNT).fill(false);
   refreshSoloMuteState();
-  // Reset (Sep 4 2026) — beat counter goes back to its own default (off) too,
-  // same as a fresh piece switch does (see loadPiece()'s metroActive=false
-  // block above): "reset" should mean tempo 100% AND every other toggle back
-  // to its starting state, not tempo alone. stopStems() below already cancels
+  // Reset (Sep 4 2026) — beat counter goes back to its own default too, same
+  // as a fresh piece switch does (see switchMosaic()'s setMetroActive() call
+  // above): "reset" should mean tempo 100% AND every other toggle back to
+  // its starting state, not tempo alone. stopStems() below already cancels
   // any clicks actually scheduled; this just fixes the button's own visuals.
-  if(metroActive){
-    metroActive=false;
-    metroBtn.classList.toggle('is-active',metroActive);
-    metroBtn.setAttribute('aria-label','Beat counter: off');
-    syncLandscapeMetroBtn();
-  }
+  // Sep 12 2026: that default is now OFF unless Count-in is on, in which
+  // case it's ON — same exception switchMosaic() and the Count-in toggle
+  // itself apply, so Reset doesn't quietly undo it either.
+  setMetroActive(countInOn&&metroReady());
   cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
   try{
     if(!prepared){
@@ -4992,13 +5042,12 @@ document.title='Mosaic — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
 // Beat counter starts OFF on page load too (Aug 30 2026 — was defaulting ON),
-// matching switchMosaic()'s own default above — still disabled outright when
-// the initial piece has no beat data.
-metroActive=false;
-metroBtn.classList.toggle('is-active',metroActive);
+// matching switchMosaic()'s own default — still disabled outright when the
+// initial piece has no beat data. Sep 12 2026: unless Count-in is already on
+// from a previous visit (localStorage), in which case it starts ON here too,
+// same exception every other default-setting call site applies.
 metroBtn.disabled=!metroReady();
-metroBtn.setAttribute('aria-label','Beat counter: '+(metroActive?'on':'off'));
-syncLandscapeMetroBtn();
+setMetroActive(countInOn&&metroReady());
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
@@ -5134,22 +5183,16 @@ if(flipViewToggle){
 // wants it there as well.
 //
 // Default OFF, same reasoning as the beat counter itself.
-let countInOn=(()=>{
-  try{return localStorage.getItem('mosaicCountIn')==='1';}catch{return false;}
-})();
 if(countInToggle){
   countInToggle.checked=countInOn;
   countInToggle.addEventListener('change',()=>{
     countInOn=countInToggle.checked;
     try{localStorage.setItem('mosaicCountIn',countInOn?'1':'0');}catch{}
     // Turning Count-in on defaults the beat counter on too (Sep 12 2026) —
-    // forwards to metroBtn's own click() so metroActive/scheduling/the
-    // landscape mirror all pick up exactly the same side effects a real tap
-    // would (see metroBtnLandscape's own listener above for the same
-    // pattern). A no-op if the metronome's already on, or if metroReady()
-    // is false — metroBtn.click() won't fire its handler on a disabled
-    // button, same guard a real tap would hit.
-    if(countInOn&&!metroActive)metroBtn.click();
+    // via the same setMetroActive() every other default-setting call site
+    // uses (piece switch, Reset, initial page load — see there), so they
+    // can never drift out of sync with each other or with a real tap.
+    if(countInOn&&metroReady()&&!metroActive)setMetroActive(true);
   });
 }
 let countingIn=false, countInTimers=[], countInSources=[], countInResolve=null;
