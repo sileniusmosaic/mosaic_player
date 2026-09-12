@@ -302,17 +302,22 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
 .metroBtn .metro-num{display:none;color:var(--text)}
 /* Active-ring (Aug 31 2026, recolored Sep 2026 — see the icon comment above;
    turned purple Sep 4 2026 per user request: metronome stays cream/white
-   when OFF, purple ring+digits only when ON). */
+   when OFF, purple ring+digits only when ON). Ring alone marks "metronome
+   enabled" regardless of icon vs number — see the comment on
+   .is-counting-in just below for what actually swaps the icon/number. */
 .metroBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-.metroBtn.is-active .metro-icon{display:none}
-.metroBtn.is-active .metro-num{display:block}
-/* Count-in (Sep 2026): borrows the exact same digit slot as the live beat
-   counter above ("display it just as you would in the metronome button")
-   without touching metroActive/is-active — a piece can have the beat
-   counter toggled off and still show a count-in, and the two must never be
-   confused with each other visually, hence a separate class rather than
-   reusing .is-active. Removed again the instant the count-in ends or is
-   cancelled — see runCountIn()/cancelCountIn() in the script. */
+/* Icon <-> number swap (Sep 12 2026 rework, real request): the button used
+   to show the live running beat digit throughout ALL of active playback
+   (the old `.is-active .metro-num{display:block}` rule, removed here) —
+   now it shows the digit ONLY while a count-in is actually counting,
+   reverting to the plain icon both before Play (metronome enabled but
+   idle — the purple ring above already says "on") and once real playback
+   begins after the count-in ends. `.is-active` alone no longer touches
+   .metro-icon/.metro-num at all; .is-counting-in below is the only thing
+   that does. updateMetro() (see the script) keeps computing the live beat
+   number into the (now hidden outside count-in) #metroNum span regardless
+   — harmless, and keeps the number ready if a later request wants it
+   visible again during playback too. */
 .metroBtn.is-counting-in .metro-icon{display:none}
 .metroBtn.is-counting-in .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
@@ -1412,7 +1417,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.39';
+const BUILD_VERSION='2.40';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2234,7 +2239,13 @@ let countInOn=(()=>{
 // keeps that first draw out of the temporal dead zone. Same fix, same
 // reason, as countInOn's own move above.
 let flipViewOn=(()=>{
-  try{return localStorage.getItem('mosaicFlipView')==='1';}catch{return false;}
+  // Default ON (Sep 12 2026, real request — swapped from the original
+  // default-OFF judgment call now that flip view has been used and liked
+  // for a while; Count-in stays default-OFF, see countInOn just above).
+  // Absent key (never touched, or a fresh browser) -> ON; an explicit '0'
+  // (someone turned it off in Settings) is still honored, same as an
+  // explicit '1' — only the "never set" case flips.
+  try{return localStorage.getItem('mosaicFlipView')!=='0';}catch{return true;}
 })();
 let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 // Tracks whichever load (ensurePrepared() or changeTempo()) currently owns
@@ -5141,16 +5152,23 @@ sizeFocusCanvas();
 document.title='Mosaic — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
-// Beat counter starts OFF on page load too (Aug 30 2026 — was defaulting
-// ON), matching switchMosaic()'s own default — still disabled outright when
-// the initial piece has no beat data. Sep 12 2026: this default is
-// deliberately unconditional (not tied to Count-in) — see switchMosaic()'s
-// own comment on the same call for why a fresh-start default was pulled
-// back out of Count-in mode; the ONE place Count-in still nudges the
-// metronome on is the moment the Count-in setting itself is switched on
-// (see the countInToggle change handler further down).
+// Beat counter default on a genuinely FRESH page load (Sep 12 2026, real
+// report/request — reverted back from the Aug 30/v2.33 unconditional-OFF
+// default): if Count-in is already on (a returning visitor's saved
+// preference — Count-in itself now defaults OFF for a brand-new visitor,
+// see countInOn's own declaration, well above), the metronome should
+// default ON too, same as the moment the Count-in toggle itself gets
+// switched on in Settings — otherwise a returning visitor's first count-in
+// this session silently isn't followed by the metronome clicking through
+// the piece, which read as broken ("the metronome does not count after
+// the count in on fresh start up"). This is DELIBERATELY only here, not in
+// switchMosaic()/reset() — those two stay unconditional-OFF-when-Count-in-
+// off / sticky-when-Count-in-on (see each of their own comments) once a
+// session is already under way; only the very first load of a session
+// re-applies the Count-in-implies-metronome-on default, since there's no
+// prior in-session state yet to preserve.
 metroBtn.disabled=!metroReady();
-setMetroActive(false);
+setMetroActive(countInOn&&metroReady());
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
@@ -5240,12 +5258,9 @@ if(!ANALYTICS_EXCLUDED){
 // (localStorage, like notrack above) — no admin/server involvement, no
 // per-piece config.
 //
-// Default is OFF (unflipped, today's existing orientation, unchanged for
-// everyone who never opens Settings) — a judgment call made without asking,
-// since it seemed safer to leave everyone's view exactly as it already is
-// until they opt in, rather than risk quietly mirroring the video for every
-// existing user. Flip if this reads backwards from what was actually wanted
-// — it's a one-line change (default true instead of false below).
+// Default is ON as of Sep 12 2026 (real request, swapped from the
+// original default-OFF judgment call — see flipViewOn's own declaration
+// near countInOn, well above, for the actual default logic).
 //
 // `let flipViewOn=...` itself now lives up near `countInOn` (see that
 // declaration's own comment) — NOT here where it reads naturally — moved
