@@ -191,7 +191,14 @@ html:not(.is-desktop).flip-view-on .focus-video{transform:scaleX(-1)}
 .is-desktop .grid-controls{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr)}
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
 .focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
-.dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 13.2px -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;line-height:1}
+/* Sep 2026, real report: the -apple-system font stack here never actually
+   applied — the global `*{font-family:...!important}` rule (near the very
+   top of this stylesheet) always wins over a non-!important shorthand, so
+   these letters were already rendering in Roboto Condensed like everything
+   else. Written explicitly now instead of a dead stack, purely so the CSS
+   itself isn't misleading; also sized up from 13.2px, which read too small
+   next to the 26px circle it sits in. */
+.dawBtn{position:absolute;top:4px;width:26px;height:26px;border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:grid;place-items:center;padding:0;z-index:4;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;font:800 15.4px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:1}
 /* Purple border+text (Sep 2026, real report) — shared by every mute button
    in the app (the small per-tile ones in portrait AND the single overlay one
    in landscape, via .muteBtn.muteBtn-landscape's shared base), one place to
@@ -200,7 +207,11 @@ html:not(.is-desktop).flip-view-on .focus-video{transform:scaleX(-1)}
 .muteBtn{right:4px}
 .soloBtn{left:4px}
 .muteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-.soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
+/* Ring instead of a full fill (Sep 2026, real report) — see the matching
+   .focusSoloBtn.is-solo comment for the reasoning; same treatment here so
+   desktop's per-tile Solo button and the mobile focus-square one always
+   agree on what "soloed" looks like. */
+.soloBtn.is-solo{background:#0c0906;color:var(--text);border-color:#ffd60a;box-shadow:0 0 0 2px #ffd60a}
 /* Mobile mute/solo moved to the focus square (Sep 2026, per direct request):
    the small per-tile M/S buttons above are now desktop-only. Still CREATED
    for every tile on every platform in buildControls() — muteBtnLandscape and
@@ -271,10 +282,21 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    with manuscript/beat-counter at the top corners; same 55px size as those
    two for an easy, confident tap target. Desktop keeps the classic per-tile
    top-corner M/S buttons instead, so these are hidden there. */
-.focusMuteBtn{top:auto;bottom:10px;right:10px;left:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
-.focusSoloBtn{top:auto;bottom:10px;left:10px;right:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+/* font-size explicit here (Sep 2026, real report — read as too small): a 55px
+   circle needs a lot more than .dawBtn's base 15.4px to look intentional —
+   30px matches muteBtnLandscape's own already-established size at the same
+   55px circle size (see .muteBtn-landscape), so every 55px round button in
+   the app now carries a letter/digit at the same visual weight. */
+.focusMuteBtn{top:auto;bottom:10px;right:10px;left:auto;width:55px;height:55px;font-size:30px;color:var(--text);border-color:var(--text);background:#0c0906}
+.focusSoloBtn{top:auto;bottom:10px;left:10px;right:auto;width:55px;height:55px;font-size:30px;color:var(--text);border-color:var(--text);background:#0c0906}
 .focusMuteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-.focusSoloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
+/* Solo's ON state (Sep 2026, real report): was a full yellow fill, the only
+   button in the app styled that way — switched to the same
+   ring-around-a-dark-button language every other active/on state already
+   uses (see .muteBtn.is-muted/.focusMuteBtn.is-muted just above, and
+   .metroBtn.is-active), just in yellow instead of blue so solo still reads
+   as its own distinct color. */
+.focusSoloBtn.is-solo{background:#0c0906;color:var(--text);border-color:#ffd60a;box-shadow:0 0 0 2px #ffd60a}
 .is-desktop .focusMuteBtn,.is-desktop .focusSoloBtn{display:none}
 .manuscriptBtn .manuscript-icon{width:72%;height:72%;fill:none;stroke:none}
 .manuscriptBtn .manuscript-icon .staff-line{stroke:var(--text);stroke-width:.8;opacity:.6}
@@ -285,8 +307,26 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    matching the app-wide "purple rim on selection" rule (Sep 4 2026). */
 .manuscriptBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 .tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
-.tile.is-muted::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;z-index:2}
-.tile.is-solo-dimmed::before{content:"";position:absolute;inset:0;background:rgba(130,130,130,.55);pointer-events:none;z-index:2}
+/* Mute/solo tile status (Sep 2026, replaces the old full-square dim overlay —
+   real report: "two different values" between the muted (black) and
+   solo-dimmed (gray) tints read as inconsistent, and didn't say WHICH
+   squares were affected without looking closely. A small M/S badge is more
+   direct — glance at the grid, see exactly which squares are muted or
+   soloed, no darkening of the actual video underneath either. Only real
+   mute/solo state gets a badge; a tile that's merely silenced as a side
+   effect of another tile being soloed gets none (the soloed tile's own S is
+   the explanation) — same as a DAW's mixer, which doesn't mark every OTHER
+   track when one is soloed. .tile.is-solo is a new class (buildControls()'s
+   refreshSoloMuteState() now toggles it, alongside the existing is-muted) —
+   distinct from the older is-solo-dimmed, which still exists for any other
+   code reading it but no longer has any visual effect of its own. */
+.tile.is-muted::after{content:"M";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid var(--accent-blue);color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
+.tile.is-solo::before{content:"S";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid #ffd60a;color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
+/* A tile that's BOTH muted and soloed (edge case — soloing a tile you'd
+   already muted) shows both badges side by side rather than one hiding the
+   other. */
+.tile.is-muted.is-solo::after{left:calc(50% - 12px)}
+.tile.is-muted.is-solo::before{left:calc(50% + 12px)}
 .tile.is-selected{outline:2px solid var(--tile-border);outline-offset:-2px}
 .tempo-strip{margin-top:6px}
 /* Desktop-only (Sep 7 2026, real report — full reasoning above on
@@ -742,6 +782,14 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    (20+65=85, 14+65=79), not 26+10=36 — an earlier version used the smaller
    number, which visibly overlapped the real (bigger) metronome button. */
 .muteBtn.muteBtn-landscape{top:var(--mute-top);right:max(20px,calc(env(safe-area-inset-right) + 14px))}
+/* Solo, landscape (Sep 2026, direct request — left side, mirroring mute's
+   own vertical position via the same --mute-top custom property so the two
+   sit at matching heights on opposite sides of the square). Same fallback
+   pattern as the buttons above: this "left" is only what shows for one
+   frame before positionLandscapeSoloBtn() (script) overrides it with the
+   real, layout-measured value. Ring-based is-solo look (not a fill) — see
+   the .soloBtn.is-solo CSS comment for why. */
+.soloBtn.soloBtn-landscape{top:var(--mute-top);left:max(20px,calc(env(safe-area-inset-left) + 14px))}
 /* Reset (Sep 2026, offset corrected) — see the markup comment on
    #resetBtnLandscape. The real #reset button has no shared class of its
    own to hook into (unlike mute/metro), so this is .dawBtn (the plain
@@ -768,9 +816,9 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    so it needed no change; the mute button has no icon at all, just the
    letter "M" at .dawBtn's 13.2px font — bumped to roughly the same
    proportion of the new size. */
-.muteBtn.muteBtn-landscape,.dawBtn.resetBtn-landscape{width:55px;height:55px}
+.muteBtn.muteBtn-landscape,.dawBtn.resetBtn-landscape,.soloBtn.soloBtn-landscape{width:55px;height:55px}
 .resetBtn-landscape .reset-icon{width:40px;height:40px}
-.muteBtn-landscape{font-size:30px}
+.muteBtn-landscape,.soloBtn-landscape{font-size:30px}
 /* Landscape square-navigation arrows (Sep 2026, rewritten Sep 2026 — see the
    architecture note near the top of the script block for the full "why").
    Used to be positioned by JS: measure .landscape-video-area, wait for two
@@ -1005,6 +1053,17 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
        syncLandscapeMuteBtn() (see script) keeps its is-muted look and
        aria-label matched to whichever tile is currently focused. -->
   <button id="muteBtnLandscape" type="button" class="dawBtn muteBtn muteBtn-landscape" aria-label="Mute">M</button>
+  <!-- Solo, landscape (Sep 2026, direct request) — on the LEFT this time,
+       past the outer edge of the Play/tempo 2x2 grid (see
+       positionLandscapeTransport()'s comment for why that grid centers in
+       the black space on this side). Same forwarding pattern as
+       muteBtnLandscape above: click() the real per-tile solo button for
+       whichever tile is currently focused. Positioned in script
+       (positionLandscapeSoloBtn(), called alongside positionLandscapeTransport()
+       from the same ResizeObserver) since, like the transport grid itself,
+       its distance from the square depends on the square's own rendered
+       size — not something pure CSS can see. -->
+  <button id="soloBtnLandscape" type="button" class="dawBtn soloBtn soloBtn-landscape" aria-label="Solo">S</button>
 </div>
 <main class="app">
   <input type="checkbox" id="menuToggle">
@@ -1258,7 +1317,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.24';
+const BUILD_VERSION='2.25';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1867,6 +1926,11 @@ landscapeArrowRight.addEventListener('click',()=>selectTile(tileAtSlot(tileSlotO
 muteBtnLandscape.addEventListener('click',()=>{
   if(muteBtns[selected])muteBtns[selected].click();
 });
+// Landscape solo (Sep 2026) — same forwarding pattern as muteBtnLandscape
+// just above, one step further from soloBtns[selected] instead of muteBtns.
+soloBtnLandscape.addEventListener('click',()=>{
+  if(soloBtns[selected])soloBtns[selected].click();
+});
 // Portrait focus-square mute+solo (Sep 2026) — same forwarding pattern as
 // muteBtnLandscape above: click the real per-tile button for whichever tile
 // is currently focused, so all the actual toggle+refresh logic stays in one
@@ -1965,6 +2029,7 @@ new ResizeObserver(()=>{
   if(landscapeClusterNeedsRecompute){
     positionLandscapeTransport();
     positionLandscapeMetroCluster();
+    positionLandscapeSoloBtn(); // must run AFTER positionLandscapeTransport() — reads its rendered edge, see that function's own comment
     landscapeClusterNeedsRecompute=false;
   }
 }).observe(landscapeFocusCanvas);
@@ -2708,6 +2773,7 @@ function updateFocusUI(){
   focusWrap.classList.toggle('is-muted',muted[selected]);
   focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
   syncLandscapeMuteBtn(); // landscape's one mute button always tracks whichever tile is now focused
+  syncLandscapeSoloBtn(); // landscape's solo button, same idea
   syncFocusMuteSoloBtns(); // portrait focus square's own mute+solo, same idea as landscape's above
   syncLandscapeArrows(); // may have just reached (or left) either end
   // No manual reposition call needed here any more (Sep 2026 rewrite — see
@@ -2733,7 +2799,7 @@ function refreshSoloMuteState(){
   for(let j=0;j<TILE_COUNT;j++){
     const silent=anySolo?!soloed[j]:muted[j];
     const dimmedBySolo=anySolo&&!soloed[j];
-    if(tileEls[j]){tileEls[j].classList.toggle('is-muted',muted[j]);tileEls[j].classList.toggle('is-solo-dimmed',dimmedBySolo);}
+    if(tileEls[j]){tileEls[j].classList.toggle('is-muted',muted[j]);tileEls[j].classList.toggle('is-solo',soloed[j]);tileEls[j].classList.toggle('is-solo-dimmed',dimmedBySolo);}
     if(muteBtns[j])muteBtns[j].classList.toggle('is-muted',muted[j]);
     if(soloBtns[j])soloBtns[j].classList.toggle('is-solo',soloed[j]);
     setTrackMute(j,silent);
@@ -2758,6 +2824,14 @@ function syncLandscapeMuteBtn(){
   // #landscapeFocusDim (see its CSS comment) since landscape has no per-tile
   // DOM to hang a class off of.
   landscapeFocusDim.classList.toggle('is-visible',isMuted);
+}
+// Landscape's solo button (Sep 2026) — same idea as syncLandscapeMuteBtn()
+// above, just for solo. No dim overlay to touch here (solo never dimmed the
+// focus square, only mute did).
+function syncLandscapeSoloBtn(){
+  const isSolo=soloed[selected];
+  soloBtnLandscape.classList.toggle('is-solo',isSolo);
+  soloBtnLandscape.setAttribute('aria-label',(isSolo?'Unsolo ':'Solo ')+NAMES[selected]);
 }
 // Portrait focus square's own mute+solo (Sep 2026) — same idea as
 // syncLandscapeMuteBtn() above, just tracking BOTH buttons (mobile portrait
@@ -2924,6 +2998,19 @@ function positionLandscapeTransport(){
   const minLeft=Math.max(20,14+insets.left,ARROW_INSET+CLUSTER_W+GAP);
   const centeredLeft=Math.max(minLeft,(blackSpaceW-clusterTotal)/2);
   landscapeTransport.style.left=centeredLeft+'px';
+}
+// Solo, landscape (Sep 2026) — sits just past the Play/tempo grid's edge
+// closest to the square (mirroring resetBtnLandscape's own placement just
+// past the metro+mute pair on the right, see that comment), rather than
+// duplicating positionLandscapeTransport()'s square/inset/arrow math here:
+// simplest to just read back where that grid ACTUALLY landed
+// (getBoundingClientRect(), post-layout) and sit one GAP beyond its right
+// edge. Must run after positionLandscapeTransport() in the same recompute
+// pass — see the ResizeObserver callback above.
+function positionLandscapeSoloBtn(){
+  const GAP=10;
+  const rect=landscapeTransport.getBoundingClientRect();
+  soloBtnLandscape.style.left=(rect.right+GAP)+'px';
 }
 // Landscape metro/mute/reset cluster centering (v1.6, real report): sitting
 // tight in the exact screen corner read as cramped — wanted centered into
