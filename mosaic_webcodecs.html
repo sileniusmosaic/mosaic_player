@@ -148,10 +148,11 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    its wrapper (.focus-wrap) — every label/button overlay is a separate
    sibling/child element positioned independently, so they stay put and
    readable regardless of this transform. The small-tile grid gets the same
-   treatment now too (see shouldFlipGridSelected(), no longer desktop-
-   excluded either) — flipping that needed a per-tile canvas-level flip
-   rather than a CSS transform, since only ONE tile in the shared grid canvas
-   should mirror; see wc-engine.js's shouldFlipSelectedTile.
+   treatment now too (see shouldFlipGridTile(), no longer desktop-excluded
+   either) — flipping that needed a per-tile canvas-level flip rather than a
+   CSS transform, since every qualifying tile in the shared grid canvas
+   mirrors independently (Sep 12 2026 — no longer gated on selection); see
+   wc-engine.js's shouldFlipSelectedTile.
    .flip-exempt-current (Sep 2026, real request): kit, bass and coro/vocal
    tiles never mirror even when flip view is on, across all three pieces —
    flipping a two-handed instrument that isn't about left/right hand
@@ -1411,7 +1412,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.36';
+const BUILD_VERSION='2.39';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2225,7 +2226,7 @@ let countInOn=(()=>{
   try{return localStorage.getItem('mosaicCountIn')==='1';}catch{return false;}
 })();
 // Read early too (Sep 12 2026, real crash fixed — see applyFlipView()'s own
-// comment, far below, for the full story): shouldFlipGridSelected() reads
+// comment, far below, for the full story): shouldFlipGridTile() reads
 // this on every tile draw, including the very first synchronous
 // drawPoster() call at the bottom of this script (before Play, before
 // buildControls() even runs) — declaring it up here alongside countInOn,
@@ -2536,7 +2537,7 @@ const engine=new WebCodecsVideoEngine({
 engine.muted=muted; // shared by reference — toggling muted[i] is automatically visible to the engine
 engine.soloDim=soloed.map(()=>false);
 engine.tileOrder=currentTileOrder(); // admin-console tile reorder (Sep 7 2026) — see currentTileOrder()'s comment and wc-engine.js's drawGridFromSource()
-engine.shouldFlipSelectedTile=shouldFlipGridSelected; // see that function's own comment, well below — read fresh on every render(), not pushed on every change
+engine.shouldFlipSelectedTile=shouldFlipGridTile; // per-tile now (Sep 12 2026) — takes the tile index; see that function's own comment, well below — read fresh on every render(), not pushed on every change
 
 function sizeFocusCanvas(){
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -2812,11 +2813,13 @@ function tileSource(i,w,h){const tw=w/TILE_COLS,th=h/TILE_ROWS;return [(i%TILE_C
 // their own geometry calls for, without duplicating the visual logic.
 function drawOneTile(ctx,i,w,h,dx,dy,S,Sh,anySolo){
   const [sx,sy,sw,sh]=tileSource(i,w,h);
-  // Flip view's small-grid counterpart (Sep 2026) — see shouldFlipGridSelected()
+  // Flip view's small-grid counterpart (Sep 2026) — see shouldFlipGridTile()
   // and the identical technique in wc-engine.js's drawGridFromSource(), which
   // takes over once real video is decoding; this is just the poster/placeholder
   // (pre-Play, or before the video for a freshly-selected tile has painted).
-  if(i===selected&&shouldFlipGridSelected()){
+  // Every qualifying tile flips here, not just the selected one — see
+  // shouldFlipGridTile()'s own comment for why.
+  if(shouldFlipGridTile(i)){
     ctx.save();ctx.translate(dx+S,dy);ctx.scale(-1,1);
     ctx.drawImage(poster,sx,sy,sw,sh,0,0,S,Sh);
     ctx.restore();
@@ -2915,25 +2918,35 @@ function syncFlipExemption(){
   nudgeRepaint(focusCanvas);
   nudgeRepaint(landscapeFocusCanvas);
 }
-// Whether the SMALL grid's currently-selected tile should mirror too (Sep
-// 2026, real request — "the corresponding small square needs flipping
-// also"; desktop was excluded at first, then included too — Sep 12 2026
-// direct request — since flip view as a whole now applies on desktop, same
-// as the focus square). Same rule as the focus square (flipViewOn, same
-// FLIP_EXEMPT_RE exemption) so the two always agree on whether a given tile
-// flips; the only difference is HOW each is flipped — the focus square is
-// one plain CSS transform on its whole canvas (see .focus-video), while the
-// small grid is one shared canvas holding all 8 tiles, so only the selected
-// tile's own cell can flip, done at the actual canvas-drawing level (see
-// drawOneTile() above for the poster/placeholder path, and wc-engine.js's
+// Whether the SMALL grid's tile `i` should mirror (Sep 2026, real request —
+// "the corresponding small square needs flipping also"; desktop was
+// excluded at first, then included too — Sep 12 2026 direct request, since
+// flip view as a whole now applies on desktop, same as the focus square).
+// EVERY non-exempt tile flips here, independent of selection (Sep 12 2026
+// direct request, superseding the original "only the currently-selected
+// tile's own cell mirrors" design — real report: "I want all squares I
+// want flipped to be flipped no matter whether selected or not," since
+// gating on selection made a tile visibly un-flip the moment focus moved
+// away from it, and never flip at all until it happened to be selected
+// once). The FOCUS SQUARE is different on purpose and stays selection-only
+// (see syncFlipExemption()/FLIP_EXEMPT_RE just above) — it only ever shows
+// ONE instrument at a time, so "which tile" and "which tile is selected"
+// are the same question there; the small grid shows all 8 at once, so its
+// flip has to be answered per-tile independently. Same underlying rule
+// (flipViewOn, same FLIP_EXEMPT_RE exemption) either way; only HOW each is
+// flipped differs — the focus square is one plain CSS transform on its
+// whole canvas (see .focus-video), while the small grid is one shared
+// canvas holding all 8 tiles, so each qualifying tile's own cell has to be
+// mirrored individually at the actual canvas-drawing level (see
+// drawOneTile() below for the poster/placeholder path, and wc-engine.js's
 // drawGridFromSource() for the live-video path, which reads this exact
-// function via engine.shouldFlipSelectedTile — set once, right after the
-// engine is constructed, below). References flipViewOn even though that's
-// declared further down in this same script — safe because this is only
-// ever CALLED at draw time, well after the whole script has finished
-// running once.
-function shouldFlipGridSelected(){
-  return flipViewOn&&!FLIP_EXEMPT_RE.test(NAMES[selected]);
+// function per-tile via engine.shouldFlipSelectedTile — set once, right
+// after the engine is constructed, below). References flipViewOn even
+// though that's declared further down in this same script — safe because
+// this is only ever CALLED at draw time, well after the whole script has
+// finished running once.
+function shouldFlipGridTile(i){
+  return flipViewOn&&!FLIP_EXEMPT_RE.test(NAMES[i]);
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
@@ -2956,8 +2969,37 @@ function updateFocusUI(){
   // moment the old comment here warned about, since the observer just fires
   // again once the real, final size lands.
   engine.selected=selected;
-  if(engine.decodedFrameCount>0)engine.render(currentPos());
-  else drawPoster();
+  // Repaint to reflect the new selection (mute/solo dim, flip mirroring,
+  // etc.) — but HOW depends on playback state, same reasoning as
+  // applyFlipView() above (Sep 12 2026 fix, real report: selecting a tile,
+  // or switching pieces, while PAUSED — after some video had already
+  // decoded this session — could silently leave the small grid showing
+  // the PREVIOUS selection's flip state until something else happened to
+  // trigger a real redraw). Root cause: this used to call a raw
+  // engine.render(currentPos()) here, but render() only actually repaints
+  // (_draw()) when a frame newly qualifies out of frameQueue — while
+  // paused, nothing is feeding fresh frames into that queue on any
+  // cadence, so a single one-shot render() call routinely found nothing
+  // new and silently no-opped. paintAt() is the existing, already-robust
+  // fix for exactly this "force a real repaint while paused" problem — it
+  // retries via requestAnimationFrame until a frame actually lands (or
+  // gives up after 40 tries), instead of silently doing nothing.
+  if(playing){
+    // tick() is already driving engine.render() every frame during real
+    // playback and will pick up the new selection on its very next frame —
+    // calling paintAt() here too would just fight it (spinner flicker,
+    // duplicate render() calls racing on the same frameQueue).
+  }else if(engine.decodedFrameCount>0){
+    paintAt(currentPos());
+  }else{
+    drawPoster();
+  }
+  // Same iOS canvas-repaint nudge as applyFlipView()'s matching call, for
+  // the same reason — a tile switch redraws the grid with correct pixels
+  // above, but real-device testing showed the browser can still need an
+  // unrelated DOM nudge to actually flush a canvas repaint. Cheap/no-op
+  // while playing (tick() keeps the canvas visibly live on its own then).
+  nudgeRepaint(grid);
 }
 // Single source of truth for mute+solo, called after EITHER a mute or a solo
 // click. Solo has priority: while any tile is soloed, a tile is only audible
@@ -5207,7 +5249,7 @@ if(!ANALYTICS_EXCLUDED){
 //
 // `let flipViewOn=...` itself now lives up near `countInOn` (see that
 // declaration's own comment) — NOT here where it reads naturally — moved
-// there Sep 12 2026 after a real crash: shouldFlipGridSelected() (called
+// there Sep 12 2026 after a real crash: shouldFlipGridTile() (called
 // from drawOneTile(), called from drawPoster(), called from the page's own
 // very first updateFocusUI() at the bottom of this script) reads
 // flipViewOn, and on a fast connection/warm cache the poster <img> can
@@ -5244,7 +5286,7 @@ function applyFlipView(){
   // The focus square's flip above is a plain CSS transform, so it updates
   // itself instantly (WebKit staleness aside, just fixed above). The small
   // grid's flip is baked in at canvas-draw time (see
-  // shouldFlipGridSelected()/drawGridFromSource()), so toggling the
+  // shouldFlipGridTile()/drawGridFromSource()), so toggling the
   // setting needs an explicit repaint here while PAUSED, or it would
   // silently wait for the next natural redraw (next Play, next tile
   // switch) to actually show. While actually playing, tick() is already
@@ -5260,6 +5302,22 @@ function applyFlipView(){
   if(playing)return;
   if(engine.decodedFrameCount>0)paintAt(currentPos());
   else drawPoster();
+  // Sep 12 2026, second real report on the very same toggle: even with the
+  // two nudges above, and even though drawPoster()/paintAt() DOES draw the
+  // small grid's newly-selected-tile cell with the correct mirrored pixels
+  // right here, real-device testing (iPhone Chrome) showed the small
+  // square visually staying unflipped after hitting the Settings toggle —
+  // correcting itself only once some OTHER change (switching focus to a
+  // different tile, which touches several unrelated classes/text nodes)
+  // happened to shake the browser into actually flushing it. Same
+  // "computed/drawn correctly, not actually repainted" WebKit class of bug
+  // as the focus square's, just showing up on the GRID canvas instead of
+  // via a CSS transform — canvas compositor staleness like this is a
+  // separately documented (if rarer) WebKit quirk from the transform one,
+  // but the same nudgeRepaint() trick fixes it the same way. Nudged here,
+  // after the real draw above, so there's already-correct pixel content on
+  // the canvas for the forced repaint to actually flush.
+  nudgeRepaint(grid);
 }
 applyFlipView();
 if(flipViewToggle){
