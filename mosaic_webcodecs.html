@@ -152,8 +152,16 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    the same browser. Deliberately NOT applied to .grid (the small-tile grid
    canvas below) — flipping that would also need every tap/mute/solo hit-area
    in #gridControls and each tile-name label repositioned/un-mirrored to
-   match, which felt like its own separate pass; see the build notes. */
-html:not(.is-desktop).flip-view-on .focus-video{transform:scaleX(-1)}
+   match, which felt like its own separate pass; see the build notes.
+   .flip-exempt-current (Sep 2026, real request): kit, bass and coro/vocal
+   tiles never mirror even when flip view is on, across all three pieces —
+   flipping a two-handed instrument that isn't about left/right hand
+   positioning (or has no hands at all, for the vocal tiles) doesn't help and
+   can confuse. Toggled per-tile in JS (see syncFlipExemption(), near
+   FLIP_EXEMPT_RE) whenever the focused tile changes, not baked into any
+   per-piece config, so it applies uniformly to Abakuá/Congo/Flip Swing and
+   to anything named similarly in a future piece too. */
+html:not(.is-desktop).flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 /* Build version badge (Sep 2026, per direct request): a small, always-on
    marker over the focus square (portrait) and the landscape video area,
@@ -287,6 +295,16 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    deliberately keeps a cream/purple off/on distinction — this one was asked
    to just match mute, no on/off difference). */
 .manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+/* Mobile portrait no longer offers a notation toggle at all (Sep 2026, real
+   request) — landscape's own notation band is unconditional/always-on (see
+   the comment near .landscape-focus-dim/"Deliberately NOT gated on
+   manuscriptOn"), so "go to landscape" is now the only way to see notation
+   on a phone. Desktop is untouched (still has its own toggle, still uses
+   #notationStripDesktop/manuscriptOn exactly as before) since desktop has no
+   portrait/landscape distinction for this to redirect to. Kept as a CSS hide,
+   not a deletion of the button/handler/manuscriptOn state — cheap to bring
+   back for mobile if wanted later, just remove this rule. */
+html:not(.is-desktop) .manuscriptBtn{display:none}
 /* Focus-square mute/solo (Sep 2026, mobile portrait only — see the comment
    above .muteBtn.is-muted for why the small per-tile buttons still exist in
    the DOM but are hidden on mobile). Bottom corners so they don't collide
@@ -331,13 +349,15 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    refreshSoloMuteState() now toggles it, alongside the existing is-muted) —
    distinct from the older is-solo-dimmed, which still exists for any other
    code reading it but no longer has any visual effect of its own. */
-.tile.is-muted::after{content:"M";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid var(--accent-blue);color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
-.tile.is-solo::before{content:"S";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid #ffd60a;color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
-/* A tile that's BOTH muted and soloed (edge case — soloing a tile you'd
-   already muted) shows both badges side by side rather than one hiding the
-   other. */
-.tile.is-muted.is-solo::after{left:calc(50% - 12px)}
-.tile.is-muted.is-solo::before{left:calc(50% + 12px)}
+/* Bottom corners (Sep 2026, was top-center — real request: match the focus
+   square's own mute/solo layout, mute bottom-right/solo bottom-left — see
+   #focusMuteBtn/#focusSoloBtn). Muted and soloed sit on opposite corners so
+   a tile that's somehow both shows both badges with no collision between
+   them; .tile-name (bottom-left, see above) is the only remaining conflict —
+   handled by nudging it right whenever the solo badge is present. */
+.tile.is-muted::after{content:"M";position:absolute;bottom:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid var(--accent-blue);color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
+.tile.is-solo::before{content:"S";position:absolute;bottom:4px;left:4px;width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid #ffd60a;color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
+.tile.is-solo .tile-name{left:28px}
 .tile.is-selected{outline:2px solid var(--tile-border);outline-offset:-2px}
 .tempo-strip{margin-top:6px}
 /* Desktop-only (Sep 7 2026, real report — full reasoning above on
@@ -732,7 +752,7 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
   .landscape-focus-canvas{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block;z-index:1}
   /* Flip view in landscape — see the portrait .focus-video rule's comment for
      the full explanation; same idea, same canvas-only scope. */
-  html.flip-view-on:not(.is-desktop) .landscape-focus-canvas{transform:scaleX(-1)}
+  html.flip-view-on:not(.is-desktop):not(.flip-exempt-current) .landscape-focus-canvas{transform:scaleX(-1)}
   /* Mute dim (Sep 2026) — same idea as .focus-dim over the portrait focus
      square (see that rule and focusWrap.classList.toggle('is-muted',...)),
      just without a shared parent class to hang off of: this view's mute
@@ -1332,7 +1352,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.26';
+const BUILD_VERSION='2.27';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2780,9 +2800,18 @@ function selectTile(i){
   tileEls.forEach((el,j)=>{if(el)el.classList.toggle('is-selected',j===selected);});
   updateFocusUI();
 }
+// Flip-view exemption (Sep 2026, real request): kit, bass and any coro/vocal
+// tile never mirror even with flip view on — matched by name, not by index,
+// so it's the same rule across Abakuá/Congo/Flip Swing (and any future
+// piece) without per-piece config. See the CSS comment on .flip-exempt-current.
+const FLIP_EXEMPT_RE=/kit|bass|coro/i;
+function syncFlipExemption(){
+  document.documentElement.classList.toggle('flip-exempt-current',FLIP_EXEMPT_RE.test(NAMES[selected]));
+}
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
   landscapeNotationLabel.textContent=NAMES[selected]; // rule (Aug 31 2026): landscape notation view always carries the instrument name, bottom-left, same NAMES[selected] source as focusLabel above
+  syncFlipExemption(); // must run whenever the focused tile (or piece) changes — see FLIP_EXEMPT_RE above
   renderNotationStrip(); // per-tile notation (cfg.notationStripByIndex) needs to update whenever the focused tile changes, not just on load/piece-switch
   const anySolo=soloed.some(Boolean);
   focusWrap.classList.toggle('is-muted',muted[selected]);
