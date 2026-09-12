@@ -604,6 +604,16 @@
   gateInput.addEventListener('keydown',function(e){if(e.key==='Enter')gateBtn.click();});
 
   (function checkExistingPass(){
+    // Staging (Sep 12 2026, by request): the server-side gate is already a
+    // no-op there (see worker.js's checkPassphrase()), so skip typing a
+    // passphrase here too — seed sessionStorage with a placeholder before the
+    // normal "already have one" flow below runs, and it verifies fine since
+    // the server accepts anything on that host. Production is untouched:
+    // location.hostname there never contains "staging", so this branch never
+    // fires and the real gate below behaves exactly as it always has.
+    if(!passphrase()&&location.hostname.indexOf('staging')!==-1){
+      sessionStorage.setItem(PASS_KEY,'staging-no-passphrase-needed');
+    }
     var v=passphrase();
     if(!v)return;
     // A passphrase already sitting in sessionStorage (e.g. a refresh) is

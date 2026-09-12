@@ -40,18 +40,25 @@
   // production ADMIN_CONFIG id above: admin-console edits (play order,
   // notation images, per-piece offsets) write straight to KV, so sharing
   // the namespace would mean testing on staging could silently change what
-  // real users see. One-time setup still needed before this works, from a
-  // normal Terminal (this can't be run from Claude's sandbox — Cloudflare's
-  // API is network-blocked there):
-  //   1. npx wrangler kv namespace create ADMIN_CONFIG_STAGING
-  //      (prints an "id" — paste it in below, replacing the placeholder)
-  //   2. npx wrangler secret put ADMIN_PASSPHRASE --env staging
-  //      (secrets are per-environment; this can be the same passphrase)
-  //   3. npx wrangler deploy --env staging
+  // real users see. One-time setup: create the namespace and paste its id in
+  // below (`npx wrangler kv namespace create ADMIN_CONFIG_STAGING`) — done,
+  // see the id already filled in. No ADMIN_PASSPHRASE secret needed for
+  // staging (see the "vars.ENVIRONMENT" comment below for why) — just
+  // `npx wrangler deploy --env staging` from here.
   //
   // No d1_databases entry here on purpose — worker.js already no-ops
   // gracefully when ANALYTICS_DB isn't bound (see its "DB not yet bound"
   // comments), so staging traffic never lands in the real usage analytics.
+  //
+  // vars.ENVIRONMENT="staging" (Sep 12 2026) — read by worker.js's
+  // checkPassphrase(): staging skips the admin passphrase gate entirely (by
+  // request — no ADMIN_PASSPHRASE secret needs setting for staging at all
+  // now), so admin.html on the staging URL goes straight in with zero typing.
+  // Safe specifically because staging has its own unlisted URL and its own
+  // separate ADMIN_CONFIG_STAGING KV above — there is nothing on staging a
+  // passphrase-less visitor could do to the live site. Production has no
+  // ENVIRONMENT var (or any value other than "staging"), so its real
+  // passphrase check is completely unaffected.
   "env": {
     "staging": {
       "name": "mosaic-player-staging",
@@ -65,7 +72,10 @@
           "binding": "ADMIN_CONFIG",
           "id": "ce2dcd64f14944c1906d1726e1ef6c07"
         }
-      ]
+      ],
+      "vars": {
+        "ENVIRONMENT": "staging"
+      }
     }
   }
 }

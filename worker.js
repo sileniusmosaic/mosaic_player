@@ -286,6 +286,15 @@ async function writeConfig(env, cfg) {
 }
 
 function checkPassphrase(request, env) {
+  // Staging has no passphrase gate at all (Sep 12 2026, deliberate): it's an
+  // internal-testers-only build behind its own unlisted URL and its own
+  // separate ADMIN_CONFIG_STAGING KV namespace (can't touch live config
+  // either way), and the whole point of standing it up was to let dev/admin
+  // work happen there with zero extra friction. env.ENVIRONMENT is set to
+  // 'staging' only in wrangler.jsonc's env.staging block — production has no
+  // such var, so this never affects the real site. Production keeps the real
+  // check below completely unchanged.
+  if (env.ENVIRONMENT === 'staging') return true;
   const passphrase = request.headers.get('x-admin-passphrase') || '';
   // env.ADMIN_PASSPHRASE not yet set (secret never configured) → refuse
   // every write rather than silently accepting an empty passphrase.
