@@ -1411,7 +1411,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.35';
+const BUILD_VERSION='2.36';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2223,6 +2223,17 @@ let tileEls=[], muteBtns=[], soloBtns=[];
 // further down — only the initial read moved.
 let countInOn=(()=>{
   try{return localStorage.getItem('mosaicCountIn')==='1';}catch{return false;}
+})();
+// Read early too (Sep 12 2026, real crash fixed — see applyFlipView()'s own
+// comment, far below, for the full story): shouldFlipGridSelected() reads
+// this on every tile draw, including the very first synchronous
+// drawPoster() call at the bottom of this script (before Play, before
+// buildControls() even runs) — declaring it up here alongside countInOn,
+// instead of down where flip view's own code naturally lives, is what
+// keeps that first draw out of the temporal dead zone. Same fix, same
+// reason, as countInOn's own move above.
+let flipViewOn=(()=>{
+  try{return localStorage.getItem('mosaicFlipView')==='1';}catch{return false;}
 })();
 let prepared=false, preparing=false, playing=false, pausedPos=0, raf=0;
 // Tracks whichever load (ensurePrepared() or changeTempo()) currently owns
@@ -5193,9 +5204,22 @@ if(!ANALYTICS_EXCLUDED){
 // until they opt in, rather than risk quietly mirroring the video for every
 // existing user. Flip if this reads backwards from what was actually wanted
 // — it's a one-line change (default true instead of false below).
-let flipViewOn=(()=>{
-  try{return localStorage.getItem('mosaicFlipView')==='1';}catch{return false;}
-})();
+//
+// `let flipViewOn=...` itself now lives up near `countInOn` (see that
+// declaration's own comment) — NOT here where it reads naturally — moved
+// there Sep 12 2026 after a real crash: shouldFlipGridSelected() (called
+// from drawOneTile(), called from drawPoster(), called from the page's own
+// very first updateFocusUI() at the bottom of this script) reads
+// flipViewOn, and on a fast connection/warm cache the poster <img> can
+// already be `.complete` by the time that FIRST synchronous call happens —
+// which is well before this line (textually near the bottom of the
+// script) would otherwise have run, throwing "Cannot access 'flipViewOn'
+// before initialization" and aborting the entire script partway through
+// (symptom: focus square poster paints fine since drawFocusPoster() runs
+// first, but the small grid stays solid black and nothing else on the
+// page ever initializes — buildControls() never got a chance to run).
+// Exactly the same TDZ hazard countInOn had already been moved once to
+// avoid; this is the same fix applied to the same class of bug.
 function applyFlipView(){
   document.documentElement.classList.toggle('flip-view-on',flipViewOn);
   // iOS WebKit staleness (Sep 12 2026, real report: "flip is enabled but
