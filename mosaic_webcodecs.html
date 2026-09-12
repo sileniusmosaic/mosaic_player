@@ -1411,7 +1411,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.33';
+const BUILD_VERSION='2.35';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2895,6 +2895,14 @@ function selectTile(i){
 const FLIP_EXEMPT_RE=/kit|bass|coro/i;
 function syncFlipExemption(){
   document.documentElement.classList.toggle('flip-exempt-current',FLIP_EXEMPT_RE.test(NAMES[selected]));
+  // iOS WebKit repaint nudge (Sep 12 2026) — see applyFlipView()'s matching
+  // call, far below, for the full explanation. This is the OTHER place the
+  // flip-relevant class on <html> changes (switching from an exempt tile
+  // like Bass to a non-exempt one, or back, while Flip view is already on)
+  // — nudgeRepaint() is a hoisted function declaration so this forward
+  // reference is safe regardless of where it's defined in the file.
+  nudgeRepaint(focusCanvas);
+  nudgeRepaint(landscapeFocusCanvas);
 }
 // Whether the SMALL grid's currently-selected tile should mirror too (Sep
 // 2026, real request — "the corresponding small square needs flipping
@@ -4648,7 +4656,17 @@ async function switchMosaic(id){
     // which would bail out on switchingMosaic still being true) because this
     // whole function already ran inside the same click that chose the piece,
     // and unlockContext() above already succeeded within that same gesture.
-    await startPlaybackNow();
+    // Sep 12 2026, direct request: skipped entirely when Count-in is on —
+    // autoplay-on-switch calls startPlaybackNow() directly, which bypasses
+    // playFromGesture() and therefore runCountIn() too, so a piece switch
+    // would otherwise start playing with no count-in at all. With Count-in
+    // on, a switch now just leaves the piece ready-and-paused; a manual
+    // Play tap goes through playFromGesture() as normal and gets its
+    // count-in (and, per v2.33, the metronome's own carried-over on/off
+    // state) exactly like any other Play. With Count-in off, autoplay on
+    // switch is unchanged.
+    if(countInOn)setStatus(cfg.label+' ready — tap Play to start.','good');
+    else await startPlaybackNow();
   }catch(err){
     // A newer switch may already have taken over by the time the
     // withTimeout() above gives up on this one (Aug 30 2026) — id!==mosaicId
@@ -5180,9 +5198,29 @@ let flipViewOn=(()=>{
 })();
 function applyFlipView(){
   document.documentElement.classList.toggle('flip-view-on',flipViewOn);
+  // iOS WebKit staleness (Sep 12 2026, real report: "flip is enabled but
+  // nothing is flipped", reproduced on iPhone Chrome, NOT reproducible on
+  // desktop Chrome via direct pixel-level testing — the CSS class/computed
+  // style is correct there too). This is the same class of bug already
+  // documented and fixed elsewhere in this file for the landscape
+  // Play-button/50%-preset repaint (see nudgeRepaint()'s own comment,
+  // above): WebKit can compute a style change correctly (here, the
+  // scaleX(-1) transform toggling on/off) without actually repainting the
+  // affected layer, especially for a canvas that's normally repainted by
+  // its OWN drawImage() calls rather than by the browser's regular style
+  // pipeline — it needs an unrelated DOM mutation to notice the change.
+  // Nudging both focus canvases (portrait + landscape; whichever is
+  // offscreen right now is a harmless no-op) right after the class change
+  // covers both directions (turning flip on AND off) and both entry
+  // points (the Settings toggle here, and a tile switch — see
+  // syncFlipExemption()'s matching nudge below, since that's the other
+  // place this same class relationship changes).
+  nudgeRepaint(focusCanvas);
+  nudgeRepaint(landscapeFocusCanvas);
   // The focus square's flip above is a plain CSS transform, so it updates
-  // itself instantly. The small grid's flip is baked in at canvas-draw time
-  // (see shouldFlipGridSelected()/drawGridFromSource()), so toggling the
+  // itself instantly (WebKit staleness aside, just fixed above). The small
+  // grid's flip is baked in at canvas-draw time (see
+  // shouldFlipGridSelected()/drawGridFromSource()), so toggling the
   // setting needs an explicit repaint here while PAUSED, or it would
   // silently wait for the next natural redraw (next Play, next tile
   // switch) to actually show. While actually playing, tick() is already
@@ -5216,14 +5254,17 @@ if(flipViewToggle){
 // its poster frame — same picture as "Tap Play to start", just with a
 // number ticking in the corner instead of the metronome icon.
 //
-// Deliberately wired into ONLY playFromGesture() (the actual Play-button
-// tap/spacebar), NOT switchMosaic()'s autoplay-resume and NOT reset() —
-// both of those call startStems()/startPlaybackNow() directly, unchanged.
-// A count-in on every piece switch or every Reset would slow down exactly
-// the two actions this app has otherwise gone out of its way to make feel
-// instant — this is a judgment call, not confirmed with him, and easy to
-// extend later (call runCountIn() from either of those spots too) if he
-// wants it there as well.
+// History (superseded, kept for context): originally wired into ONLY
+// playFromGesture() — NOT switchMosaic()'s autoplay-resume and NOT reset(),
+// both of which called startStems()/startPlaybackNow() directly — on the
+// reasoning that a count-in on every piece switch or Reset would slow down
+// two actions this app otherwise goes out of its way to make feel instant.
+// Both since reversed by direct request: reset() runs the count-in too as
+// of v2.30 (see its own comment there), and switchMosaic()'s autoplay is
+// SKIPPED entirely while Count-in is on as of this round (see its own
+// comment there) — a switch just leaves the piece paused-and-ready, so the
+// eventual Play tap still goes through playFromGesture() and gets a count-in
+// like any other Play, rather than autoplay silently skipping it.
 //
 // Default OFF, same reasoning as the beat counter itself.
 if(countInToggle){
@@ -5327,6 +5368,8 @@ setStatus('WebCodecs build: one decode pipeline drives both views — audio is t
 // button itself should ever start playback on page load now. Switching
 // pieces still autoplays (see switchMosaic()'s own startPlaybackNow() call
 // above) — that's a separate, deliberately-kept behavior, not this one.
+// (Sep 12 2026: switching pieces stops autoplaying specifically while
+// Count-in is on — see that same call site's own comment.)
 // Logged (Aug 2026) the same way prefetchTempoBanks() is — this is the OTHER
 // silent video fetch that used to leave the log with nothing to show for the
 // very first video download of the session (before Play is ever pressed).
