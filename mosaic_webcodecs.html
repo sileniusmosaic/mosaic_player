@@ -430,73 +430,93 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    grid's right edge, not just approximately near them. */
 .is-desktop .tempo-strip{width:796px;margin-left:auto;margin-right:auto}
 .panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
-.transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-/* Desktop-only (Sep 7 2026, real report: "move reset button to the right and
-   inline with the play button in the vertical plane... line the settings
-   [button] vertically with the right hand edge of the new larger small
-   squares"): same width-matched, centered box as .is-desktop .tempo-strip
-   above, nested one level deeper inside .panel's own padding — centering a
-   box inside a symmetrically-padded container lands at the identical
-   absolute x as centering it directly inside .app, so no extra offset math
-   is needed to account for .panel's padding. Reset is this row's first
-   child with no left margin, and #settingsBtn already carries
-   margin-left:auto (see .settingsBtn below) — between them those two rules
-   already push Reset flush left and Settings flush right within whatever
-   box .transport occupies, so narrowing/centering the box alone is enough
-   to land Reset directly under Play (same x) and Settings directly under
-   100% (same x), no separate positioning rule required. */
-.is-desktop .transport{width:796px;margin-left:auto;margin-right:auto}
+/* Rebuilt as a 4-column grid (Sep 12 2026, real request — add a Flip button
+   under 100%, move Settings to under 75%, exact alignment even though it
+   costs the scrubber some width): column-for-column IDENTICAL to
+   #tempoButtons' own grid (repeat(4,1fr) here, 55px 1fr 1fr 55px on desktop
+   — see .is-desktop .transport below), so whatever sits in column N here
+   lands at exactly the same x as column N up there, with no more hand-tuned
+   nudge fudge-factors needed (the old flex-row version only ever
+   approximated this — see the now-removed 4.375px nudge comments this
+   replaced). Reset/column1 under Play, the timeline/column2 under 50%,
+   Settings/column3 under 75%, Flip/column4 under 100%. justify-items:center
+   matches .tempo-buttons so each 55px circle centers in its own column
+   exactly like Play/50/75/100 do above it. */
+/* margin:0 -12px (measured via a headless render, same technique as the old
+   4.375px nudge this replaces): .panel's own border(2px)+padding(10px)=12px
+   insets .transport from .panel's outer edge, while .tempo-buttons sits
+   directly in .tempo-strip with no such inset — without this, the two grids'
+   columns would land ~9-12px apart instead of exactly matching. This cancels
+   that inset exactly so both grids share the identical effective width/x. */
+.transport{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;align-items:center;justify-items:center;margin:0 -12px}
+/* Desktop-only (Sep 7 2026 originally; grid-template-columns override added
+   Sep 12 2026 alongside the .transport rewrite above): same width-matched,
+   centered box as .is-desktop .tempo-strip, nested one level deeper inside
+   .panel's own padding — centering a box inside a symmetrically-padded
+   container lands at the identical absolute x as centering it directly
+   inside .app, so no extra offset math is needed to account for .panel's
+   padding. The column template match with .is-desktop .tempo-buttons (both
+   55px 1fr 1fr 55px) is what actually delivers the exact alignment; the
+   width+centering here is what makes sure both rows' columns start at the
+   same x to begin with. */
+.is-desktop .transport{width:796px;margin-left:auto;margin-right:auto;grid-template-columns:55px 1fr 1fr 55px}
+/* Reset/Settings/Flip are each their own grid cell now (see .transport
+   above) — no explicit grid-column needed since they're already in source
+   order 1/3/4 with the timeline wrapper (below) taking column 2. */
 /* display:inline-flex (Aug 30 2026) — these buttons went icon-only (no more
    "Reset"/"Settings" text), so centering their single SVG child needs flex
    the same way the tempo-buttons row already centers its own content. */
 .transport button{font:inherit;border:2px solid var(--window-border);border-radius:8px;padding:9px 14px;background:var(--panel2);color:var(--text);display:inline-flex;align-items:center;justify-content:center}
 .transport button.primary{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
 .transport button:disabled{opacity:.5}
-.settingsBtn{margin-left:auto}
+/* Timeline+time (Sep 12 2026): now their own single grid cell (column 2,
+   under 50% — see .transport above) instead of two bare flex children
+   spanning most of the old flex row. Internally still flex — the input
+   grows via .timeline's own flex:1 (unchanged) to fill whatever width this
+   one column gives it, with .time's existing margin-left:auto (unchanged)
+   left harmless since flex:1 already claims all the free space here, same
+   net effect as before. min-width:0 keeps the <input type=range> from
+   forcing this cell (and so the whole grid) wider than the column allows —
+   range inputs have a non-zero intrinsic min-width in some browsers that
+   would otherwise blow out the grid track. */
+.transport-mid{display:flex;align-items:center;min-width:0;width:100%}
 /* #reset made circular (Sep 2026, real report — same request as the tempo
    row above: match the metro/manuscript overlays, 55px, var(--text)-on-dark,
-   no accent color). Stays exactly where it is in the .transport flex row —
-   only its own shape/size/color changed. */
-/* Nudged 4.375px in from the panel's left edge (Sep 4 2026, real report:
-   "bring reset and settings in from the edge a little so they're
-   vertically in line with play and 100%"). Measured via a headless render:
-   Play/100% sit centered in their grid column, which insets them ~16.4px
-   from the tempo-row's shared left/right edge; Reset/Settings, as flex
-   children flush against the .panel's own border+padding, only got a 12px
-   inset — this margin makes up exactly that ~4.375px difference so all
-   four buttons line up vertically. */
-#reset{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text);margin-left:4.375px}
-/* The 4.375px nudge above was tuned for mobile/portrait's own coincidental
-   alignment math (see the comment on it) and would throw off desktop's new
-   exact alignment by that same 4.375px (Reset would sit 4.375px right of
-   Play instead of exactly under it — see .is-desktop .transport above,
-   which now aligns Reset/Play to 0px precision on its own). Cancelled here,
-   desktop-only. */
-.is-desktop #reset{margin-left:0}
+   no accent color). Its position comes entirely from the grid now (see
+   .transport above) — no per-button nudge margin needed on any screen size,
+   unlike the old flex-row version. */
+#reset{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 /* #settingsBtn (Sep 4 2026, real report — "make the settings button in
    portrait a circle... to match all the other circle buttons, lose the
-   square shape"): same treatment as #reset right above — the plain
-   .transport-button pill (var(--panel2) fill, 8px border-radius) is
-   overridden here with the shared 55px/var(--text)-on-dark circle every
-   other transport/overlay button already uses. Position in the flex row
-   (margin-left:auto, see .settingsBtn above) is untouched. */
-#settingsBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text);margin-right:4.375px}
-/* Same reasoning as .is-desktop #reset above — cancels the mobile-tuned
-   4.375px nudge so Settings' right edge lands exactly on the 100% button's
-   (and the tile grid's) right edge on desktop, not 4.375px short of it. */
-.is-desktop #settingsBtn{margin-right:0}
+   square shape"): same treatment as #reset right above. Moved from column 4
+   to column 3 (Sep 12 2026, real request — "under 75%", to make room for the
+   new Flip button in column 4) purely by moving its markup one slot earlier;
+   no CSS position override needed either way, same as #reset above. */
+#settingsBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 #settingsBtn .settings-icon{width:28px;height:28px}
+/* Flip button (Sep 12 2026, real request): identical circular chrome to
+   #reset/#settingsBtn above — same 55px size, same var(--text)-on-dark
+   background, same border weight — so the redrawn icon (see the markup
+   comment on #flipBtn) sits inside the exact same "outer circumference" as
+   every other transport-row button, per the ask, rather than carrying any
+   of the reference image's own black-circle/cream-color styling. The active
+   (Flip view on) state reuses the identical blue-ring recipe already shared
+   by .tempo-buttons button.active and .metroBtn.is-active elsewhere in this
+   file, for visual consistency. */
+.flipBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
+.flipBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 /* Screen-reader-only text (Aug 30 2026): kept in the DOM so the accessible
    name still updates with state (Play/Pause/Loading…), just not painted —
    every icon-only control button now relies on either this class (Play,
    whose label genuinely changes) or a static aria-label (Reset, Settings,
-   whose names never change) for its accessible name. */
+   Flip — Flip's aria-label does change with state, via syncFlipBtn(), same
+   idea as Play's) for its accessible name. */
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-/* Same visual language across all three transport-row icons (Aug 30 2026):
-   identical size and identical currentColor fill, so the play arrow, the
-   reset circular-arrow, and the settings gear read as one family rather
-   than three unrelated glyphs. */
-.play-icon,.reset-icon,.settings-icon{width:20px;height:20px;flex:0 0 auto;fill:currentColor}
+/* Same visual language across all four transport-row icons (Aug 30 2026;
+   Flip added Sep 12 2026): identical size and identical currentColor fill,
+   so the play arrow, the reset circular-arrow, the settings gear, and the
+   new flip glyph read as one family rather than unrelated icons. */
+.play-icon,.reset-icon,.settings-icon,.flip-icon{width:20px;height:20px;flex:0 0 auto;fill:currentColor}
 /* Reset's circular-arrow reads thinner than the solid play triangle at the
    same size (Aug 31 2026) — bump it up slightly and add a matching stroke
    along the path edges to bulk up its line weight so the two feel matched. */
@@ -508,6 +528,13 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    — see #settingsBtn .settings-icon further down. */
 #play .play-icon{width:26px;height:26px}
 #reset .reset-icon{width:34px;height:34px}
+/* Flip icon parts (Sep 12 2026): the two mirrored figures are plain
+   currentColor fills, same as reset/settings' paths; the center divider is
+   a stroked line rather than a filled shape, same technique as the
+   manuscript icon's staff lines. */
+#flipBtn .flip-icon{width:26px;height:26px}
+.flip-divider{stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
+.flip-figure{fill:currentColor}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
 .tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0;justify-items:center}
 /* Desktop-only (Sep 7 2026) — see the real report quoted on .is-desktop
@@ -1304,8 +1331,18 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
           <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path>
         </svg>
       </button>
-      <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
-      <span id="time" class="time">0 / 46</span>
+      <!-- Timeline+time wrapped together (Sep 12 2026, needed for the new
+           grid layout below — see .transport's CSS comment): the row is now
+           a 4-column grid matching #tempoButtons column-for-column (Reset
+           under Play, this wrapper under 50%, Settings under 75%, Flip under
+           100%), so the scrubber needs its own single grid cell instead of
+           being a bare flex child spanning most of the row like before. It's
+           narrower now as a direct result of that exact alignment — a
+           deliberate trade-off, confirmed on request. -->
+      <div class="transport-mid">
+        <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
+        <span id="time" class="time">0 / 46</span>
+      </div>
       <!-- Icon-only (Aug 30 2026) — the Unicode ⚙ glyph is replaced with a
            real SVG gear so it matches the play arrow / reset circular-arrow
            in weight and style (see the shared .settings-icon sizing rule
@@ -1314,6 +1351,29 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
       <button id="settingsBtn" type="button" class="settingsBtn" aria-label="Settings">
         <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
+        </svg>
+      </button>
+      <!-- Flip button (Sep 12 2026, real request): replaces the old
+           Settings-menu toggle entirely (see JS comment near flipViewOn/
+           syncFlipBtn() below) — instant tap, no menu. Icon is a from-
+           scratch redraw of the reference pictograph supplied (two mirrored
+           seated figures either side of a center divider) in this file's
+           own plain-currentColor-fill icon style, matching the play/reset/
+           settings glyphs rather than embedding the original image's own
+           black-circle/cream-figure artwork wholesale — see .flipBtn's CSS
+           comment for why the circle itself is the shared button chrome,
+           not part of the icon. -->
+      <button id="flipBtn" type="button" class="flipBtn" aria-label="Flip view: off">
+        <svg class="flip-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <line class="flip-divider" x1="12" y1="1.6" x2="12" y2="22.4"></line>
+          <g class="flip-figure">
+            <circle cx="6.6" cy="5.7" r="1.85"></circle>
+            <path d="M3.55 15.85c.2-2.55.6-4.55 1.1-5.55.4-.8 1.15-1.3 2-1.3s1.55.5 1.9 1.25c.45.95.8 2.95 1 5.5.05.55-.35 1-.9 1.05-.5.05-.95-.3-1.05-.8l-.5-2.55v6.2c0 .55-.45 1-1 1H8.9c-.55 0-1-.45-1-1v-3.75l-.45 3.85c-.05.5-.5.85-1 .8-.5-.05-.9-.5-.85-1z"></path>
+          </g>
+          <g class="flip-figure flip-figure-mirror">
+            <circle cx="17.4" cy="5.7" r="1.85"></circle>
+            <path d="M20.45 15.85c-.2-2.55-.6-4.55-1.1-5.55-.4-.8-1.15-1.3-2-1.3s-1.55.5-1.9 1.25c-.45.95-.8 2.95-1 5.5-.05.55.35 1 .9 1.05.5.05.95-.3 1.05-.8l.5-2.55v6.2c0 .55.45 1 1 1h.2c.55 0 1-.45 1-1v-3.75l.45 3.85c.05.5.5.85 1 .8.5-.05.9-.5.85-1z"></path>
+          </g>
         </svg>
       </button>
     </div>
@@ -1362,21 +1422,13 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
       <div id="mosaicRail"></div>
     </div>
     <!-- Settings (Sep 2026, mobile only for this build — see .settings-menu-sub
-         CSS comment). First row: flip view, a standard iOS-style toggle
-         switch — see the JS comment near flipViewOn for what it does and why
-         it only mirrors the focus square, not the small tile grid. -->
+         CSS comment). Flip view USED to have its own toggle row here — moved
+         out entirely (Sep 12 2026, real request) to a dedicated button
+         (#flipBtn) on the main transport row instead, right next to Settings
+         itself, so it's an instant tap with no menu to open. See the JS
+         comment near flipViewOn/syncFlipBtn() for the button's logic. -->
     <div class="menu-sub settings-menu-sub">
       <p class="rail-title">Settings</p>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Flip view</div>
-          <div class="settings-row-sub">Mirrors the main square — easier to copy hand position</div>
-        </div>
-        <label class="ios-toggle">
-          <input type="checkbox" id="flipViewToggle">
-          <span class="ios-toggle-track"><span class="ios-toggle-knob"></span></span>
-        </label>
-      </div>
       <!-- Count-in (Sep 2026): one bar of clicks (3 or 4 depending on the
            piece's own beatsPerBar) before playback actually starts, counted
            out in the same digit slot the beat counter uses — see the JS
@@ -1442,7 +1494,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.46';
+const BUILD_VERSION='2.47';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -5415,14 +5467,26 @@ function applyFlipView(){
   nudgeRepaint(grid);
 }
 applyFlipView();
-if(flipViewToggle){
-  flipViewToggle.checked=flipViewOn;
-  flipViewToggle.addEventListener('change',()=>{
-    flipViewOn=flipViewToggle.checked;
-    try{localStorage.setItem('mosaicFlipView',flipViewOn?'1':'0');}catch{}
-    applyFlipView();
-  });
+// Flip button (Sep 12 2026, real request — replaces the old Settings-menu
+// toggle entirely): a dedicated icon on the main transport row, right next
+// to Settings, so flipping is one instant tap with no menu to open. Ring
+// lights up blue via .is-active exactly like every other active-state icon
+// in this file (.metroBtn.is-active, .tempo-buttons button.active) when Flip
+// view is on, plain/dark when it's off. flipBtn resolves via the same
+// DOM id-to-global lookup settingsBtn already relies on (see its own click
+// listener just below) — safe since the button always exists in the markup
+// now, unlike the toggle it replaces.
+function syncFlipBtn(){
+  flipBtn.classList.toggle('is-active',flipViewOn);
+  flipBtn.setAttribute('aria-label','Flip view: '+(flipViewOn?'on':'off'));
 }
+syncFlipBtn();
+flipBtn.addEventListener('click',()=>{
+  flipViewOn=!flipViewOn;
+  try{localStorage.setItem('mosaicFlipView',flipViewOn?'1':'0');}catch{}
+  applyFlipView();
+  syncFlipBtn();
+});
 // Count-in (Sep 2026, real request — was parked during the v2.24 mobile
 // round pending its own pass). One bar of clicks (beatsPerBar of them —
 // 3 or 4 depending on the piece) before playback actually starts, counted
