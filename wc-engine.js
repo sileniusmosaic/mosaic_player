@@ -87,6 +87,15 @@ class WebCodecsVideoEngine {
     // app the same way `muted` is — reassigned by reference whenever solo
     // state changes.
     this.soloDim = new Array(tileCount).fill(false);
+    // Flip view's small-grid counterpart (Sep 2026, real request): whichever
+    // tile is currently focused/selected also mirrors in the small grid when
+    // flip view is on, matching the focus square. A plain callback (not a
+    // boolean the app pushes on every selection/toggle change) so it's
+    // always read fresh at the moment of drawing regardless of which of the
+    // many call sites triggered this render — see mosaic_webcodecs.html's
+    // own assignment right after constructing this engine. Defaults to "never
+    // flip" so an app that never sets this behaves exactly as before.
+    this.shouldFlipSelectedTile = () => false;
     this.cycleSeconds = 0;
     this.decodedFrameCount = 0;
     this.pumpBudgetMs = 6;     // don't let one pump call hog the main thread
@@ -411,7 +420,7 @@ class WebCodecsVideoEngine {
     }
     this._offscreenCtx.drawImage(frame, 0, 0, w, h); // full-frame blit — no cropping here, universally safe
     if (this.gridCtx) {
-      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder, this._gridDestShape());
+      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder, this._gridDestShape(), this.shouldFlipSelectedTile());
     }
     if (this.gridLeftCtx || this.gridRightCtx) {
       // Split layout: first half of the flat tile index list (reading order —
@@ -446,7 +455,7 @@ function tileRect(i, w, h, cols = 4, rows = 2) {
 // top-to-bottom down one column then the next; changed to read "like a
 // book" instead, left-to-right then top-to-bottom, same as mobile).
 // columnMajor stays a live option below in case a future layout wants it.
-function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape) {
+function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape, flipSelected) {
   const { cols: destCols, rows: destRows, columnMajor } = destShape || { cols, rows, columnMajor: false };
   const S = ctx.canvas.width / destCols, Sh = ctx.canvas.height / destRows;
   // tileOrder[slot] = logical tile index drawn at grid position `slot` (see
@@ -458,7 +467,23 @@ function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows =
     const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
     const dx = columnMajor ? Math.floor(slot / destRows) * S : (slot % destCols) * S;
     const dy = columnMajor ? (slot % destRows) * Sh : Math.floor(slot / destCols) * Sh;
-    ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
+    // Small-grid flip counterpart (Sep 2026): only ever the currently
+    // SELECTED tile's own cell, mirrored in place — translate to its right
+    // edge and scale(-1,1) so the flipped copy lands in exactly the same
+    // dx/dy/S/Sh box a normal drawImage would have used, then restore
+    // immediately so every other tile's drawImage below is unaffected.
+    // Reading `source` (the shared offscreen canvas) back into itself works
+    // safely here because the destination box for THIS tile never overlaps
+    // its own source crop box at this canvas's scale.
+    if (i === selected && flipSelected) {
+      ctx.save();
+      ctx.translate(dx + S, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, S, Sh);
+      ctx.restore();
+    } else {
+      ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
+    }
     // Explicit mute always wins the visual (black); a tile silenced only
     // because something ELSE is soloed gets the lighter grey "dimmed" wash.
     if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S, Sh); }

@@ -190,7 +190,16 @@ html:not(.is-desktop).flip-view-on:not(.flip-exempt-current) .focus-video{transf
    interactive itself (pointer-events:none) so it never blocks tap-to-select
    on the square underneath; nothing inside it needs to be tappable. */
 .focus-bottom-overlay{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:flex-start;pointer-events:none}
-.focus-label{background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;margin:0 0 6px 10px}
+/* Top-left (Sep 2026, was bottom-left, stacked above the notation strip in
+   .focus-bottom-overlay — real request: all instrument titles move to
+   top-left, both here and on the small tiles (see .tile-name). No longer
+   part of that bottom-anchored flex column at all — .notation-strip is the
+   only thing left in it now, unaffected. Plain top-left on mobile, where
+   nothing else lives in that corner any more (v2.27 hid the manuscript
+   button there for mobile); shifted right on desktop to clear that same
+   button, which desktop still shows — see the .is-desktop override below. */
+.focus-label{position:absolute;top:10px;left:10px;z-index:4;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px}
+.is-desktop .focus-label{left:75px}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -344,7 +353,12 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
 /* Selected/toggled-on state: purple circumference only — icon stays white,
    matching the app-wide "purple rim on selection" rule (Sep 4 2026). */
 .manuscriptBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-.tile-name{position:absolute;left:4px;bottom:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
+/* Top-left (Sep 2026, was bottom-left — real request: all instrument titles
+   move to top-left, both here and on the focus square (see .focus-label).
+   Moving it up also clears the M/S badges below entirely on its own — no
+   more nudge-right-when-soloed hack needed (see the removed
+   .tile.is-solo .tile-name rule that used to live near the badges below). */
+.tile-name{position:absolute;left:4px;top:4px;background:rgba(21,16,11,.75);padding:2px 5px;border-radius:5px;font-size:9.9px;font-family:'Fraunces',serif;font-style:italic;pointer-events:none}
 /* Mute/solo tile status (Sep 2026, replaces the old full-square dim overlay —
    real report: "two different values" between the muted (black) and
    solo-dimmed (gray) tints read as inconsistent, and didn't say WHICH
@@ -362,11 +376,11 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    square's own mute/solo layout, mute bottom-right/solo bottom-left — see
    #focusMuteBtn/#focusSoloBtn). Muted and soloed sit on opposite corners so
    a tile that's somehow both shows both badges with no collision between
-   them; .tile-name (bottom-left, see above) is the only remaining conflict —
-   handled by nudging it right whenever the solo badge is present. */
+   them. .tile-name moved to top-left the same day (see above), which also
+   retired the nudge-right-when-soloed rule that used to live here — top and
+   bottom no longer share any space to collide over. */
 .tile.is-muted::after{content:"M";position:absolute;bottom:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid var(--accent-blue);color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
 .tile.is-solo::before{content:"S";position:absolute;bottom:4px;left:4px;width:20px;height:20px;border-radius:50%;background:rgba(12,9,6,.85);border:1.5px solid #ffd60a;color:var(--text);font:800 12px 'Roboto Condensed',Arial,Helvetica,sans-serif;line-height:18px;text-align:center;pointer-events:none;z-index:3}
-.tile.is-solo .tile-name{left:28px}
 .tile.is-selected{outline:2px solid var(--tile-border);outline-offset:-2px}
 .tempo-strip{margin-top:6px}
 /* Desktop-only (Sep 7 2026, real report — full reasoning above on
@@ -665,17 +679,18 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    even while hidden. */
 .notation-strip:not([hidden]){display:block}
 /* Anchored over the BOTTOM portion of the focus square (Aug 2026) via
-   .focus-bottom-overlay (see that rule) rather than its own absolute
-   position now, so the instrument label above it can share the same
-   bottom-anchored column. No border-radius needed — .focus-wrap's
-   overflow:hidden plus its own 10px corner radius already clips this to
-   match every other layer inside it, the same way the canvas and dim
-   overlays are clipped. pointer-events:none is inherited from the wrapper. */
+   .focus-bottom-overlay (see that rule). The instrument label used to share
+   this same bottom-anchored flex column, stacked directly above this image
+   — it moved to its own top-left position in Sep 2026 (see .focus-label),
+   so this is the only thing left in the column now. No border-radius
+   needed — .focus-wrap's overflow:hidden plus its own 10px corner radius
+   already clips this to match every other layer inside it, the same way
+   the canvas and dim overlays are clipped. pointer-events:none is inherited
+   from the wrapper. */
 .notation-strip{width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0;flex:0 0 auto}
 /* Manuscript toggled off (Aug 30 2026): visibility, not display — the image
-   keeps its rendered box (same height) so .focus-label above it in the same
-   flex column stays exactly where it is instead of dropping down into the
-   space the image used to occupy. */
+   keeps its rendered box (same height) so .focus-bottom-overlay's own
+   position/height stays stable instead of collapsing when the image is off. */
 .notation-strip.is-off{visibility:hidden}
 /* .focus-stack (Sep 7 2026) — see the markup comment above focusWrap for the
    full reasoning. display:contents on mobile/by default means this wrapper
@@ -787,20 +802,20 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
      sharp edge rather than fading/blending into black. */
   .landscape-bottom-margin{flex:0 0 10vh;background:#000}
 }
-/* Rule (Aug 31 2026, moved top-left Sep 2026, moved again Sep 2026): the
-   landscape notation view always carries the instrument name. Now pinned to
-   the bottom-left corner of the focus SQUARE itself (direct feedback — match
-   portrait's own .focus-label placement over #mosaicFocus, see that rule),
-   via .landscape-focus-label-anchor sharing the exact same grid-area:1/1 +
+/* Rule (Aug 31 2026, moved top-left Sep 2026, moved to bottom-left Sep 2026,
+   moved back to top-left Sep 2026 — real request: ALL instrument titles
+   move to top-left, matching portrait's .focus-label and the small tiles'
+   .tile-name). Pinned to the top-left corner of the focus SQUARE itself via
+   .landscape-focus-label-anchor sharing the exact same grid-area:1/1 +
    height:100%/aspect-ratio:1/1 sizing trick as .landscape-focus-dim above —
    so the anchor's own box always exactly matches the square regardless of
    the square's current size (which varies with the focused tile's notation
-   band height), and the label just sits absolute bottom-left inside that
-   box. Font bumped 10% over .focus-label's own 15.4px, per direct feedback.
-   Same dark-badge look as .focus-label/.tile-name elsewhere in the app for
-   visual consistency. */
+   band height), and the label just sits absolute top-left inside that box.
+   Font bumped 10% over .focus-label's own 15.4px, per earlier direct
+   feedback. Same dark-badge look as .focus-label/.tile-name elsewhere in
+   the app for visual consistency. */
 .landscape-focus-label-anchor{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;position:relative;pointer-events:none;z-index:3}
-.landscape-notation-label{position:absolute;left:10px;bottom:6px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:16.94px;color:var(--text);pointer-events:none}
+.landscape-notation-label{position:absolute;left:10px;top:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:16.94px;color:var(--text);pointer-events:none}
 /* Landscape metronome (Aug 31 2026) — see the markup comment on
    #metroBtnLandscape. Only top/right are overridden (same safe-area-aware
    treatment as the label above, mirrored to the opposite corner); every
@@ -822,14 +837,15 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    (20+65=85, 14+65=79), not 26+10=36 — an earlier version used the smaller
    number, which visibly overlapped the real (bigger) metronome button. */
 .muteBtn.muteBtn-landscape{top:var(--mute-top);right:max(20px,calc(env(safe-area-inset-right) + 14px))}
-/* Solo, landscape (Sep 2026, direct request — left side, mirroring mute's
-   own vertical position via the same --mute-top custom property so the two
-   sit at matching heights on opposite sides of the square). Same fallback
-   pattern as the buttons above: this "left" is only what shows for one
-   frame before positionLandscapeSoloBtn() (script) overrides it with the
-   real, layout-measured value. Ring-based is-solo look (not a fill) — see
-   the .soloBtn.is-solo CSS comment for why. */
-.soloBtn.soloBtn-landscape{top:var(--mute-top);left:max(20px,calc(env(safe-area-inset-left) + 14px))}
+/* Solo, landscape (Sep 2026 — moved off the left side to sit in the same
+   right-hand cluster as metro/mute/reset: left of mute, directly under
+   reset, per direct request. Same column as reset (--mute-top instead of
+   --cluster-top puts it one row down, under reset rather than beside it),
+   same fallback pattern as the rest of the cluster — this is only what
+   shows for one frame before positionLandscapeMetroCluster() (script)
+   overrides it with the real, layout-measured value. Ring-based is-solo
+   look (not a fill) — see the .soloBtn.is-solo CSS comment for why. */
+.soloBtn.soloBtn-landscape{top:var(--mute-top);right:max(85px,calc(env(safe-area-inset-right) + 79px))}
 /* Reset (Sep 2026, offset corrected) — see the markup comment on
    #resetBtnLandscape. The real #reset button has no shared class of its
    own to hook into (unlike mute/metro), so this is .dawBtn (the plain
@@ -1092,16 +1108,14 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
        syncLandscapeMuteBtn() (see script) keeps its is-muted look and
        aria-label matched to whichever tile is currently focused. -->
   <button id="muteBtnLandscape" type="button" class="dawBtn muteBtn muteBtn-landscape" aria-label="Mute">M</button>
-  <!-- Solo, landscape (Sep 2026, direct request) — on the LEFT this time,
-       past the outer edge of the Play/tempo 2x2 grid (see
-       positionLandscapeTransport()'s comment for why that grid centers in
-       the black space on this side). Same forwarding pattern as
-       muteBtnLandscape above: click() the real per-tile solo button for
-       whichever tile is currently focused. Positioned in script
-       (positionLandscapeSoloBtn(), called alongside positionLandscapeTransport()
-       from the same ResizeObserver) since, like the transport grid itself,
-       its distance from the square depends on the square's own rendered
-       size — not something pure CSS can see. -->
+  <!-- Solo, landscape (Sep 2026 — moved off the left side into the same
+       right-hand cluster as metro/mute/reset: left of mute, under reset,
+       per direct request). Same forwarding pattern as muteBtnLandscape
+       above: click() the real per-tile solo button for whichever tile is
+       currently focused. Positioned in script (positionLandscapeMetroCluster(),
+       same function that places metro/mute/reset) since its distance from
+       the square depends on the square's own rendered size — not something
+       pure CSS can see. -->
   <button id="soloBtnLandscape" type="button" class="dawBtn soloBtn soloBtn-landscape" aria-label="Solo">S</button>
 </div>
 <main class="app">
@@ -1191,18 +1205,18 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
         <button id="focusMuteBtn" type="button" class="dawBtn focusMuteBtn" aria-label="Mute">M</button>
         <button id="focusSoloBtn" type="button" class="dawBtn focusSoloBtn" aria-label="Solo">S</button>
         <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
-        <!-- Instrument label + notation strip, grouped (Aug 2026) so the
-             label always sits directly above the notation image instead of
-             floating at a fixed distance from the bottom — the notation
-             image's rendered height varies by piece/width, so a fixed
-             bottom offset for the label would obscure it at some sizes and
-             leave a gap at others. Stacking them in one flex column instead
-             means the label's position is always "right above the image",
-             whatever height the image turns out to be. Sits below the two
-             corner buttons in stacking order (their dawBtn z-index:4 always
-             wins), so it never blocks either from being tapped. -->
+        <!-- Instrument title (Sep 2026, moved out of the bottom overlay below
+             to its own top-left position — real request, matches .tile-name's
+             move on the small squares. On desktop this sits to the right of
+             the manuscript button rather than under it — see the
+             .is-desktop .focus-label CSS override. -->
+        <div id="focusLabel" class="focus-label">Clave</div>
+        <!-- Notation strip: used to be grouped with the label above it in one
+             flex column (see .focus-bottom-overlay) so the label always sat
+             directly above the image regardless of its rendered height —
+             the label has its own fixed position now, so this is just the
+             image on its own. -->
         <div class="focus-bottom-overlay">
-          <div id="focusLabel" class="focus-label">Clave</div>
           <img id="notationStrip" class="notation-strip" alt="" hidden>
         </div>
       </div>
@@ -1376,7 +1390,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.28';
+const BUILD_VERSION='2.30';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2087,8 +2101,7 @@ new ResizeObserver(()=>{
   // (see its own comment) rather than a variable-width bar.
   if(landscapeClusterNeedsRecompute){
     positionLandscapeTransport();
-    positionLandscapeMetroCluster();
-    positionLandscapeSoloBtn(); // must run AFTER positionLandscapeTransport() — reads its rendered edge, see that function's own comment
+    positionLandscapeMetroCluster(); // now also places soloBtnLandscape — see that function's own comment
     landscapeClusterNeedsRecompute=false;
   }
 }).observe(landscapeFocusCanvas);
@@ -2472,6 +2485,7 @@ const engine=new WebCodecsVideoEngine({
 engine.muted=muted; // shared by reference — toggling muted[i] is automatically visible to the engine
 engine.soloDim=soloed.map(()=>false);
 engine.tileOrder=currentTileOrder(); // admin-console tile reorder (Sep 7 2026) — see currentTileOrder()'s comment and wc-engine.js's drawGridFromSource()
+engine.shouldFlipSelectedTile=shouldFlipGridSelected; // see that function's own comment, well below — read fresh on every render(), not pushed on every change
 
 function sizeFocusCanvas(){
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -2747,7 +2761,17 @@ function tileSource(i,w,h){const tw=w/TILE_COLS,th=h/TILE_ROWS;return [(i%TILE_C
 // their own geometry calls for, without duplicating the visual logic.
 function drawOneTile(ctx,i,w,h,dx,dy,S,Sh,anySolo){
   const [sx,sy,sw,sh]=tileSource(i,w,h);
-  ctx.drawImage(poster,sx,sy,sw,sh,dx,dy,S,Sh);
+  // Flip view's small-grid counterpart (Sep 2026) — see shouldFlipGridSelected()
+  // and the identical technique in wc-engine.js's drawGridFromSource(), which
+  // takes over once real video is decoding; this is just the poster/placeholder
+  // (pre-Play, or before the video for a freshly-selected tile has painted).
+  if(i===selected&&shouldFlipGridSelected()){
+    ctx.save();ctx.translate(dx+S,dy);ctx.scale(-1,1);
+    ctx.drawImage(poster,sx,sy,sw,sh,0,0,S,Sh);
+    ctx.restore();
+  }else{
+    ctx.drawImage(poster,sx,sy,sw,sh,dx,dy,S,Sh);
+  }
   if(muted[i]){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(dx,dy,S,Sh)}
   else if(anySolo&&!soloed[i]){ctx.fillStyle='rgba(130,130,130,.55)';ctx.fillRect(dx,dy,S,Sh)}
   ctx.strokeStyle=i===selected?'#63d7ff':'#050607';ctx.lineWidth=i===selected?4:2;ctx.strokeRect(dx+1,dy+1,S-2,Sh-2);
@@ -2831,6 +2855,24 @@ function selectTile(i){
 const FLIP_EXEMPT_RE=/kit|bass|coro/i;
 function syncFlipExemption(){
   document.documentElement.classList.toggle('flip-exempt-current',FLIP_EXEMPT_RE.test(NAMES[selected]));
+}
+// Whether the SMALL grid's currently-selected tile should mirror too (Sep
+// 2026, real request — "the corresponding small square needs flipping
+// also"). Same rule as the focus square (flipViewOn, mobile-only via
+// !IS_DESKTOP, same FLIP_EXEMPT_RE exemption) so the two always agree on
+// whether a given tile flips; the only difference is HOW each is flipped —
+// the focus square is one plain CSS transform on its whole canvas (see
+// .focus-video), while the small grid is one shared canvas holding all 8
+// tiles, so only the selected tile's own cell can flip, done at the actual
+// canvas-drawing level (see drawOneTile() above for the poster/placeholder
+// path, and wc-engine.js's drawGridFromSource() for the live-video path,
+// which reads this exact function via engine.shouldFlipSelectedTile — set
+// once, right after the engine is constructed, below). References
+// flipViewOn even though that's declared further down in this same script —
+// safe because this is only ever CALLED at draw time, well after the whole
+// script has finished running once.
+function shouldFlipGridSelected(){
+  return !IS_DESKTOP&&flipViewOn&&!FLIP_EXEMPT_RE.test(NAMES[selected]);
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
@@ -3067,19 +3109,6 @@ function positionLandscapeTransport(){
   const centeredLeft=Math.max(minLeft,(blackSpaceW-clusterTotal)/2);
   landscapeTransport.style.left=centeredLeft+'px';
 }
-// Solo, landscape (Sep 2026) — sits just past the Play/tempo grid's edge
-// closest to the square (mirroring resetBtnLandscape's own placement just
-// past the metro+mute pair on the right, see that comment), rather than
-// duplicating positionLandscapeTransport()'s square/inset/arrow math here:
-// simplest to just read back where that grid ACTUALLY landed
-// (getBoundingClientRect(), post-layout) and sit one GAP beyond its right
-// edge. Must run after positionLandscapeTransport() in the same recompute
-// pass — see the ResizeObserver callback above.
-function positionLandscapeSoloBtn(){
-  const GAP=10;
-  const rect=landscapeTransport.getBoundingClientRect();
-  soloBtnLandscape.style.left=(rect.right+GAP)+'px';
-}
 // Landscape metro/mute/reset cluster centering (v1.6, real report): sitting
 // tight in the exact screen corner read as cramped — wanted centered into
 // the black space beside the square instead. Unlike positionLandscapeTransport
@@ -3107,7 +3136,12 @@ function positionLandscapeMetroCluster(){
   const centeredRight=Math.max(minRight,(blackSpaceW-CLUSTER_W)/2);
   metroBtnLandscape.style.right=centeredRight+'px';
   muteBtnLandscape.style.right=centeredRight+'px';
+  // Solo (Sep 2026, moved here from its own former left-side placement —
+  // real request: "left of the mute button and under the reset button")
+  // shares reset's column, one cluster-width+gap further from the edge than
+  // metro/mute — same reasoning as reset originally: sits directly below it.
   resetBtnLandscape.style.right=(centeredRight+CLUSTER_W+GAP)+'px';
+  soloBtnLandscape.style.right=(centeredRight+CLUSTER_W+GAP)+'px';
 }
 // Reverted (Sep 2026): every tile lives in the single #gridControls grid on
 // both mobile and desktop now — see the CSS/markup comments near
@@ -4587,6 +4621,12 @@ async function playFromGesture(){
     if(!prepared){const ok=await ensurePrepared();if(!ok)return;}
     const proceed=await runCountIn(); // no-op (resolves true immediately) unless the count-in setting is on — see runCountIn()
     if(!proceed)return; // cancelled mid count-in (see cancelCountIn()) — don't start playback
+    // Count-in always leads into playback from the very top (Sep 12 2026) —
+    // a Pause then Play resumes from pausedPos everywhere else, but with
+    // Count-in on that would land the beat-1 click somewhere in the middle
+    // of a bar instead of on it. Mute/solo (muted/soloed arrays) are
+    // untouched here, exactly as before.
+    if(countInActive())pausedPos=0;
     await startPlaybackNow();
   }finally{startingPlayback=false;}
 }
@@ -4672,10 +4712,23 @@ async function reset(){
       engine.seekTo(0);
     }
     schedulePrefetchOnce();
-    if(fallbackMode){fallbackAudio.currentTime=0;await fallbackAudio.play();}
-    else{await unlockContext();startStems(0);}
-    playing=true;setPlayBtnLabel('Pause');badge.textContent='Playing · 100%';setStatus('Reset — mute/solo cleared, back to 100%, playing from the start.','good');
-    resetStallWatchdog();if(!raf)tick();
+    // Reset now runs the count-in too (Sep 12 2026), same as a manual Play
+    // tap does — mute/solo/tempo above are already cleared/reset
+    // unconditionally regardless of what happens here; this only gates the
+    // actual playback start. runCountIn() itself no-ops (resolves true
+    // immediately) unless the Count-in setting is on for this piece.
+    const proceed=await runCountIn();
+    if(proceed){
+      if(fallbackMode){fallbackAudio.currentTime=0;await fallbackAudio.play();}
+      else{await unlockContext();startStems(0);}
+      playing=true;setPlayBtnLabel('Pause');badge.textContent='Playing · 100%';setStatus('Reset — mute/solo cleared, back to 100%, playing from the start.','good');
+      resetStallWatchdog();if(!raf)tick();
+    }else{
+      // Cancelled mid count-in (e.g. a Play/Pause tap during it, see
+      // toggleFromGesture()) — the mute/solo/tempo reset above already
+      // happened and stays; just don't autoplay on top of it.
+      playing=false;setPlayBtnLabel('Play');badge.textContent='Paused';setStatus('Reset — mute/solo cleared, back to 100%.','good');
+    }
   }catch(err){
     console.error(err);
     playing=false;
@@ -5044,6 +5097,15 @@ let flipViewOn=(()=>{
 })();
 function applyFlipView(){
   document.documentElement.classList.toggle('flip-view-on',flipViewOn);
+  // The focus square's flip above is a plain CSS transform, so it updates
+  // itself instantly. The small grid's flip is baked in at canvas-draw time
+  // (see shouldFlipGridSelected()/drawGridFromSource()), so toggling the
+  // setting needs an explicit repaint here or it would silently wait for the
+  // next natural redraw (next Play, next tile switch) to actually show.
+  // paintAt() itself no-ops while genuinely playing (tick() already redraws
+  // every frame on its own), so this is only doing real work while paused.
+  if(engine.decodedFrameCount>0)paintAt(currentPos());
+  else drawPoster();
 }
 applyFlipView();
 if(flipViewToggle){
@@ -5080,6 +5142,14 @@ if(countInToggle){
   countInToggle.addEventListener('change',()=>{
     countInOn=countInToggle.checked;
     try{localStorage.setItem('mosaicCountIn',countInOn?'1':'0');}catch{}
+    // Turning Count-in on defaults the beat counter on too (Sep 12 2026) —
+    // forwards to metroBtn's own click() so metroActive/scheduling/the
+    // landscape mirror all pick up exactly the same side effects a real tap
+    // would (see metroBtnLandscape's own listener above for the same
+    // pattern). A no-op if the metronome's already on, or if metroReady()
+    // is false — metroBtn.click() won't fire its handler on a disabled
+    // button, same guard a real tap would hit.
+    if(countInOn&&!metroActive)metroBtn.click();
   });
 }
 let countingIn=false, countInTimers=[], countInSources=[], countInResolve=null;
@@ -5113,8 +5183,13 @@ function cancelCountIn(){
 // the clicks themselves are just as sample-accurate; the on-screen digit is
 // plain setTimeout against the same secondsPerBeat, which is more than
 // accurate enough for a number a human is reading, not an audio join.
+// Shared gate for "will a count-in actually run right now" — used both by
+// runCountIn() itself and by playFromGesture() (to decide whether a
+// Pause-then-Play should restart from position 0, see there) so the two
+// never disagree about when count-in is really in effect.
+function countInActive(){return countInOn&&metroReady()&&!fallbackMode;}
 async function runCountIn(){
-  if(!countInOn||!metroReady()||fallbackMode)return true; // fallbackMode has no Web Audio context to schedule clicks on — same bail scheduleMetroClicks() already takes
+  if(!countInActive())return true; // fallbackMode has no Web Audio context to schedule clicks on — same bail scheduleMetroClicks() already takes
   await unlockContext(); // needed before scheduling anything audible, same as startPlaybackNow() itself does
   await ensureMetroBuffers();
   if(!metroBuffersLoaded)return true; // click samples failed to load — skip the count-in but still proceed to Play
