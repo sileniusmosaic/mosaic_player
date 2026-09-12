@@ -119,6 +119,21 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .menu-links a.active{color:var(--accent)}
 .menu-sub{margin-top:22px}
 .rail-title{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1.5px;color:var(--brass);text-transform:uppercase;margin:0 0 10px}
+/* Settings menu (Sep 2026, mobile only for now — see the JS build notes near
+   flipViewOn): a per-user preference row with a standard iOS-style toggle
+   switch, same visual family as the rest of the burger menu. Whole section
+   hidden on desktop for this build — nothing here applies there yet. */
+.is-desktop .settings-menu-sub{display:none}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
+.settings-row:last-child{border-bottom:none}
+.settings-row-label{font-family:'Fraunces',serif;font-size:15.4px;color:var(--text)}
+.settings-row-sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+.ios-toggle{position:relative;display:inline-block;width:51px;height:31px;flex:0 0 auto}
+.ios-toggle input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.ios-toggle-track{position:absolute;inset:0;background:var(--panel2);border:1px solid var(--border);border-radius:999px;transition:background .2s ease}
+.ios-toggle-knob{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:var(--text);box-shadow:0 2px 4px rgba(0,0,0,.4);transition:transform .2s ease}
+.ios-toggle input:checked~.ios-toggle-track{background:var(--good);border-color:var(--good)}
+.ios-toggle input:checked~.ios-toggle-track .ios-toggle-knob{transform:translateX(20px)}
 .rail-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:3px;margin-bottom:8px;border:1px solid var(--border);background:var(--panel);cursor:pointer}
 .rail-item.active{border-color:var(--accent)}
 .rail-name{font-family:'Fraunces',serif;font-weight:600;font-size:14.3px}
@@ -126,6 +141,19 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .badge{font-size:13.2px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
 .focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:3px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
+/* Flip view (Sep 2026, mobile only — see the JS comment near flipViewOn):
+   mirrors the focus square's video horizontally so a right-handed player can
+   copy hand/finger position more naturally. Applied to the CANVAS only, not
+   its wrapper (.focus-wrap) — every label/button overlay is a separate
+   sibling/child element positioned independently, so they stay put and
+   readable regardless of this transform. Scoped to :not(.is-desktop)
+   defensively (the toggle itself is already hidden on desktop) so a flip
+   preference saved on a phone can never visually affect a desktop session on
+   the same browser. Deliberately NOT applied to .grid (the small-tile grid
+   canvas below) — flipping that would also need every tap/mute/solo hit-area
+   in #gridControls and each tile-name label repositioned/un-mirrored to
+   match, which felt like its own separate pass; see the build notes. */
+html:not(.is-desktop).flip-view-on .focus-video{transform:scaleX(-1)}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 /* Build version badge (Sep 2026, per direct request): a small, always-on
    marker over the focus square (portrait) and the landscape video area,
@@ -173,6 +201,16 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .soloBtn{left:4px}
 .muteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 .soloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
+/* Mobile mute/solo moved to the focus square (Sep 2026, per direct request):
+   the small per-tile M/S buttons above are now desktop-only. Still CREATED
+   for every tile on every platform in buildControls() — muteBtnLandscape and
+   the new focusMuteBtn/focusSoloBtn below both work by forwarding a click to
+   the real per-tile button (muteBtns[selected]/soloBtns[selected]).click()),
+   same single-source-of-truth pattern already used for landscape's mute —
+   so the underlying element has to exist even where it's never shown.
+   .click() fires normally on a display:none element, so hiding here is
+   purely visual and doesn't break that forwarding. */
+html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{display:none}
 /* Beat counter: top-right of the focus square (Aug 2026 — moved up from
    bottom-right so the notation overlay, now anchored to the bottom of the
    square, has that space free). Sized/colored differently from the
@@ -227,6 +265,17 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    deliberately keeps a cream/purple off/on distinction — this one was asked
    to just match mute, no on/off difference). */
 .manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+/* Focus-square mute/solo (Sep 2026, mobile portrait only — see the comment
+   above .muteBtn.is-muted for why the small per-tile buttons still exist in
+   the DOM but are hidden on mobile). Bottom corners so they don't collide
+   with manuscript/beat-counter at the top corners; same 55px size as those
+   two for an easy, confident tap target. Desktop keeps the classic per-tile
+   top-corner M/S buttons instead, so these are hidden there. */
+.focusMuteBtn{top:auto;bottom:10px;right:10px;left:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+.focusSoloBtn{top:auto;bottom:10px;left:10px;right:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+.focusMuteBtn.is-muted{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+.focusSoloBtn.is-solo{background:#ffd60a;color:#231a00;border-color:#231a00}
+.is-desktop .focusMuteBtn,.is-desktop .focusSoloBtn{display:none}
 .manuscriptBtn .manuscript-icon{width:72%;height:72%;fill:none;stroke:none}
 .manuscriptBtn .manuscript-icon .staff-line{stroke:var(--text);stroke-width:.8;opacity:.6}
 .manuscriptBtn .manuscript-icon .note-head{fill:var(--text);stroke:none}
@@ -630,6 +679,9 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
      height:100% on the canvas then resolves against that real number. */
   .landscape-video-area{flex:1 1 auto;min-height:0;position:relative;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);place-items:center}
   .landscape-focus-canvas{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;display:block;z-index:1}
+  /* Flip view in landscape — see the portrait .focus-video rule's comment for
+     the full explanation; same idea, same canvas-only scope. */
+  html.flip-view-on:not(.is-desktop) .landscape-focus-canvas{transform:scaleX(-1)}
   /* Mute dim (Sep 2026) — same idea as .focus-dim over the portrait focus
      square (see that rule and focusWrap.classList.toggle('is-muted',...)),
      just without a shared parent class to hang off of: this view's mute
@@ -1034,6 +1086,13 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
           </svg>
           <span id="metroNum" class="metro-num"></span>
         </button>
+        <!-- Focus-square mute/solo (Sep 2026, mobile portrait only) — see the
+             CSS comment above .focusMuteBtn for the full reasoning. Bottom
+             corners so they never collide with manuscript/beat-counter above.
+             Kept in sync by syncFocusMuteSoloBtns(), called from
+             updateFocusUI() same as landscape's muteBtnLandscape. -->
+        <button id="focusMuteBtn" type="button" class="dawBtn focusMuteBtn" aria-label="Mute">M</button>
+        <button id="focusSoloBtn" type="button" class="dawBtn focusSoloBtn" aria-label="Solo">S</button>
         <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
         <!-- Instrument label + notation strip, grouped (Aug 2026) so the
              label always sits directly above the notation image instead of
@@ -1139,6 +1198,23 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
       <p class="rail-title">Mosaics</p>
       <div id="mosaicRail"></div>
     </div>
+    <!-- Settings (Sep 2026, mobile only for this build — see .settings-menu-sub
+         CSS comment). First row: flip view, a standard iOS-style toggle
+         switch — see the JS comment near flipViewOn for what it does and why
+         it only mirrors the focus square, not the small tile grid. -->
+    <div class="menu-sub settings-menu-sub">
+      <p class="rail-title">Settings</p>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Flip view</div>
+          <div class="settings-row-sub">Mirrors the main square — easier to copy hand position</div>
+        </div>
+        <label class="ios-toggle">
+          <input type="checkbox" id="flipViewToggle">
+          <span class="ios-toggle-track"><span class="ios-toggle-knob"></span></span>
+        </label>
+      </div>
+    </div>
   </div>
 </main>
 <script src="mp4-demuxer.js"></script>
@@ -1182,7 +1258,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.23';
+const BUILD_VERSION='2.24';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1790,6 +1866,16 @@ landscapeArrowRight.addEventListener('click',()=>selectTile(tileAtSlot(tileSlotO
 // clicked, since the button is inside the initially-hidden landscape view).
 muteBtnLandscape.addEventListener('click',()=>{
   if(muteBtns[selected])muteBtns[selected].click();
+});
+// Portrait focus-square mute+solo (Sep 2026) — same forwarding pattern as
+// muteBtnLandscape above: click the real per-tile button for whichever tile
+// is currently focused, so all the actual toggle+refresh logic stays in one
+// place (the per-tile buttons' own click handlers in buildControls()).
+focusMuteBtn.addEventListener('click',()=>{
+  if(muteBtns[selected])muteBtns[selected].click();
+});
+focusSoloBtn.addEventListener('click',()=>{
+  if(soloBtns[selected])soloBtns[selected].click();
 });
 // Landscape reset (Sep 2026) — see the markup comment on #resetBtnLandscape:
 // forwards to the real #reset button, same single-source-of-truth pattern,
@@ -2622,6 +2708,7 @@ function updateFocusUI(){
   focusWrap.classList.toggle('is-muted',muted[selected]);
   focusWrap.classList.toggle('is-solo-dimmed',anySolo&&!soloed[selected]);
   syncLandscapeMuteBtn(); // landscape's one mute button always tracks whichever tile is now focused
+  syncFocusMuteSoloBtns(); // portrait focus square's own mute+solo, same idea as landscape's above
   syncLandscapeArrows(); // may have just reached (or left) either end
   // No manual reposition call needed here any more (Sep 2026 rewrite — see
   // the architecture note near the ResizeObserver setup, above): the arrows
@@ -2671,6 +2758,18 @@ function syncLandscapeMuteBtn(){
   // #landscapeFocusDim (see its CSS comment) since landscape has no per-tile
   // DOM to hang a class off of.
   landscapeFocusDim.classList.toggle('is-visible',isMuted);
+}
+// Portrait focus square's own mute+solo (Sep 2026) — same idea as
+// syncLandscapeMuteBtn() above, just tracking BOTH buttons (mobile portrait
+// gets a real Solo control here, unlike landscape which only ever had Mute).
+// Called from updateFocusUI() so it tracks a focus change and a mute/solo
+// toggle on the already-focused tile alike.
+function syncFocusMuteSoloBtns(){
+  const isMuted=muted[selected], isSolo=soloed[selected];
+  focusMuteBtn.classList.toggle('is-muted',isMuted);
+  focusMuteBtn.setAttribute('aria-label',(isMuted?'Unmute ':'Mute ')+NAMES[selected]);
+  focusSoloBtn.classList.toggle('is-solo',isSolo);
+  focusSoloBtn.setAttribute('aria-label',(isSolo?'Unsolo ':'Solo ')+NAMES[selected]);
 }
 // Shows only whichever direction actually leads to another square — see the
 // markup comment on #landscapeArrowLeft for why a disabled-but-visible arrow
@@ -2875,12 +2974,15 @@ function buildControls(){
     const name=NAMES[i];
     const t=document.createElement('div');t.className='tile';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',name+': select focus');
-    // Solo is desktop/mouse-only (a precision mixing tool); touch just gets
-    // quick Mute/unmute, so the Solo button is never created at all on touch
-    // — soloBtns[i] stays undefined there and every solo-aware code path
-    // already guards on that (soloed[] simply never becomes true on touch).
-    let solo=null;
-    if(IS_DESKTOP){solo=document.createElement('button');solo.type='button';solo.className='dawBtn soloBtn';solo.textContent='S';solo.setAttribute('aria-label','Solo '+name);}
+    // Solo used to be desktop/mouse-only (touch got quick Mute/unmute only) —
+    // now created unconditionally on every platform (Sep 2026), since mobile
+    // has its own solo control too now (see focusSoloBtn), just on the focus
+    // square rather than per-tile. Per-tile mute AND solo are still built for
+    // every tile on every platform regardless — see the CSS comment above
+    // .muteBtn.is-muted — just hidden by CSS on mobile instead of never
+    // created, so focusMuteBtn/focusSoloBtn's forwarding-click always has a
+    // real button to forward to.
+    const solo=document.createElement('button');solo.type='button';solo.className='dawBtn soloBtn';solo.textContent='S';solo.setAttribute('aria-label','Solo '+name);
     const mute=document.createElement('button');mute.type='button';mute.className='dawBtn muteBtn';mute.textContent='M';mute.setAttribute('aria-label','Mute '+name);
     const label=document.createElement('span');label.className='tile-name';label.textContent=name;
     t.appendChild(label);t.appendChild(tap);if(solo)t.appendChild(solo);t.appendChild(mute);
@@ -4756,6 +4858,36 @@ if(!ANALYTICS_EXCLUDED){
       sendAnalyticsPing('heartbeat');
     }
   },ANALYTICS_POLL_MS);
+}
+// Flip view (Sep 2026, mobile only — build scope, see CLAUDE.md/memory notes
+// for this round's changes). Mirrors the focus square horizontally so a
+// right-handed player can copy hand/finger position more naturally — the
+// actual transform lives in CSS (html.flip-view-on .focus-video /
+// .landscape-focus-canvas), scoped to :not(.is-desktop) there too, so this
+// JS only needs to read the saved preference and toggle one class. A plain
+// client-side preference (localStorage, like notrack above) — no admin/
+// server involvement, no per-piece config.
+//
+// Default is OFF (unflipped, today's existing orientation, unchanged for
+// everyone who never opens Settings) — a judgment call made without asking,
+// since it seemed safer to leave everyone's view exactly as it already is
+// until they opt in, rather than risk quietly mirroring the video for every
+// existing user. Flip if this reads backwards from what was actually wanted
+// — it's a one-line change (default true instead of false below).
+let flipViewOn=(()=>{
+  try{return localStorage.getItem('mosaicFlipView')==='1';}catch{return false;}
+})();
+function applyFlipView(){
+  document.documentElement.classList.toggle('flip-view-on',flipViewOn);
+}
+applyFlipView();
+if(flipViewToggle){
+  flipViewToggle.checked=flipViewOn;
+  flipViewToggle.addEventListener('change',()=>{
+    flipViewOn=flipViewToggle.checked;
+    try{localStorage.setItem('mosaicFlipView',flipViewOn?'1':'0');}catch{}
+    applyFlipView();
+  });
 }
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play to begin.');
