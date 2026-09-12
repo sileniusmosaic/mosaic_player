@@ -1411,7 +1411,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.32';
+const BUILD_VERSION='2.33';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -4461,14 +4461,25 @@ async function switchMosaic(id){
     lastLoopPos=null;
     // Beat counter defaults to OFF for every piece switch (Aug 30 2026 — was
     // defaulting ON) — tap to switch it on. Still disabled outright for a
-    // piece with no beat data at all. Sep 12 2026: EXCEPT when Count-in is
-    // enabled — then the metronome defaults back ON for the new piece too
-    // (matching the same default the Count-in toggle itself applies), so a
-    // piece switch doesn't quietly undo it. Still just a default: the user
-    // switching it off manually sticks for the rest of that piece, same as
-    // always — only a fresh piece/Reset/re-toggling Count-in resets it.
+    // piece with no beat data at all.
+    // Sep 12 2026, corrected same day: an earlier version of this also
+    // force-defaulted the metronome back ON on every switch whenever
+    // Count-in was enabled — real feedback was that this was too eager: a
+    // manual "off" should just carry over to the next piece untouched, not
+    // get silently re-defaulted back on every time. So with Count-in on,
+    // metroActive is now left exactly as it was (only forced off if the new
+    // piece has no beat data to run it on at all) — Count-in's own click
+    // countdown (runCountIn()) is unaffected either way, since it always
+    // plays independently of metroActive; only the LIVE metronome ticking
+    // through the piece afterward respects the carried-over state. With
+    // Count-in off, the long-standing default-OFF-per-switch behavior above
+    // is unchanged.
     metroBtn.disabled=!metroReady();
-    setMetroActive(countInOn&&metroReady());
+    if(countInOn){
+      if(!metroReady()&&metroActive)setMetroActive(false);
+    }else{
+      setMetroActive(false);
+    }
     if(ctx)ensureGains(true);
 
     document.title='Mosaic — '+cfg.label;
@@ -4732,15 +4743,18 @@ async function reset(){
   muted=Array(TILE_COUNT).fill(false);
   soloed=Array(TILE_COUNT).fill(false);
   refreshSoloMuteState();
-  // Reset (Sep 4 2026) — beat counter goes back to its own default too, same
-  // as a fresh piece switch does (see switchMosaic()'s setMetroActive() call
-  // above): "reset" should mean tempo 100% AND every other toggle back to
-  // its starting state, not tempo alone. stopStems() below already cancels
-  // any clicks actually scheduled; this just fixes the button's own visuals.
-  // Sep 12 2026: that default is now OFF unless Count-in is on, in which
-  // case it's ON — same exception switchMosaic() and the Count-in toggle
-  // itself apply, so Reset doesn't quietly undo it either.
-  setMetroActive(countInOn&&metroReady());
+  // Reset (Sep 4 2026) — beat counter goes back to its own default (off)
+  // too, same as a fresh piece switch does: "reset" should mean tempo 100%
+  // AND every other toggle back to its starting state, not tempo alone.
+  // stopStems() below already cancels any clicks actually scheduled; this
+  // just fixes the button's own visuals.
+  // Sep 12 2026, corrected same day: with Count-in on, Reset no longer
+  // touches metroActive at all — real feedback was that forcing it back on
+  // (an earlier version of this line did that) undid a manual "off" the
+  // moment Reset ran, when the user's expectation is that a manual choice
+  // sticks through a restart. Reset still always runs the count-in itself
+  // (see runCountIn() below) independent of this either way.
+  if(!countInOn)setMetroActive(false);
   cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;
   try{
     if(!prepared){
@@ -5056,13 +5070,16 @@ sizeFocusCanvas();
 document.title='Mosaic — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
-// Beat counter starts OFF on page load too (Aug 30 2026 — was defaulting ON),
-// matching switchMosaic()'s own default — still disabled outright when the
-// initial piece has no beat data. Sep 12 2026: unless Count-in is already on
-// from a previous visit (localStorage), in which case it starts ON here too,
-// same exception every other default-setting call site applies.
+// Beat counter starts OFF on page load too (Aug 30 2026 — was defaulting
+// ON), matching switchMosaic()'s own default — still disabled outright when
+// the initial piece has no beat data. Sep 12 2026: this default is
+// deliberately unconditional (not tied to Count-in) — see switchMosaic()'s
+// own comment on the same call for why a fresh-start default was pulled
+// back out of Count-in mode; the ONE place Count-in still nudges the
+// metronome on is the moment the Count-in setting itself is switched on
+// (see the countInToggle change handler further down).
 metroBtn.disabled=!metroReady();
-setMetroActive(countInOn&&metroReady());
+setMetroActive(false);
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
 buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
@@ -5166,10 +5183,19 @@ function applyFlipView(){
   // The focus square's flip above is a plain CSS transform, so it updates
   // itself instantly. The small grid's flip is baked in at canvas-draw time
   // (see shouldFlipGridSelected()/drawGridFromSource()), so toggling the
-  // setting needs an explicit repaint here or it would silently wait for the
-  // next natural redraw (next Play, next tile switch) to actually show.
-  // paintAt() itself no-ops while genuinely playing (tick() already redraws
-  // every frame on its own), so this is only doing real work while paused.
+  // setting needs an explicit repaint here while PAUSED, or it would
+  // silently wait for the next natural redraw (next Play, next tile
+  // switch) to actually show. While actually playing, tick() is already
+  // redrawing every single frame on its own and will pick up the new flip
+  // state on its very next frame with no help needed here — bug fixed Sep
+  // 12 2026, real report: this used to call paintAt() unconditionally,
+  // including while playing, on the mistaken belief that paintAt() itself
+  // was a safe no-op there. It isn't: paintAt() shows the buffering
+  // spinner immediately, then its internal retry loop bails out as soon as
+  // it sees playing==true, WITHOUT ever hiding the spinner again — leaving
+  // it stuck on screen over a video that was actually still playing fine
+  // underneath, until something unrelated (e.g. Reset) happened to hide it.
+  if(playing)return;
   if(engine.decodedFrameCount>0)paintAt(currentPos());
   else drawPoster();
 }
