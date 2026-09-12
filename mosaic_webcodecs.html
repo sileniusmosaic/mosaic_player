@@ -141,18 +141,17 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
 .badge{font-size:13.2px;border:1px solid var(--border);border-radius:999px;padding:6px 8px;white-space:nowrap;background:var(--panel)}
 .focus-wrap{position:relative;aspect-ratio:1/1;background:#030405;border:3px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .focus-video{position:absolute;inset:0;width:100%;height:100%;display:block;background:#030405}
-/* Flip view (Sep 2026, mobile only — see the JS comment near flipViewOn):
+/* Flip view (Sep 2026, originally mobile only; extended to desktop too Sep
+   12 2026 per direct request — see the JS comment near flipViewOn):
    mirrors the focus square's video horizontally so a right-handed player can
    copy hand/finger position more naturally. Applied to the CANVAS only, not
    its wrapper (.focus-wrap) — every label/button overlay is a separate
    sibling/child element positioned independently, so they stay put and
-   readable regardless of this transform. Scoped to :not(.is-desktop)
-   defensively (the toggle itself is already hidden on desktop) so a flip
-   preference saved on a phone can never visually affect a desktop session on
-   the same browser. Deliberately NOT applied to .grid (the small-tile grid
-   canvas below) — flipping that would also need every tap/mute/solo hit-area
-   in #gridControls and each tile-name label repositioned/un-mirrored to
-   match, which felt like its own separate pass; see the build notes.
+   readable regardless of this transform. The small-tile grid gets the same
+   treatment now too (see shouldFlipGridSelected(), no longer desktop-
+   excluded either) — flipping that needed a per-tile canvas-level flip
+   rather than a CSS transform, since only ONE tile in the shared grid canvas
+   should mirror; see wc-engine.js's shouldFlipSelectedTile.
    .flip-exempt-current (Sep 2026, real request): kit, bass and coro/vocal
    tiles never mirror even when flip view is on, across all three pieces —
    flipping a two-handed instrument that isn't about left/right hand
@@ -161,7 +160,7 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    FLIP_EXEMPT_RE) whenever the focused tile changes, not baked into any
    per-piece config, so it applies uniformly to Abakuá/Congo/Flip Swing and
    to anything named similarly in a future piece too. */
-html:not(.is-desktop).flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
+html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
 .focus-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none;display:none}.focus-wrap.is-muted .focus-dim{display:block}
 /* Build version badge (Sep 2026, per direct request): a small, always-on
    marker over the focus square (portrait) and the landscape video area,
@@ -250,6 +249,20 @@ html:not(.is-desktop).flip-view-on:not(.flip-exempt-current) .focus-video{transf
    .click() fires normally on a display:none element, so hiding here is
    purely visual and doesn't break that forwarding. */
 html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{display:none}
+/* Desktop's per-tile Solo/Mute buttons, real report Sep 12 2026: still the
+   real always-visible buttons (never hidden on desktop, see the rule just
+   above), but relocated from .dawBtn's default top corners down to the
+   bottom corners — solo bottom-left, mute bottom-right — because the top
+   corners collided with .tile-name once that moved to top-left (v2.29/2.30
+   above), the button literally sitting on top of the instrument name. No
+   separate M/S badge needed here on top of this (see the suppression right
+   below): the button itself already shows its own on/off ring
+   (.soloBtn.is-solo/.muteBtn.is-muted), so a second icon in the same corner
+   would just be redundant clutter — different from mobile, where the real
+   buttons are hidden and the badge is the ONLY visual indicator. */
+.is-desktop .tile .soloBtn{top:auto;bottom:4px;left:4px}
+.is-desktop .tile .muteBtn{top:auto;bottom:4px;right:4px}
+.is-desktop .tile.is-muted::after,.is-desktop .tile.is-solo::before{content:none}
 /* Beat counter: top-right of the focus square (Aug 2026 — moved up from
    bottom-right so the notation overlay, now anchored to the bottom of the
    square, has that space free). Sized/colored differently from the
@@ -1398,7 +1411,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.31';
+const BUILD_VERSION='2.32';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2885,21 +2898,23 @@ function syncFlipExemption(){
 }
 // Whether the SMALL grid's currently-selected tile should mirror too (Sep
 // 2026, real request — "the corresponding small square needs flipping
-// also"). Same rule as the focus square (flipViewOn, mobile-only via
-// !IS_DESKTOP, same FLIP_EXEMPT_RE exemption) so the two always agree on
-// whether a given tile flips; the only difference is HOW each is flipped —
-// the focus square is one plain CSS transform on its whole canvas (see
-// .focus-video), while the small grid is one shared canvas holding all 8
-// tiles, so only the selected tile's own cell can flip, done at the actual
-// canvas-drawing level (see drawOneTile() above for the poster/placeholder
-// path, and wc-engine.js's drawGridFromSource() for the live-video path,
-// which reads this exact function via engine.shouldFlipSelectedTile — set
-// once, right after the engine is constructed, below). References
-// flipViewOn even though that's declared further down in this same script —
-// safe because this is only ever CALLED at draw time, well after the whole
-// script has finished running once.
+// also"; desktop was excluded at first, then included too — Sep 12 2026
+// direct request — since flip view as a whole now applies on desktop, same
+// as the focus square). Same rule as the focus square (flipViewOn, same
+// FLIP_EXEMPT_RE exemption) so the two always agree on whether a given tile
+// flips; the only difference is HOW each is flipped — the focus square is
+// one plain CSS transform on its whole canvas (see .focus-video), while the
+// small grid is one shared canvas holding all 8 tiles, so only the selected
+// tile's own cell can flip, done at the actual canvas-drawing level (see
+// drawOneTile() above for the poster/placeholder path, and wc-engine.js's
+// drawGridFromSource() for the live-video path, which reads this exact
+// function via engine.shouldFlipSelectedTile — set once, right after the
+// engine is constructed, below). References flipViewOn even though that's
+// declared further down in this same script — safe because this is only
+// ever CALLED at draw time, well after the whole script has finished
+// running once.
 function shouldFlipGridSelected(){
-  return !IS_DESKTOP&&flipViewOn&&!FLIP_EXEMPT_RE.test(NAMES[selected]);
+  return flipViewOn&&!FLIP_EXEMPT_RE.test(NAMES[selected]);
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
@@ -5126,14 +5141,16 @@ if(!ANALYTICS_EXCLUDED){
     }
   },ANALYTICS_POLL_MS);
 }
-// Flip view (Sep 2026, mobile only — build scope, see CLAUDE.md/memory notes
-// for this round's changes). Mirrors the focus square horizontally so a
-// right-handed player can copy hand/finger position more naturally — the
-// actual transform lives in CSS (html.flip-view-on .focus-video /
-// .landscape-focus-canvas), scoped to :not(.is-desktop) there too, so this
-// JS only needs to read the saved preference and toggle one class. A plain
-// client-side preference (localStorage, like notrack above) — no admin/
-// server involvement, no per-piece config.
+// Flip view (Sep 2026, originally mobile only; extended to desktop too Sep
+// 12 2026 per direct request — see CLAUDE.md/memory notes for build scope
+// history). Mirrors the focus square horizontally so a right-handed player
+// can copy hand/finger position more naturally — the actual transform lives
+// in CSS (html.flip-view-on .focus-video; the landscape-only
+// .landscape-focus-canvas rule stays :not(.is-desktop), since desktop never
+// shows that phone-rotated view at all), so this JS only needs to read the
+// saved preference and toggle one class. A plain client-side preference
+// (localStorage, like notrack above) — no admin/server involvement, no
+// per-piece config.
 //
 // Default is OFF (unflipped, today's existing orientation, unchanged for
 // everyone who never opens Settings) — a judgment call made without asking,
