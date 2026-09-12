@@ -283,6 +283,15 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
 .metroBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 .metroBtn.is-active .metro-icon{display:none}
 .metroBtn.is-active .metro-num{display:block}
+/* Count-in (Sep 2026): borrows the exact same digit slot as the live beat
+   counter above ("display it just as you would in the metronome button")
+   without touching metroActive/is-active — a piece can have the beat
+   counter toggled off and still show a count-in, and the two must never be
+   confused with each other visually, hence a separate class rather than
+   reusing .is-active. Removed again the instant the count-in ends or is
+   cancelled — see runCountIn()/cancelCountIn() in the script. */
+.metroBtn.is-counting-in .metro-icon{display:none}
+.metroBtn.is-counting-in .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
 /* Manuscript toggle (Aug 2026): top-left of the focus square, mirroring the
    beat counter at top-right. Turns the notation overlay (now anchored to
@@ -1302,6 +1311,21 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
           <span class="ios-toggle-track"><span class="ios-toggle-knob"></span></span>
         </label>
       </div>
+      <!-- Count-in (Sep 2026): one bar of clicks (3 or 4 depending on the
+           piece's own beatsPerBar) before playback actually starts, counted
+           out in the same digit slot the beat counter uses — see the JS
+           comment near countInOn for exactly when this does and doesn't
+           fire. Defaults OFF, same reasoning as the beat counter itself. -->
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Count-in</div>
+          <div class="settings-row-sub">One bar of clicks before Play actually starts</div>
+        </div>
+        <label class="ios-toggle">
+          <input type="checkbox" id="countInToggle">
+          <span class="ios-toggle-track"><span class="ios-toggle-knob"></span></span>
+        </label>
+      </div>
     </div>
   </div>
   <!-- Version badge (Sep 2026): moved off the focus square, see the CSS
@@ -1352,7 +1376,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.27';
+const BUILD_VERSION='2.28';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -4104,6 +4128,7 @@ function setTempoButtonsDisabled(disabled){
 // logic in changeTempoImpl().
 async function changeTempo(percent){
   percent=+percent;if(!TEMPO_PRESETS.includes(percent)||percent===tempoPercent||bankBusy)return;
+  cancelCountIn(); // a tempo change mid count-in should win immediately, not queue behind it
   if(!prepared){tempoPercent=percent;updateTempoUI();badge.textContent='Ready to start';setStatus(percent+'% selected. Tap Play to prepare and start.');return;}
   bankBusy=true;setTempoButtonsDisabled(true);
   // Free up whatever bandwidth a background prefetch is still using for some
@@ -4311,6 +4336,7 @@ function prefetchTempoBanks(){
 // to a piece visited earlier this session is instant, no re-fetch/re-decode.
 async function switchMosaic(id){
   if(!MOSAICS[id]||id===mosaicId||switchingMosaic)return;
+  cancelCountIn(); // a piece switch mid count-in should win immediately, not queue behind it
   switchingMosaic=true;
   // Same reasoning as Reset: a tempo switch or first prepare stuck on the
   // OLD piece must not go on holding bankBusy/preparing (and the disabled
@@ -4559,16 +4585,24 @@ async function playFromGesture(){
   startingPlayback=true;
   try{
     if(!prepared){const ok=await ensurePrepared();if(!ok)return;}
+    const proceed=await runCountIn(); // no-op (resolves true immediately) unless the count-in setting is on — see runCountIn()
+    if(!proceed)return; // cancelled mid count-in (see cancelCountIn()) — don't start playback
     await startPlaybackNow();
   }finally{startingPlayback=false;}
 }
 function pause(){if(!playing)return;pausedPos=currentPos();playing=false;if(fallbackMode)fallbackAudio.pause();else stopStems();setPlayBtnLabel('Play');badge.textContent='Paused';cancelAnimationFrame(raf);raf=0;bufferingSpinner.hidden=true;updateUI()}
-function toggleFromGesture(){if(playing)pause();else playFromGesture()}
+// A tap during the count-in itself (playing is still false at that point,
+// so this would otherwise fall to the playFromGesture() branch and just be
+// silently swallowed by its startingPlayback guard) cancels it instead —
+// leaving someone stuck watching a count-in they didn't mean to start, with
+// no way to stop it, would be worse than just letting a second tap abort it.
+function toggleFromGesture(){if(countingIn){cancelCountIn();return;}if(playing)pause();else playFromGesture()}
 // Reset is a full "start over": clears every Mute and Solo, drops back to
 // 100% tempo (re-preparing that bank/video first if a different tempo was
 // active), and immediately starts playing again from position 0 — not just
 // clearing state and sitting paused on the poster frame like it used to.
 async function reset(){
+  cancelCountIn(); // Reset mid count-in should win immediately, not queue behind it
   resetBtn.disabled=true;
   // A tempo switch (or the very first prepare) already in flight used to make
   // Reset bail out and do nothing at all — fine when that load was seconds
@@ -5019,6 +5053,111 @@ if(flipViewToggle){
     try{localStorage.setItem('mosaicFlipView',flipViewOn?'1':'0');}catch{}
     applyFlipView();
   });
+}
+// Count-in (Sep 2026, real request — was parked during the v2.24 mobile
+// round pending its own pass). One bar of clicks (beatsPerBar of them —
+// 3 or 4 depending on the piece) before playback actually starts, counted
+// down in the exact same digit slot the live beat counter uses (see the
+// .metroBtn.is-counting-in CSS), everything else still sitting paused on
+// its poster frame — same picture as "Tap Play to start", just with a
+// number ticking in the corner instead of the metronome icon.
+//
+// Deliberately wired into ONLY playFromGesture() (the actual Play-button
+// tap/spacebar), NOT switchMosaic()'s autoplay-resume and NOT reset() —
+// both of those call startStems()/startPlaybackNow() directly, unchanged.
+// A count-in on every piece switch or every Reset would slow down exactly
+// the two actions this app has otherwise gone out of its way to make feel
+// instant — this is a judgment call, not confirmed with him, and easy to
+// extend later (call runCountIn() from either of those spots too) if he
+// wants it there as well.
+//
+// Default OFF, same reasoning as the beat counter itself.
+let countInOn=(()=>{
+  try{return localStorage.getItem('mosaicCountIn')==='1';}catch{return false;}
+})();
+if(countInToggle){
+  countInToggle.checked=countInOn;
+  countInToggle.addEventListener('change',()=>{
+    countInOn=countInToggle.checked;
+    try{localStorage.setItem('mosaicCountIn',countInOn?'1':'0');}catch{}
+  });
+}
+let countingIn=false, countInTimers=[], countInSources=[], countInResolve=null;
+// Real-time cancel, not just "stop scheduling more" — a fast double-tap of
+// Play/Pause, or a tempo/piece change/Reset landing mid-count (see the
+// cancelCountIn() calls at the top of changeTempo()/switchMosaic()/reset())
+// must be able to abort cleanly: kill every pending setTimeout, stop+
+// disconnect every click source already scheduled, hand the beat-counter
+// digit slot back to whatever updateMetro() would otherwise be showing, AND
+// resolve runCountIn()'s own pending promise (countInResolve) so that
+// function's await unblocks instead of hanging forever — a plain
+// clearTimeout on the promise's own resolver timer would otherwise leave
+// runCountIn() (and playFromGesture() awaiting it) stuck permanently.
+function cancelCountIn(){
+  if(!countingIn)return;
+  countingIn=false;
+  countInTimers.forEach(clearTimeout);countInTimers=[];
+  countInSources.forEach(s=>{try{s.stop()}catch{}try{s.disconnect()}catch{}});countInSources=[];
+  metroBtn.classList.remove('is-counting-in');metroBtnLandscape.classList.remove('is-counting-in');
+  if(countInResolve){const r=countInResolve;countInResolve=null;r();}
+}
+// Returns true when playFromGesture() should go ahead and actually start
+// playback, false when the count-in was cancelled mid-way (see
+// cancelCountIn() above) and playback must NOT start. Resolves immediately
+// with true (no sound/visual at all) if the setting's off, the piece has no
+// beatsPerBar configured (metroReady()), or the click samples failed to
+// load — the last of those matches ensureMetroBuffers()'s own established
+// "beat counter stays visual-only" fallback rather than silently blocking
+// Play. Audio scheduling reuses the exact absolute-AudioContext-time
+// technique scheduleMetroClicks() already uses for the live metronome, so
+// the clicks themselves are just as sample-accurate; the on-screen digit is
+// plain setTimeout against the same secondsPerBeat, which is more than
+// accurate enough for a number a human is reading, not an audio join.
+async function runCountIn(){
+  if(!countInOn||!metroReady()||fallbackMode)return true; // fallbackMode has no Web Audio context to schedule clicks on — same bail scheduleMetroClicks() already takes
+  await unlockContext(); // needed before scheduling anything audible, same as startPlaybackNow() itself does
+  await ensureMetroBuffers();
+  if(!metroBuffersLoaded)return true; // click samples failed to load — skip the count-in but still proceed to Play
+  const beatsPerBar=cfg.beatsPerBar;
+  // Same two branches as computeMetroBeatTimes()/updateMetro() — mirrors
+  // their math exactly so the count-in's tempo always matches the live
+  // metronome's, at whatever tempo preset is currently selected.
+  let secondsPerBeat;
+  if(cfg.bars){
+    const cyc=(buffers[0]&&buffers[0].duration)||videoCycle||LOOP_END;
+    secondsPerBeat=cyc/(cfg.beatsPerBar*cfg.bars);
+  }else{
+    secondsPerBeat=(60/cfg.bpm)*(100/tempoPercent);
+  }
+  countingIn=true;
+  metroBtn.classList.add('is-counting-in');metroBtnLandscape.classList.add('is-counting-in');
+  const lead=0.05; // small fixed head start, same idea as startStems()'s own +0.02s
+  const startCtx=ctx.currentTime+lead;
+  const startWall=performance.now()+lead*1000;
+  for(let i=0;i<beatsPerBar;i++){
+    const buf=i===0?metroBuffers.accent:metroBuffers.normal;
+    if(buf){
+      const src=ctx.createBufferSource();src.buffer=buf;src.connect(metroGain);
+      src.start(startCtx+i*secondsPerBeat);
+      countInSources.push(src);
+    }
+    const t=setTimeout(()=>{
+      if(!countingIn)return;
+      metroNum.textContent=String(i+1);metroNumLandscape.textContent=String(i+1);
+    },Math.max(0,startWall+i*secondsPerBeat*1000-performance.now()));
+    countInTimers.push(t);
+  }
+  const totalMs=lead*1000+beatsPerBar*secondsPerBeat*1000;
+  await new Promise(res=>{
+    countInResolve=res;
+    const t=setTimeout(res,totalMs);
+    countInTimers.push(t);
+  });
+  countInResolve=null;
+  if(!countingIn)return false; // cancelled while waiting — playFromGesture() must not start playback
+  countingIn=false;
+  metroBtn.classList.remove('is-counting-in');metroBtnLandscape.classList.remove('is-counting-in');
+  return true;
 }
 bufferingSpinner.hidden=false; // same reasoning as switchMosaic() — spinner covers the initial video fetch, not just the post-fetch decode wait
 setStatus('WebCodecs build: one decode pipeline drives both views — audio is the master clock, video is always redrawn to match it. Tap Play to begin.');
