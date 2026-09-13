@@ -1649,7 +1649,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.51';
+const BUILD_VERSION='2.52';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1698,21 +1698,22 @@ const MOSAICS={
     // above, which is the full sheet-music page(s) shown further down the
     // page. Placeholder (Aug 29 2026): same one static image on all three
     // pieces for now — the real plan is 23 per-instrument strips (8 Abakuá +
-    // 8 Congo + 7 Flip Swing), swapped as the focused tile changes. Clave
-    // and Bembé (indices 0-1 below — first real per-tile notation strips
-    // for Abakuá, Sep 9 2026) now replace the placeholder; Cata, Erikundi,
-    // Quinto, Conga, Tumba and Coro (indices 2-7) still fall back to it.
+    // 8 Congo + 7 Flip Swing), swapped as the focused tile changes. Clave and
+    // Bembé got real art first (Sep 9 2026) but it was pulled Sep 10 2026
+    // (his own commit 0659cd9, files deleted — see git history if the old
+    // art is ever needed again) after it started 404ing live. Sep 13 2026,
+    // real request ("abakua Quinto conga... pngs ready to go... always
+    // replace placeholder", then "full set please" once he confirmed the
+    // rest were sitting ready too): Clave, Bembé, Erikundi, Quinto, Conga and
+    // Tumba (indices 0,1,3,4,5,6) all restored/added at once, sourced from
+    // his "Scores/Mosaic Scores" Google Drive folder — renamed on his end to
+    // match this repo's NN_instrument_abakua.png convention (several of the
+    // source files were named abakua_NN_instrument.png, segment order
+    // swapped). Only Cata (2) and Coro (7) still fall through to the
+    // placeholder — no art exists for either yet anywhere in that Drive
+    // folder (Cata has only an .svg, no .png; Coro has nothing at all).
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    // Clave/Bembé entries removed Sep 10 2026 — 01_clave_abakua.png and
-    // 02_bembe_abakua.png were deleted from the repo (his own commit
-    // 0659cd9), so these were pointing at 404s and rendering as broken
-    // images on the live site (browser alt-text box) instead of falling
-    // through to notationStrip. Leaving this empty lets both correctly
-    // fall through to notationStrip -> GLOBAL_NOTATION_FALLBACK (the
-    // Mosaic wordmark) below until real per-tile art replaces it — Bembé
-    // still gets its admin-uploaded bars 6+19 KV variant via
-    // cfg.notationVariantsByIndex ahead of this, just no 'all' base yet.
-    notationStripByIndex:{},
+    notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png',3:'Mosaic/Abakua/04_erikundi_abakua.png',4:'Mosaic/Abakua/05_quinto_abakua.png',5:'Mosaic/Abakua/06_conga_abakua.png',6:'Mosaic/Abakua/07_tumba_abakua.png'},
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
     // bundled into the git repo/Worker static assets while every other
