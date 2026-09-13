@@ -783,9 +783,18 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    this element's own display value. Purely a visual readout, kept in sync
    every frame by updateUI() (see the JS comment there) — not an
    interactive scrubber, unlike the real #timeline input it mirrors. */
-.mini-progress{display:flex;align-items:center;width:50%;max-width:340px;margin:0 auto}
+/* Height fix (Sep 2026): the tick/track row sits between two .focus-column
+   flex gaps (8px each), so adding this element between focus-stack and
+   #gridStageMobile widened the page by gap+height+gap regardless of how
+   tall the row itself is (measured +20px at 12px tick height). Negative
+   top/bottom margin here cancels exactly one of those two gaps back out
+   (-8px matches the 8px .focus-column gap), so the row's real footprint on
+   the page is just its own height again — restoring the original portrait
+   page height once the tick is also shortened below. Left/right stay auto
+   to keep centering. */
+.mini-progress{display:flex;align-items:center;width:50%;max-width:340px;margin:-8px auto}
 .is-desktop .mini-progress{display:none}
-.mini-progress-tick{width:2px;height:12px;flex:0 0 auto;background:var(--accent-blue);border-radius:1px}
+.mini-progress-tick{width:2px;height:8px;flex:0 0 auto;background:var(--accent-blue);border-radius:1px}
 .mini-progress-track{position:relative;flex:1;height:2px;margin:0 4px;background:rgba(109,197,255,.32);border-radius:1px;overflow:hidden}
 .mini-progress-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:var(--accent-blue)}
 /* flex-basis tightened to exactly match its own content — 520px focus-wrap +
@@ -1009,8 +1018,26 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    Font bumped 10% over .focus-label's own 15.4px, per earlier direct
    feedback. Same dark-badge look as .focus-label/.tile-name elsewhere in
    the app for visual consistency. */
-.landscape-focus-label-anchor{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;position:relative;pointer-events:none;z-index:3}
-.landscape-notation-label{position:absolute;left:10px;top:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:16.94px;color:var(--text);pointer-events:none}
+.landscape-focus-label-anchor{grid-area:1/1;height:100%;width:auto;max-width:100%;aspect-ratio:1/1;position:relative;pointer-events:none;z-index:3;container-type:size}
+/* Indirectly-proportionate label size (Sep 2026): direct feedback that the
+   16.94px flat size read too large. A size keyed directly (linearly) to the
+   focus square (via cqw/cqh against the anchor above, which container-type:
+   size turns into a query container exactly matching the square) would fix
+   that case but overcorrects for pieces with a tall notation band, where the
+   square gets small and pure proportionality would shrink the label past
+   legibility. So this is an affine (not proportional) function of the
+   square's size — a flat px floor plus a shallow per-cqw slope, rather than
+   a plain multiple of the square's size — so it barely moves once the
+   square is already small, and still tapers down (rather than staying flat)
+   once the square is large. 13px floor matches the commonly-cited practical
+   minimum for non-decorative UI text (iOS HIG's smallest interface text is
+   10pt, about 13px; Material Design's minimum body text is 14sp) with a
+   15px ceiling so it never grows back past the size that read as "too
+   large" here. Plain 15px first as the fallback for browsers without
+   container query unit support — dropped as an invalid declaration (not
+   applied) by any browser that understands cqw, so only one of the two
+   ever takes effect. */
+.landscape-notation-label{position:absolute;left:10px;top:10px;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15px;font-size:clamp(13px,12.7px + 0.65cqw,15px);color:var(--text);pointer-events:none}
 /* Landscape metronome (Aug 31 2026) — see the markup comment on
    #metroBtnLandscape. Only top/right are overridden (same safe-area-aware
    treatment as the label above, mirrored to the opposite corner); every
@@ -1691,7 +1718,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.54';
+const BUILD_VERSION='2.55';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
