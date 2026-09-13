@@ -644,7 +644,13 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    square, only each button's own shape/size/color changed, not its position
    — justify-items:center (above) keeps each now-smaller circle centered in
    its (still wider) 1fr column instead of stretching to fill it. */
-.tempo-buttons button{font:inherit;border:2px solid var(--text);border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;color:var(--text);font-size:13.2px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
+/* Text size bumped +20% Sep 13 2026 (real request — "now do the same with
+   the 50 75 100", following the same-day icon-enlarging pass on every other
+   transport button — see the .play-icon/.reset-icon/.settings-icon comment
+   above): 13.2px -> 15.84px, same old-value*1.2 rule, circle diameter (55px)
+   unchanged. Landscape's own copy of this text (.landscape-transport button)
+   got the same treatment right below it, further down this file. */
+.tempo-buttons button{font:inherit;border:2px solid var(--text);border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;color:var(--text);font-size:15.84px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
 /* Active tempo (Sep 2026, real report: bring purple back, but only as a
    border+text ring rather than the old solid fill — background stays the
    same dark #0c0906 every circular button now shares). */
@@ -1082,7 +1088,10 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    for any of them (it now anchors below the arrows' own frozen position,
    plus has to stay clear of a notched/Dynamic-Island phone's safe area). */
 .landscape-transport{position:absolute;top:var(--cluster-top);display:grid;grid-template-columns:repeat(2,var(--cluster-size));grid-template-rows:repeat(2,var(--cluster-size));gap:10px;z-index:5}
-.landscape-transport button{font:inherit;border:2px solid var(--text);border-radius:50%;padding:0;background:#0c0906;color:var(--text);font-size:13px;font-weight:700;width:var(--cluster-size);height:var(--cluster-size);display:flex;align-items:center;justify-content:center;gap:4px}
+/* 13px -> 15.6px (Sep 13 2026), same +20% pass as .tempo-buttons button's
+   own text, above — landscape's 50/75/100 (and Play's visually-hidden
+   label) are their own separate button here, not a copy of that rule. */
+.landscape-transport button{font:inherit;border:2px solid var(--text);border-radius:50%;padding:0;background:#0c0906;color:var(--text);font-size:15.6px;font-weight:700;width:var(--cluster-size);height:var(--cluster-size);display:flex;align-items:center;justify-content:center;gap:4px}
 /* Active tempo (Sep 2026, real report: purple is back — see the matching
    .tempo-buttons button.active comment in portrait — still a ring, not a
    fill, so the dark background every button here shares stays put). */
@@ -1640,7 +1649,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.50';
+const BUILD_VERSION='2.51';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
