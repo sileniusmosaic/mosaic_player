@@ -759,6 +759,35 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    square above the grid) via the base column direction below. Desktop
    overrides to a row instead, so the grid sits to the focus square's right. */
 .focus-column{display:flex;flex-direction:column;gap:8px}
+/* Mini progress bar (Sep 13 2026, real request — "in the black space
+   between focus square and small squares... a new very narrow progress bar
+   in light blue, taking up about half of that space, with a vertical line
+   at each end... same blue as others"): sits as its own flex child of
+   .focus-column, landing exactly in the gap between the focus square
+   (.focus-stack) and the tile grid (#gridStageMobile) below it, purely via
+   DOM order — no absolute positioning needed, same technique used
+   throughout this file wherever something just needs to occupy a specific
+   flex slot. width:50% + margin:0 auto is the literal "about half of that
+   space, taking up... centered" reading. "Same blue as others" -> reuses
+   var(--accent-blue) throughout (it's already a light sky-blue, #6dc5ff —
+   not a new color) rather than inventing a separate "light blue": the two
+   end ticks and the fill are solid var(--accent-blue), the unfilled track
+   is the same blue at low opacity so the fill still reads as progress
+   against it. Ticks are taller than the track and vertically centered on
+   it (align-items:center on the flex row) — the "vertical line at each
+   end... central in the vertical axis" read literally. Mobile-only: hidden
+   entirely on desktop (below) since desktop's focus-column is a row, not a
+   column, so there's no equivalent horizontal gap to place this in; never
+   visible in landscape either, same as the rest of .app, since the whole
+   normal UI is swapped out for .landscape-notation there regardless of
+   this element's own display value. Purely a visual readout, kept in sync
+   every frame by updateUI() (see the JS comment there) — not an
+   interactive scrubber, unlike the real #timeline input it mirrors. */
+.mini-progress{display:flex;align-items:center;width:50%;max-width:340px;margin:0 auto}
+.is-desktop .mini-progress{display:none}
+.mini-progress-tick{width:2px;height:12px;flex:0 0 auto;background:var(--accent-blue);border-radius:1px}
+.mini-progress-track{position:relative;flex:1;height:2px;margin:0 4px;background:rgba(109,197,255,.32);border-radius:1px;overflow:hidden}
+.mini-progress-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:var(--accent-blue)}
 /* flex-basis tightened to exactly match its own content — 520px focus-wrap +
    16px gap + the tile grid's own current width (Sep 7 2026; was a loose
    900px, leaving slack to the right of the grid that made .viewer's
@@ -1448,6 +1477,19 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
            default/on mobile; shown only via .is-desktop CSS. -->
       <img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden>
       </div>
+      <!-- Mini progress bar (Sep 13 2026, real request — a narrow playback
+           progress indicator in the black gap between the focus square and
+           the small-tile grid below it, mobile portrait only; see
+           .mini-progress's own CSS comment for sizing/color and why it's
+           hidden on desktop. Purely a visual readout, not an interactive
+           scrubber — the real (hidden-on-mobile) #timeline input is still
+           what Reset/scrub logic reads/writes; this just mirrors its
+           position every frame via updateUI(), see the JS comment there. -->
+      <div id="miniProgress" class="mini-progress" aria-hidden="true">
+        <span class="mini-progress-tick"></span>
+        <span class="mini-progress-track"><span id="miniProgressFill" class="mini-progress-fill"></span></span>
+        <span class="mini-progress-tick"></span>
+      </div>
       <!-- All tiles as one 4x2 grid — shown on both mobile and desktop now
            (reverted Sep 2026). On mobile it sits below the focus square in
            .focus-column's normal column layout; on desktop, .focus-column
@@ -1649,7 +1691,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.53';
+const BUILD_VERSION='2.54';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -5220,6 +5262,11 @@ function wrappedAudioPos(){
 function updateUI(){
   const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;
   if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}
+  // #miniProgressFill (Sep 13 2026) — the mobile-portrait mini progress bar
+  // between the focus square and the tile grid (see its own CSS comment
+  // near .focus-column); mirrors the same p/dur this function already
+  // computes for the real #timeline input, every frame, scrubbing included.
+  if(miniProgressFill)miniProgressFill.style.width=(dur?Math.min(100,Math.max(0,p/dur*100)):0)+'%';
   // Fixed-format time text (no fps suffix) — the fps readout used to live
   // here too, but its length changes as digits appear/disappear, which was
   // reflowing the Reset/timeline/time row (the range slider is flex:1, so
