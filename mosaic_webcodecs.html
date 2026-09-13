@@ -1718,7 +1718,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.55';
+const BUILD_VERSION='2.56';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2425,6 +2425,7 @@ syncLandscapePlayBtn(); // initial state, before anything has changed to trigger
 // positionLandscapeMetroCluster() call that used to be sprinkled across
 // updateFocusUI(), the notation-image loader, and the resize listener.
 let landscapeClusterNeedsRecompute=true; // metro/mute/reset AND the Play/tempo cluster (Sep 2026: made to match — real report, see below) freeze until a genuine rotation ("also not moving"); starts true so the very first layout pass positions them
+let landscapeClusterFreezeTimer=null;
 new ResizeObserver(()=>{
   // Zero-size guard (Sep 2026, real report): the right arrow could be found
   // overlapping the metronome on the very first rotation, self-correcting
@@ -2452,7 +2453,29 @@ new ResizeObserver(()=>{
   if(landscapeClusterNeedsRecompute){
     positionLandscapeTransport();
     positionLandscapeMetroCluster(); // now also places soloBtnLandscape — see that function's own comment
-    landscapeClusterNeedsRecompute=false;
+    // v2.56 fix (real report: metro/reset/S/M cluster landing with a big gap
+    // from the square — too far toward the true screen edge — on a rotation
+    // right after a fresh page load/deploy, "fixed itself" after a reload or
+    // rotating away and back). Root cause: this callback's first firing after
+    // a genuine rotation can land BEFORE the notation band's real image has
+    // loaded (applyLandscapeNotationImage(), well below) and set the canvas's
+    // final trimmed height — the band's own reveal is itself a SECOND, later
+    // resize of this same landscapeFocusCanvas (its height:100% comes from
+    // .landscape-video-area, which shrinks once its band sibling claims real
+    // space). Immediately freezing right here, on just the first firing,
+    // discarded that truer second resize — exactly contradicting this
+    // function's own "whenever that size change actually lands" design (see
+    // applyLandscapeNotationImage()'s comment). A cold cache (right after a
+    // deploy) makes the image slow enough for the gap to actually show up;
+    // an already-cached image on a later reload usually loads fast enough
+    // that nobody notices the first, briefly-wrong reading. Rather than
+    // freezing on this exact line, keep responding to further real resizes
+    // of this same square for a short settling window — each one just re-
+    // runs the same two calls against the CURRENT (more current) geometry,
+    // so a correction lands automatically once the band's real size arrives,
+    // with no dependency on guessing how long that'll take.
+    clearTimeout(landscapeClusterFreezeTimer);
+    landscapeClusterFreezeTimer=setTimeout(()=>{landscapeClusterNeedsRecompute=false;},900);
   }
 }).observe(landscapeFocusCanvas);
 // matchMedia's orientation query — not the old width>height diff on every
