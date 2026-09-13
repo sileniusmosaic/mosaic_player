@@ -1718,7 +1718,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.56';
+const BUILD_VERSION='2.57';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -3570,7 +3570,24 @@ function positionLandscapeTransport(){
   // clears the arrow's right edge by a full GAP, no matter how little black
   // space is available. Mirrors positionLandscapeMetroCluster's minRight.
   const minLeft=Math.max(20,14+insets.left,ARROW_INSET+CLUSTER_W+GAP);
-  const centeredLeft=Math.max(minLeft,(blackSpaceW-clusterTotal)/2);
+  // v2.57 (real report — "the 4 buttons sit too far away from [the arrow],
+  // should look balanced either side"): this used to center the cluster in
+  // the ENTIRE space left of the square, with zero regard for the left
+  // arrow sitting fixed at left:12px inside that same space — the bigger
+  // that space is, the further the "centered" position drifts from the
+  // arrow (the midpoint of a wide interval isn't anywhere near one fixed
+  // end of it), reading as two disconnected groups rather than one side of
+  // controls. Snapping to minLeft — the same floor that already exists
+  // purely to stop overlap — puts the cluster right next to the arrow
+  // (just the intentional GAP of breathing room between them) instead of
+  // floating in the middle, so the ENTIRE leftover space reads as one gap
+  // between the square and a single combined [arrow+cluster] group on each
+  // side — which is what actually looks "balanced" once there's a group of
+  // controls anchoring that edge, rather than bare corner (the original
+  // "sitting tight in the exact corner read as cramped" complaint this
+  // centering behavior was FIRST built for, back before the arrow/flip
+  // buttons existed to anchor that corner instead).
+  const centeredLeft=minLeft;
   landscapeTransport.style.left=centeredLeft+'px';
 }
 // Landscape metro/mute/reset cluster centering (v1.6, real report): sitting
@@ -3597,7 +3614,13 @@ function positionLandscapeMetroCluster(){
   // --cluster-size wide), letting the two genuinely overlap on a narrow
   // enough black space rather than this being purely a timing issue.
   const minRight=Math.max(20,14+insets.right,ARROW_INSET+CLUSTER_W+GAP);
-  const centeredRight=Math.max(minRight,(blackSpaceW-CLUSTER_W)/2);
+  // v2.57 — see positionLandscapeTransport's own comment on the mirror-image
+  // fix on the other side of the screen: snap to minRight (right next to
+  // the arrow, just the intentional GAP of clearance) instead of centering
+  // in the full black space, so this cluster and the arrow/flip read as one
+  // combined group anchoring the edge rather than two disconnected islands
+  // with a growing gap between them on any wide screen.
+  const centeredRight=minRight;
   metroBtnLandscape.style.right=centeredRight+'px';
   muteBtnLandscape.style.right=centeredRight+'px';
   // Solo (Sep 2026, moved here from its own former left-side placement —
