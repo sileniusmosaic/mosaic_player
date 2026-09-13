@@ -1649,7 +1649,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.52';
+const BUILD_VERSION='2.53';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1709,11 +1709,16 @@ const MOSAICS={
     // his "Scores/Mosaic Scores" Google Drive folder — renamed on his end to
     // match this repo's NN_instrument_abakua.png convention (several of the
     // source files were named abakua_NN_instrument.png, segment order
-    // swapped). Only Cata (2) and Coro (7) still fall through to the
-    // placeholder — no art exists for either yet anywhere in that Drive
-    // folder (Cata has only an .svg, no .png; Coro has nothing at all).
+    // swapped). Cata (2) added right after, same day — his own art folder had
+    // no PNG for it (only an .svg), but per direct instruction "the notation
+    // is the same as erikindi" musically, so 03_cata_abakua.png is a literal
+    // copy of 04_erikundi_abakua.png rather than a separate asset — if
+    // Erikundi's art is ever redrawn, Cata's needs the same update alongside
+    // it (they're not symlinked/shared, just two copies of the same file).
+    // Only Coro (7) still falls through to the placeholder — no art exists
+    // for it anywhere in that Drive folder.
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-    notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png',3:'Mosaic/Abakua/04_erikundi_abakua.png',4:'Mosaic/Abakua/05_quinto_abakua.png',5:'Mosaic/Abakua/06_conga_abakua.png',6:'Mosaic/Abakua/07_tumba_abakua.png'},
+    notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png',2:'Mosaic/Abakua/03_cata_abakua.png',3:'Mosaic/Abakua/04_erikundi_abakua.png',4:'Mosaic/Abakua/05_quinto_abakua.png',5:'Mosaic/Abakua/06_conga_abakua.png',6:'Mosaic/Abakua/07_tumba_abakua.png'},
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
     // bundled into the git repo/Worker static assets while every other
