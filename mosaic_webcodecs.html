@@ -288,7 +288,7 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    Every piece drawn as its own class so each part can be stroke-only or
    fill-only as appropriate (see rules below) instead of one blanket
    path/circle rule like the old design needed. */
-.metroBtn .metro-icon{width:72%;height:72%;fill:none;stroke:none}
+.metroBtn .metro-icon{width:86.4%;height:86.4%;fill:none;stroke:none}
 .metroBtn .metro-icon .metro-case{stroke:var(--text);stroke-width:1.6;stroke-linejoin:round;fill:none}
 .metroBtn .metro-icon .metro-arm{stroke:var(--text);stroke-width:1.6;stroke-linecap:round}
 .metroBtn .metro-icon .metro-ticks line{stroke:var(--text);stroke-width:1.6;stroke-linecap:round}
@@ -378,7 +378,7 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    as its own distinct color. */
 .focusSoloBtn.is-solo{background:#0c0906;color:var(--text);border-color:#ffd60a;box-shadow:0 0 0 2px #ffd60a}
 .is-desktop .focusMuteBtn,.is-desktop .focusSoloBtn{display:none}
-.manuscriptBtn .manuscript-icon{width:72%;height:72%;fill:none;stroke:none}
+.manuscriptBtn .manuscript-icon{width:86.4%;height:86.4%;fill:none;stroke:none}
 .manuscriptBtn .manuscript-icon .staff-line{stroke:var(--text);stroke-width:.8;opacity:.6}
 .manuscriptBtn .manuscript-icon .note-head{fill:var(--text);stroke:none}
 .manuscriptBtn .manuscript-icon .note-beam{fill:var(--text);stroke:none}
@@ -438,19 +438,23 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    lands at exactly the same x as column N up there, with no more hand-tuned
    nudge fudge-factors needed (the old flex-row version only ever
    approximated this — see the now-removed 4.375px nudge comments this
-   replaced). Reset/column1 under Play, Settings/column3 under 75%, Flip/
-   column4 under 100% — always true on both layouts. Column 2 itself differs
-   by layout as of Sep 13 2026 (real request): on mobile portrait the
+   replaced). Reset/column1 under Play, Flip/column4 under 100% — always true
+   on both layouts. Columns 2/3 differ by layout: on mobile portrait the
    timeline is hidden outright (.transport-mid{display:none} below) so
-   #countInBtn — next in source order — becomes column 2's item instead,
-   landing under 50% same as the timeline used to; on desktop the timeline
-   stays put in column 2 and #countInBtn is pulled out of grid flow entirely
+   #settingsBtn/#countInBtn — next in source order — become columns 2/3
+   instead, landing under 50%/75% (Sep 13 2026, real request — "swap countin
+   and setting buttons": Settings now before Count-in in the markup, the
+   reverse of how they first shipped, purely a markup reorder — see
+   #settingsBtn's own comment below); on desktop the timeline stays put in
+   column 2 (unaffected by that reorder — #countInBtn sits after #settingsBtn
+   in source order either way, and is excluded from the flow entirely on
+   desktop regardless, see next) with #settingsBtn following it into column 3
+   same as always, and #countInBtn is pulled out of grid flow entirely
    (position:absolute) to sit centered on the seam between columns 2/3
    instead (see #countInBtn's own desktop rule, below .transport-mid).
-   justify-items:center matches .tempo-buttons so each 55px circle centers
-   in its own column exactly like Play/50/75/100 do above it. position:
-   relative is what #countInBtn's desktop absolute positioning resolves
-   against. */
+   justify-items:center matches .tempo-buttons so each 55px circle centers in
+   its own column exactly like Play/50/75/100 do above it. position:relative
+   is what #countInBtn's desktop absolute positioning resolves against. */
 /* margin:0 -12px (measured via a headless render, same technique as the old
    4.375px nudge this replaces): .panel's own border(2px)+padding(10px)=12px
    insets .transport from .panel's outer edge, while .tempo-buttons sits
@@ -524,12 +528,19 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
 #reset{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 /* #settingsBtn (Sep 4 2026, real report — "make the settings button in
    portrait a circle... to match all the other circle buttons, lose the
-   square shape"): same treatment as #reset right above. Moved from column 4
-   to column 3 (Sep 12 2026, real request — "under 75%", to make room for the
-   new Flip button in column 4) purely by moving its markup one slot earlier;
-   no CSS position override needed either way, same as #reset above. */
+   square shape"): same treatment as #reset right above. Column 4 to column 3
+   (Sep 12 2026, "under 75%", to make room for the new Flip button in column
+   4), then moved one slot earlier again, ahead of #countInBtn this time (Sep
+   13 2026, real request — "swap countin and setting buttons" — now under
+   50%, #countInBtn takes 75% instead, see the shared comment on .transport
+   above): purely a markup reorder, same technique as the Sep 12 move, and
+   safe for desktop for the same reason — #countInBtn is excluded from
+   desktop's grid flow entirely regardless of where it sits in source order
+   (position:absolute, see its own rule below .transport-mid), so desktop's
+   Reset/Timeline/Settings/Flip column order is unaffected either way. No CSS
+   position override needed for #settingsBtn itself on either layout. */
 #settingsBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
-#settingsBtn .settings-icon{width:28px;height:28px}
+#settingsBtn .settings-icon{width:33.6px;height:33.6px}
 /* Flip button (Sep 12 2026, real request): identical circular chrome to
    #reset/#settingsBtn above — same 55px size, same var(--text)-on-dark
    background, same border weight — so the icon sits inside the exact same
@@ -561,7 +572,7 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    (a countdown-pie wedge, a bare counter-clockwise arrow) were shown and
    this one was preferred. Sized at 72% of the button diameter, same rule as
    #flipBtn .flip-icon/.metroBtn .metro-icon below. */
-#countInBtn .countin-icon{width:72%;height:72%;flex:0 0 auto;fill:none}
+#countInBtn .countin-icon{width:86.4%;height:86.4%;flex:0 0 auto;fill:none}
 .countin-case{stroke:currentColor;stroke-width:1.8}
 .countin-crown{fill:currentColor;stroke:none}
 .countin-hand{stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
@@ -577,19 +588,26 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    reset circular-arrow and the settings gear read as one family. Flip is no
    longer part of this list (Sep 13 2026) — its icon is now a real <img>, not
    an SVG, so `fill` doesn't apply and it's sized separately (see #flipBtn
-   .flip-icon below). */
-.play-icon,.reset-icon,.settings-icon{width:20px;height:20px;flex:0 0 auto;fill:currentColor}
+   .flip-icon below). Every icon size on this row/every other icon button in
+   the app (metro, manuscript, count-in, flip, settings, landscape arrows and
+   transport) was bumped +20% Sep 13 2026 (real request — "keeping all
+   buttons the same size, make all button icons inside 20% larger") — button
+   chrome/circle diameters are all untouched, only each icon's own
+   width/height (or, for the 72%-of-button ones, that percentage) scaled up:
+   old-value*1.2 in every case, so relative sizing between icons is
+   preserved exactly as before. */
+.play-icon,.reset-icon,.settings-icon{width:24px;height:24px;flex:0 0 auto;fill:currentColor}
 /* Reset's circular-arrow reads thinner than the solid play triangle at the
    same size (Aug 31 2026) — bump it up slightly and add a matching stroke
    along the path edges to bulk up its line weight so the two feel matched. */
-.reset-icon{width:22px;height:22px;stroke:currentColor;stroke-width:.7;stroke-linejoin:round;stroke-linecap:round}
+.reset-icon{width:26.4px;height:26.4px;stroke:currentColor;stroke-width:.7;stroke-linejoin:round;stroke-linecap:round}
 /* Bumped to suit the bigger 55px circles (Sep 2026 — see .tempo-buttons
    button and #reset below); scoped by ID so the landscape buttons (each
    already have their own scoped icon-size override) are untouched.
    #settingsBtn got its own matching bump (28px) once it went circular too
    — see #settingsBtn .settings-icon further down. */
-#play .play-icon{width:26px;height:26px}
-#reset .reset-icon{width:34px;height:34px}
+#play .play-icon{width:31.2px;height:31.2px}
+#reset .reset-icon{width:40.8px;height:40.8px}
 /* Flip icon (Sep 13 2026, real request — "just cut that out of my png and
    wrap a better circle around it"): a from-scratch redraw was tried first
    and rejected (didn't read as the reference pictograph at any size, and one
@@ -605,7 +623,7 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    guards against the source image's aspect ratio (320x327, very slightly
    taller than wide) being stretched to a perfect square by the width/height
    percentages alone. */
-#flipBtn .flip-icon,#flipBtnLandscape .flip-icon{width:72%;height:72%;object-fit:contain}
+#flipBtn .flip-icon,#flipBtnLandscape .flip-icon{width:86.4%;height:86.4%;object-fit:contain}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
 .tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0;justify-items:center}
 /* Desktop-only (Sep 7 2026) — see the real report quoted on .is-desktop
@@ -1023,7 +1041,7 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    letter "M" at .dawBtn's 13.2px font — bumped to roughly the same
    proportion of the new size. */
 .muteBtn.muteBtn-landscape,.dawBtn.resetBtn-landscape,.soloBtn.soloBtn-landscape{width:55px;height:55px}
-.resetBtn-landscape .reset-icon{width:40px;height:40px}
+.resetBtn-landscape .reset-icon{width:48px;height:48px}
 .muteBtn-landscape,.soloBtn-landscape{font-size:30px}
 /* Landscape square-navigation arrows (Sep 2026, rewritten Sep 2026 — see the
    architecture note near the top of the script block for the full "why").
@@ -1048,7 +1066,7 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    next to the now-circular Play/tempo grid and metro/mute/reset buttons). */
 .landscapeArrow{position:absolute;top:max(20px,min(calc(var(--cluster-top) + (var(--cluster-size) / 2)),calc(100% - 20px)));transform:translateY(-50%);width:var(--cluster-size);height:var(--cluster-size);border-radius:50%;border:2px solid var(--text);background:rgba(12,9,6,.72);color:var(--text);display:grid;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.75);touch-action:manipulation;z-index:5}
 .landscapeArrow[hidden]{display:none}
-.landscapeArrow svg{width:28px;height:28px}
+.landscapeArrow svg{width:33.6px;height:33.6px}
 .landscapeArrowLeft{left:12px}
 .landscapeArrowRight{right:12px}
 /* Landscape transport (Sep 2026, enlarged/repositioned) — see the markup
@@ -1070,7 +1088,7 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    fill, so the dark background every button here shares stays put). */
 .landscape-transport button.active{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 .landscape-transport button:disabled{opacity:.4}
-.landscape-transport .play-icon{width:22px;height:22px}
+.landscape-transport .play-icon{width:26.4px;height:26.4px}
 /* Same loading-fill/is-loading/reset-instant treatment as the real #play
    button (see #play and its neighbors above) — duplicated here rather than
    shared because those rules are scoped to #play's id specifically (only one
@@ -1098,7 +1116,7 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
 #countInBtnLandscape{left:12px}
 #flipBtnLandscape{right:12px}
 #countInBtnLandscape.is-active,#flipBtnLandscape.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-#countInBtnLandscape .countin-icon{width:72%;height:72%}
+#countInBtnLandscape .countin-icon{width:86.4%;height:86.4%}
 </style>
 </head>
 <body>
@@ -1442,27 +1460,6 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
           <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path>
         </svg>
       </button>
-      <!-- Count-in button (Sep 13 2026, real request): sits between Reset and
-           the timeline in source order, but where it actually LANDS differs
-           by layout — see .transport-mid/.transport's own CSS comments:
-             - mobile portrait: the timeline is hidden entirely (for now, per
-               direct request — "let's lose the progress bar and see if I can
-               live without it") so this becomes the grid's column-2 item,
-               landing directly under 50% same as the timeline used to.
-             - desktop: the timeline stays, so this is pulled OUT of grid flow
-               (position:absolute) and centered on the seam between the 50%/
-               75% columns instead, per the ask ("half way between the 50 and
-               75 buttons"), with the timeline shortened to leave it room.
-           Icon/behavior is a smaller-scale twin of #metroBtn's own stopwatch
-           styling; syncCountInBtn() (see JS) keeps this, countInBtnLandscape
-           and the pre-existing Settings-row checkbox all in sync. -->
-      <button id="countInBtn" type="button" aria-label="Count-in: off">
-        <svg class="countin-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle class="countin-case" cx="12" cy="13.3" r="7.6"></circle>
-          <rect class="countin-crown" x="10.1" y="1.2" width="3.8" height="2.4" rx="1.1"></rect>
-          <line class="countin-hand" x1="12" y1="13.3" x2="6.98" y2="16.2"></line>
-        </svg>
-      </button>
       <!-- Timeline+time wrapped together (Sep 12 2026, needed for the new
            grid layout below — see .transport's CSS comment): the row is now
            a 4-column grid matching #tempoButtons column-for-column (Reset
@@ -1486,6 +1483,34 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
       <button id="settingsBtn" type="button" class="settingsBtn" aria-label="Settings">
         <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
+        </svg>
+      </button>
+      <!-- Count-in button (Sep 13 2026, real request; moved here, after
+           Settings, same day — "swap countin and setting buttons": Settings
+           is back in source order right after Reset/before the timeline
+           (landing under 50% on mobile portrait, same slot it held before
+           Count-in existed), and this is now next instead. Where it actually
+           LANDS still differs by layout — see .transport-mid/.transport's own
+           CSS comments:
+             - mobile portrait: the timeline is hidden entirely (for now, per
+               direct request — "let's lose the progress bar and see if I can
+               live without it") so this becomes the grid's column-3 item,
+               landing under 75%.
+             - desktop: the timeline stays, so this is pulled OUT of grid flow
+               (position:absolute) and centered on the seam between the 50%/
+               75% columns instead, per the ask ("half way between the 50 and
+               75 buttons"), with the timeline shortened to leave it room —
+               unaffected by this reorder either way, since being excluded
+               from the flow means its source-order position doesn't matter
+               on desktop (see its own CSS rule for why).
+           Icon/behavior is a smaller-scale twin of #metroBtn's own stopwatch
+           styling; syncCountInBtn() (see JS) keeps this, countInBtnLandscape
+           and the pre-existing Settings-row checkbox all in sync. -->
+      <button id="countInBtn" type="button" aria-label="Count-in: off">
+        <svg class="countin-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="countin-case" cx="12" cy="13.3" r="7.6"></circle>
+          <rect class="countin-crown" x="10.1" y="1.2" width="3.8" height="2.4" rx="1.1"></rect>
+          <line class="countin-hand" x1="12" y1="13.3" x2="6.98" y2="16.2"></line>
         </svg>
       </button>
       <!-- Flip button (Sep 12 2026, real request; icon replaced Sep 13 2026 —
@@ -1615,7 +1640,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.49';
+const BUILD_VERSION='2.50';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -5663,8 +5688,15 @@ countInBtn.addEventListener('click',()=>{
   try{localStorage.setItem('mosaicCountIn',countInOn?'1':'0');}catch{}
   // Same "Count-in on defaults the beat counter on too" rule the checkbox's
   // own change handler already applies just below — kept identical here so
-  // tapping the button behaves exactly like ticking the checkbox.
-  if(countInOn&&metroReady()&&!metroActive)setMetroActive(true);
+  // tapping the button behaves exactly like ticking the checkbox. Gated on
+  // !playing (Sep 13 2026 fix, real report — "pressing countin during
+  // playback wrongly turns metronome on if previously off"): this is only a
+  // convenience default for the NEXT time Play is pressed, never something
+  // that should reach into an already-playing piece and switch its live
+  // metronome on. Count-in's own countdown (runCountIn()) doesn't need
+  // metroActive at all — see the comment near countInOn's declaration — so
+  // skipping this while playing loses nothing functional.
+  if(countInOn&&metroReady()&&!metroActive&&!playing)setMetroActive(true);
   syncCountInBtn();
 });
 if(typeof countInBtnLandscape!=='undefined'&&countInBtnLandscape)countInBtnLandscape.addEventListener('click',()=>countInBtn.click());
@@ -5677,7 +5709,9 @@ if(countInToggle){
     // via the same setMetroActive() every other default-setting call site
     // uses (piece switch, Reset, initial page load — see there), so they
     // can never drift out of sync with each other or with a real tap.
-    if(countInOn&&metroReady()&&!metroActive)setMetroActive(true);
+    // Same !playing gate as the button's own handler above (Sep 13 2026 fix)
+    // — never switch the live metronome on mid-playback from here either.
+    if(countInOn&&metroReady()&&!metroActive&&!playing)setMetroActive(true);
     syncCountInBtn();
   });
 }
