@@ -438,17 +438,26 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    lands at exactly the same x as column N up there, with no more hand-tuned
    nudge fudge-factors needed (the old flex-row version only ever
    approximated this — see the now-removed 4.375px nudge comments this
-   replaced). Reset/column1 under Play, the timeline/column2 under 50%,
-   Settings/column3 under 75%, Flip/column4 under 100%. justify-items:center
-   matches .tempo-buttons so each 55px circle centers in its own column
-   exactly like Play/50/75/100 do above it. */
+   replaced). Reset/column1 under Play, Settings/column3 under 75%, Flip/
+   column4 under 100% — always true on both layouts. Column 2 itself differs
+   by layout as of Sep 13 2026 (real request): on mobile portrait the
+   timeline is hidden outright (.transport-mid{display:none} below) so
+   #countInBtn — next in source order — becomes column 2's item instead,
+   landing under 50% same as the timeline used to; on desktop the timeline
+   stays put in column 2 and #countInBtn is pulled out of grid flow entirely
+   (position:absolute) to sit centered on the seam between columns 2/3
+   instead (see #countInBtn's own desktop rule, below .transport-mid).
+   justify-items:center matches .tempo-buttons so each 55px circle centers
+   in its own column exactly like Play/50/75/100 do above it. position:
+   relative is what #countInBtn's desktop absolute positioning resolves
+   against. */
 /* margin:0 -12px (measured via a headless render, same technique as the old
    4.375px nudge this replaces): .panel's own border(2px)+padding(10px)=12px
    insets .transport from .panel's outer edge, while .tempo-buttons sits
    directly in .tempo-strip with no such inset — without this, the two grids'
    columns would land ~9-12px apart instead of exactly matching. This cancels
    that inset exactly so both grids share the identical effective width/x. */
-.transport{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;align-items:center;justify-items:center;margin:0 -12px}
+.transport{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;align-items:center;justify-items:center;margin:0 -12px}
 /* Desktop-only (Sep 7 2026 originally; grid-template-columns override added
    Sep 12 2026 alongside the .transport rewrite above): same width-matched,
    centered box as .is-desktop .tempo-strip, nested one level deeper inside
@@ -462,24 +471,51 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
 .is-desktop .transport{width:796px;margin-left:auto;margin-right:auto;grid-template-columns:55px 1fr 1fr 55px}
 /* Reset/Settings/Flip are each their own grid cell now (see .transport
    above) — no explicit grid-column needed since they're already in source
-   order 1/3/4 with the timeline wrapper (below) taking column 2. */
+   order 1/3/4 with the timeline wrapper (below) taking column 2 on desktop
+   (column 2 is #countInBtn instead on mobile portrait — see .transport's own
+   comment above). */
 /* display:inline-flex (Aug 30 2026) — these buttons went icon-only (no more
    "Reset"/"Settings" text), so centering their single SVG child needs flex
    the same way the tempo-buttons row already centers its own content. */
 .transport button{font:inherit;border:2px solid var(--window-border);border-radius:8px;padding:9px 14px;background:var(--panel2);color:var(--text);display:inline-flex;align-items:center;justify-content:center}
 .transport button.primary{background:var(--danger);color:var(--text);border-color:transparent;font-weight:750}
 .transport button:disabled{opacity:.5}
-/* Timeline+time (Sep 12 2026): now their own single grid cell (column 2,
-   under 50% — see .transport above) instead of two bare flex children
-   spanning most of the old flex row. Internally still flex — the input
-   grows via .timeline's own flex:1 (unchanged) to fill whatever width this
-   one column gives it, with .time's existing margin-left:auto (unchanged)
-   left harmless since flex:1 already claims all the free space here, same
-   net effect as before. min-width:0 keeps the <input type=range> from
-   forcing this cell (and so the whole grid) wider than the column allows —
-   range inputs have a non-zero intrinsic min-width in some browsers that
-   would otherwise blow out the grid track. */
-.transport-mid{display:flex;align-items:center;min-width:0;width:100%}
+/* Timeline+time (Sep 12 2026; hidden on mobile portrait as of Sep 13 2026 —
+   real request, "let's lose the progress bar for now and see if I can live
+   without it": display:none removes it from grid flow entirely rather than
+   just hiding it visually, so #countInBtn — next in source order — takes
+   over this grid cell instead of leaving a gap). Restored on desktop, below,
+   where there's room for both. Internally still flex — the input grows via
+   .timeline's own flex:1 (unchanged) to fill whatever width this one column
+   gives it, with .time's existing margin-left:auto (unchanged) left harmless
+   since flex:1 already claims all the free space here, same net effect as
+   before. min-width:0 keeps the <input type=range> from forcing this cell
+   (and so the whole grid) wider than the column allows — range inputs have a
+   non-zero intrinsic min-width in some browsers that would otherwise blow
+   out the grid track. */
+.transport-mid{display:none;align-items:center;min-width:0;width:100%}
+/* Desktop keeps the timeline (Sep 13 2026) but shortens it — padding-right
+   leaves clearance for #countInBtn, which on desktop sits centered exactly
+   on this column's right edge/the column-3 seam (see #countInBtn's own
+   desktop rule below) and would otherwise sit half-on-top of the slider's
+   thumb track. 38px clears half the button (27.5px) plus a small gap;
+   confirmed via a headless render, same verification technique used
+   throughout this row's original alignment work. */
+.is-desktop .transport-mid{display:flex;padding-right:38px}
+/* #countInBtn desktop placement (Sep 13 2026, real request — "half way
+   between the 50 and 75 buttons"): pulled out of grid flow (position:
+   absolute removes an element from grid placement entirely, per spec) so it
+   can sit centered on the seam between columns 2/3 instead of inside either
+   one — that seam IS the row's exact horizontal center here, since columns
+   2/3 are equal 1fr tracks flanked by matching 55px end columns (see
+   .is-desktop .transport above), so left:50% needs no further offset.
+   Removing it from flow also means the OTHER four items (Reset/Timeline/
+   Settings/Flip) simply fall back into their original four-column places
+   unchanged, same as before this button existed. z-index lifts it above the
+   (shortened, but still adjacent) timeline. Mobile portrait needs none of
+   this — see .transport's own comment for why #countInBtn is already a
+   normal in-flow grid item there. */
+.is-desktop #countInBtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2}
 /* #reset made circular (Sep 2026, real report — same request as the tempo
    row above: match the metro/manuscript overlays, 55px, var(--text)-on-dark,
    no accent color). Its position comes entirely from the grid now (see
@@ -496,22 +532,39 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
 #settingsBtn .settings-icon{width:28px;height:28px}
 /* Flip button (Sep 12 2026, real request): identical circular chrome to
    #reset/#settingsBtn above — same 55px size, same var(--text)-on-dark
-   background, same border weight — so the redrawn icon (see the markup
-   comment on #flipBtn) sits inside the exact same "outer circumference" as
-   every other transport-row button, per the ask, rather than carrying any
-   of the reference image's own black-circle/cream-color styling. The active
+   background, same border weight — so the icon sits inside the exact same
+   "outer circumference" as every other transport-row button. The active
    (Flip view on) state reuses the identical blue-ring recipe already shared
    by .tempo-buttons button.active and .metroBtn.is-active elsewhere in this
    file, for visual consistency.
    ID selector, not a class (Sep 12 2026 fix, real report — "currently
    square in dev" with a stray white/light halo instead of the dark circle):
-   the original .flipBtn class selector loses to .transport button's own
+   a plain .flipBtn class selector loses to .transport button's own
    border-radius:8px/padding/background/border-color (that plain selector
    has HIGHER specificity — one class + one type — than a single class alone
    does), the exact same reason #reset/#settingsBtn already use an ID
    selector instead of a class for this. */
 #flipBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 #flipBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+/* Count-in button (Sep 13 2026, real request): the on-main-transport twin of
+   Flip above, replacing the old Settings-menu-only toggle with an instant
+   tap (the Settings row checkbox — see countInToggle further down — is left
+   in place too, both now kept in sync by syncCountInBtn()). Identical
+   circular chrome/active-ring recipe as #reset/#settingsBtn/#flipBtn. */
+#countInBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
+#countInBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+/* Count-in icon (Sep 13 2026): a small stopwatch — case as a stroked circle
+   (same technique as .metro-icon .metro-case), crown as a filled rect, and a
+   single hand at roughly 8 o'clock (deliberately off 12-and-12, per direct
+   request/preview) as a stroked line. No second hand and no arrow — the
+   simplest of the previewed options, picked after a round of alternatives
+   (a countdown-pie wedge, a bare counter-clockwise arrow) were shown and
+   this one was preferred. Sized at 72% of the button diameter, same rule as
+   #flipBtn .flip-icon/.metroBtn .metro-icon below. */
+#countInBtn .countin-icon{width:72%;height:72%;flex:0 0 auto;fill:none}
+.countin-case{stroke:currentColor;stroke-width:1.8}
+.countin-crown{fill:currentColor;stroke:none}
+.countin-hand{stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 /* Screen-reader-only text (Aug 30 2026): kept in the DOM so the accessible
    name still updates with state (Play/Pause/Loading…), just not painted —
    every icon-only control button now relies on either this class (Play,
@@ -519,11 +572,13 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    Flip — Flip's aria-label does change with state, via syncFlipBtn(), same
    idea as Play's) for its accessible name. */
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-/* Same visual language across all four transport-row icons (Aug 30 2026;
-   Flip added Sep 12 2026): identical size and identical currentColor fill,
-   so the play arrow, the reset circular-arrow, the settings gear, and the
-   new flip glyph read as one family rather than unrelated icons. */
-.play-icon,.reset-icon,.settings-icon,.flip-icon{width:20px;height:20px;flex:0 0 auto;fill:currentColor}
+/* Same visual language across the SVG transport-row icons (Aug 30 2026):
+   identical size and identical currentColor fill, so the play arrow, the
+   reset circular-arrow and the settings gear read as one family. Flip is no
+   longer part of this list (Sep 13 2026) — its icon is now a real <img>, not
+   an SVG, so `fill` doesn't apply and it's sized separately (see #flipBtn
+   .flip-icon below). */
+.play-icon,.reset-icon,.settings-icon{width:20px;height:20px;flex:0 0 auto;fill:currentColor}
 /* Reset's circular-arrow reads thinner than the solid play triangle at the
    same size (Aug 31 2026) — bump it up slightly and add a matching stroke
    along the path edges to bulk up its line weight so the two feel matched. */
@@ -535,17 +590,22 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    — see #settingsBtn .settings-icon further down. */
 #play .play-icon{width:26px;height:26px}
 #reset .reset-icon{width:34px;height:34px}
-/* Flip icon parts (Sep 12 2026): the two mirrored figures are plain
-   currentColor fills, same as reset/settings' paths; the center divider is
-   a stroked line rather than a filled shape, same technique as the
-   manuscript icon's staff lines. Sized at 72% of the button diameter (Sep
-   12 2026 fix, real request — "relative size of icon to circle diameter"
-   should match the metronome/manuscript buttons specifically) — the exact
-   same percentage .metroBtn .metro-icon/.manuscriptBtn .manuscript-icon use,
-   rather than the fixed-px sizing #play/#reset/#settingsBtn's icons use. */
-#flipBtn .flip-icon{width:72%;height:72%}
-.flip-divider{stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
-.flip-figure{fill:currentColor}
+/* Flip icon (Sep 13 2026, real request — "just cut that out of my png and
+   wrap a better circle around it"): a from-scratch redraw was tried first
+   and rejected (didn't read as the reference pictograph at any size, and one
+   draft came out looking like an unrelated silhouette entirely — geometry
+   too organic/curved). Replaced with the ACTUAL reference artwork: the
+   source PNG's own black background and thin outer ring were cropped off
+   (leaving just the two-figures+divider linework as a transparent-background
+   image, flip-icon.png), then dropped into the exact same circular button
+   chrome every other transport icon uses (see #flipBtn above) rather than
+   keeping any of the source image's own black-circle styling. Sized at 72%
+   of the button diameter, same rule as #countInBtn .countin-icon above and
+   .metroBtn .metro-icon/.manuscriptBtn .manuscript-icon below; object-fit
+   guards against the source image's aspect ratio (320x327, very slightly
+   taller than wide) being stretched to a perfect square by the width/height
+   percentages alone. */
+#flipBtn .flip-icon,#flipBtnLandscape .flip-icon{width:72%;height:72%;object-fit:contain}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
 .tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0;justify-items:center}
 /* Desktop-only (Sep 7 2026) — see the real report quoted on .is-desktop
@@ -1023,6 +1083,22 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
 .landscape-transport .transportPlayBtn::before{content:'';position:absolute;inset:0;z-index:-1;background:var(--accent-blue);transform-origin:left;transform:scaleX(var(--play-progress));transition:transform .18s linear}
 .landscape-transport .transportPlayBtn.is-loading{background:var(--accent-blue-dim)}
 .landscape-transport .transportPlayBtn.reset-instant::before{transition:none!important}
+/* Count-in + Flip, landscape (Sep 13 2026) — see the markup comment on
+   #countInBtnLandscape/#flipBtnLandscape for why these are standalone fixed-
+   position buttons rather than grid items. top matches the landscape-
+   transport 2x2 grid's own row 2 (--cluster-top + one cluster + its 10px
+   row-gap — see .landscape-transport's grid-template-rows/gap), so both new
+   buttons line up level with 75%/100%/Solo/Mute one row down from the
+   arrows, exactly "under" landscapeArrowLeft/Right which sit at row 1 (same
+   left:12px/right:12px as those two). Same circular chrome as every other
+   landscape button (.dawBtn), just not sharing that class since these two
+   also need is-active support (.dawBtn alone has none) — same active-ring
+   recipe as #countInBtn/#flipBtn in portrait. */
+#countInBtnLandscape,#flipBtnLandscape{position:absolute;top:calc(var(--cluster-top) + var(--cluster-size) + 10px);width:var(--cluster-size);height:var(--cluster-size);border-radius:50%;border:2px solid var(--text);background:#0c0906;color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;z-index:5}
+#countInBtnLandscape{left:12px}
+#flipBtnLandscape{right:12px}
+#countInBtnLandscape.is-active,#flipBtnLandscape.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+#countInBtnLandscape .countin-icon{width:72%;height:72%}
 </style>
 </head>
 <body>
@@ -1207,6 +1283,30 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
        the square depends on the square's own rendered size — not something
        pure CSS can see. -->
   <button id="soloBtnLandscape" type="button" class="dawBtn soloBtn soloBtn-landscape" aria-label="Solo">S</button>
+  <!-- Count-in + Flip, landscape (Sep 13 2026, real request — "the count in
+       button to the left of the 75 button (under the left arrow)" / "the
+       flip button to the right of the M button (under the right arrow)").
+       Deliberately NOT part of #landscapeTransport's 2x2 grid or the metro/
+       mute/reset/solo cluster's own JS-measured positioning (positionLandscape
+       Transport()/positionLandscapeMetroCluster()) — both of those size
+       themselves off the square's rendered width, which these two don't need
+       to care about. Instead they sit at the exact same fixed left:12px/
+       right:12px as landscapeArrowLeft/Right (so "under the arrow" is
+       literal), one row below the arrows/top cluster — see .countInBtn
+       Landscape/#flipBtnLandscape's shared CSS rule for the row-2 top offset
+       math. Same forwarding + sync pattern as every other landscape button
+       here: click() the real portrait button, and syncCountInBtn()/
+       syncFlipBtn() (see script) mirror is-active/aria-label back here. -->
+  <button id="countInBtnLandscape" type="button" aria-label="Count-in: off">
+    <svg class="countin-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle class="countin-case" cx="12" cy="13.3" r="7.6"></circle>
+      <rect class="countin-crown" x="10.1" y="1.2" width="3.8" height="2.4" rx="1.1"></rect>
+      <line class="countin-hand" x1="12" y1="13.3" x2="6.98" y2="16.2"></line>
+    </svg>
+  </button>
+  <button id="flipBtnLandscape" type="button" aria-label="Flip view: off">
+    <img class="flip-icon" src="flip-icon.png" alt="">
+  </button>
 </div>
 <main class="app">
   <input type="checkbox" id="menuToggle">
@@ -1342,6 +1442,27 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
           <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path>
         </svg>
       </button>
+      <!-- Count-in button (Sep 13 2026, real request): sits between Reset and
+           the timeline in source order, but where it actually LANDS differs
+           by layout — see .transport-mid/.transport's own CSS comments:
+             - mobile portrait: the timeline is hidden entirely (for now, per
+               direct request — "let's lose the progress bar and see if I can
+               live without it") so this becomes the grid's column-2 item,
+               landing directly under 50% same as the timeline used to.
+             - desktop: the timeline stays, so this is pulled OUT of grid flow
+               (position:absolute) and centered on the seam between the 50%/
+               75% columns instead, per the ask ("half way between the 50 and
+               75 buttons"), with the timeline shortened to leave it room.
+           Icon/behavior is a smaller-scale twin of #metroBtn's own stopwatch
+           styling; syncCountInBtn() (see JS) keeps this, countInBtnLandscape
+           and the pre-existing Settings-row checkbox all in sync. -->
+      <button id="countInBtn" type="button" aria-label="Count-in: off">
+        <svg class="countin-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="countin-case" cx="12" cy="13.3" r="7.6"></circle>
+          <rect class="countin-crown" x="10.1" y="1.2" width="3.8" height="2.4" rx="1.1"></rect>
+          <line class="countin-hand" x1="12" y1="13.3" x2="6.98" y2="16.2"></line>
+        </svg>
+      </button>
       <!-- Timeline+time wrapped together (Sep 12 2026, needed for the new
            grid layout below — see .transport's CSS comment): the row is now
            a 4-column grid matching #tempoButtons column-for-column (Reset
@@ -1349,7 +1470,10 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
            100%), so the scrubber needs its own single grid cell instead of
            being a bare flex child spanning most of the row like before. It's
            narrower now as a direct result of that exact alignment — a
-           deliberate trade-off, confirmed on request. -->
+           deliberate trade-off, confirmed on request.
+           Hidden outright on mobile portrait as of Sep 13 2026 (see
+           .transport-mid's CSS comment) so #countInBtn above can take this
+           grid cell instead; still shown (narrowed) on desktop. -->
       <div class="transport-mid">
         <input id="timeline" class="timeline" type="range" min="0" max="45.6" step="0.001" value="0" aria-label="Timeline">
         <span id="time" class="time">0 / 46</span>
@@ -1364,28 +1488,14 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
           <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
         </svg>
       </button>
-      <!-- Flip button (Sep 12 2026, real request): replaces the old
-           Settings-menu toggle entirely (see JS comment near flipViewOn/
-           syncFlipBtn() below) — instant tap, no menu. Icon is a from-
-           scratch redraw of the reference pictograph supplied (two mirrored
-           seated figures either side of a center divider) in this file's
-           own plain-currentColor-fill icon style, matching the play/reset/
-           settings glyphs rather than embedding the original image's own
-           black-circle/cream-figure artwork wholesale — see .flipBtn's CSS
-           comment for why the circle itself is the shared button chrome,
-           not part of the icon. -->
+      <!-- Flip button (Sep 12 2026, real request; icon replaced Sep 13 2026 —
+           see flip-icon.png's own note below): replaces the old Settings-menu
+           toggle entirely (see JS comment near flipViewOn/syncFlipBtn()
+           below) — instant tap, no menu. See .flipBtn's CSS comment for why
+           the circle itself is the shared button chrome, not part of the
+           icon. -->
       <button id="flipBtn" type="button" class="flipBtn" aria-label="Flip view: off">
-        <svg class="flip-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <line class="flip-divider" x1="12" y1="1.6" x2="12" y2="22.4"></line>
-          <g class="flip-figure">
-            <circle cx="6.6" cy="5.7" r="1.85"></circle>
-            <path d="M3.55 15.85c.2-2.55.6-4.55 1.1-5.55.4-.8 1.15-1.3 2-1.3s1.55.5 1.9 1.25c.45.95.8 2.95 1 5.5.05.55-.35 1-.9 1.05-.5.05-.95-.3-1.05-.8l-.5-2.55v6.2c0 .55-.45 1-1 1H8.9c-.55 0-1-.45-1-1v-3.75l-.45 3.85c-.05.5-.5.85-1 .8-.5-.05-.9-.5-.85-1z"></path>
-          </g>
-          <g class="flip-figure flip-figure-mirror">
-            <circle cx="17.4" cy="5.7" r="1.85"></circle>
-            <path d="M20.45 15.85c-.2-2.55-.6-4.55-1.1-5.55-.4-.8-1.15-1.3-2-1.3s-1.55.5-1.9 1.25c-.45.95-.8 2.95-1 5.5-.05.55.35 1 .9 1.05.5.05.95-.3 1.05-.8l.5-2.55v6.2c0 .55.45 1 1 1h.2c.55 0 1-.45 1-1v-3.75l.45 3.85c.05.5.5.85 1 .8.5-.05.9-.5.85-1z"></path>
-          </g>
-        </svg>
+        <img class="flip-icon" src="flip-icon.png" alt="">
       </button>
     </div>
   </section>
@@ -1505,7 +1615,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.48';
+const BUILD_VERSION='2.49';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -5487,9 +5597,18 @@ applyFlipView();
 // DOM id-to-global lookup settingsBtn already relies on (see its own click
 // listener just below) — safe since the button always exists in the markup
 // now, unlike the toggle it replaces.
+// flipBtnLandscape (Sep 13 2026): a fixed-position twin in the landscape
+// view (see its own markup comment) — mirrored here alongside flipBtn itself
+// so the two can never drift out of sync, same "if it exists" guard pattern
+// countInToggle already used just below (both buttons exist in the markup
+// unconditionally now, but the guard costs nothing and matches house style).
 function syncFlipBtn(){
   flipBtn.classList.toggle('is-active',flipViewOn);
   flipBtn.setAttribute('aria-label','Flip view: '+(flipViewOn?'on':'off'));
+  if(typeof flipBtnLandscape!=='undefined'&&flipBtnLandscape){
+    flipBtnLandscape.classList.toggle('is-active',flipViewOn);
+    flipBtnLandscape.setAttribute('aria-label','Flip view: '+(flipViewOn?'on':'off'));
+  }
 }
 syncFlipBtn();
 flipBtn.addEventListener('click',()=>{
@@ -5498,6 +5617,7 @@ flipBtn.addEventListener('click',()=>{
   applyFlipView();
   syncFlipBtn();
 });
+if(typeof flipBtnLandscape!=='undefined'&&flipBtnLandscape)flipBtnLandscape.addEventListener('click',()=>flipBtn.click());
 // Count-in (Sep 2026, real request — was parked during the v2.24 mobile
 // round pending its own pass). One bar of clicks (beatsPerBar of them —
 // 3 or 4 depending on the piece) before playback actually starts, counted
@@ -5519,6 +5639,35 @@ flipBtn.addEventListener('click',()=>{
 // like any other Play, rather than autoplay silently skipping it.
 //
 // Default OFF, same reasoning as the beat counter itself.
+//
+// #countInBtn/#countInBtnLandscape (Sep 13 2026, real request): a dedicated
+// main-transport button + landscape twin, same "instant tap, no menu"
+// treatment Flip already got — but UNLIKE Flip, the Settings-row checkbox
+// (countInToggle, below) is deliberately kept rather than removed, since
+// that wasn't asked for this time. All three (button, its landscape twin,
+// the checkbox) share the one countInOn variable and are kept in sync by
+// syncCountInBtn(), the same single-source-of-truth pattern as everywhere
+// else in this file.
+function syncCountInBtn(){
+  countInBtn.classList.toggle('is-active',countInOn);
+  countInBtn.setAttribute('aria-label','Count-in: '+(countInOn?'on':'off'));
+  if(typeof countInBtnLandscape!=='undefined'&&countInBtnLandscape){
+    countInBtnLandscape.classList.toggle('is-active',countInOn);
+    countInBtnLandscape.setAttribute('aria-label','Count-in: '+(countInOn?'on':'off'));
+  }
+  if(countInToggle)countInToggle.checked=countInOn;
+}
+syncCountInBtn();
+countInBtn.addEventListener('click',()=>{
+  countInOn=!countInOn;
+  try{localStorage.setItem('mosaicCountIn',countInOn?'1':'0');}catch{}
+  // Same "Count-in on defaults the beat counter on too" rule the checkbox's
+  // own change handler already applies just below — kept identical here so
+  // tapping the button behaves exactly like ticking the checkbox.
+  if(countInOn&&metroReady()&&!metroActive)setMetroActive(true);
+  syncCountInBtn();
+});
+if(typeof countInBtnLandscape!=='undefined'&&countInBtnLandscape)countInBtnLandscape.addEventListener('click',()=>countInBtn.click());
 if(countInToggle){
   countInToggle.checked=countInOn;
   countInToggle.addEventListener('change',()=>{
@@ -5529,6 +5678,7 @@ if(countInToggle){
     // uses (piece switch, Reset, initial page load — see there), so they
     // can never drift out of sync with each other or with a real tap.
     if(countInOn&&metroReady()&&!metroActive)setMetroActive(true);
+    syncCountInBtn();
   });
 }
 // `let countingIn=...` used to live here — moved up alongside
