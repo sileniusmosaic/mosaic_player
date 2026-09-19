@@ -1182,6 +1182,29 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
 #flipBtnLandscape{right:12px}
 #countInBtnLandscape.is-active,#flipBtnLandscape.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 #countInBtnLandscape .countin-icon{width:86.4%;height:86.4%}
+/* First-visit onboarding coachmark tour (Sep 2026, real request — "a couple
+   of splash screens... points different buttons in their use... tells them
+   to scroll down for more info on landscape", revised on request to small
+   arrow-pointing cards next to the real buttons instead of full-screen
+   panels, advanced by a tap anywhere on screen rather than per-card close
+   buttons. See ONBOARD_KEY/maybeStartOnboarding()/runOnboardingTour() in the
+   script for the shown-once logic and the ?newuser=1 test override.
+   Portrait/mobile only (see maybeStartOnboarding()'s own IS_DESKTOP/
+   landscape-matchMedia guard) — the targeted buttons are the mobile-portrait
+   ones (e.g. focusMuteBtn/focusSoloBtn), not their landscape counterparts.
+   z-index above everything else on the page, including the ?debug=1 overlay
+   (z-index:99999, see debugLandscapeEl above) — this only ever runs on top
+   of a freshly-loaded page, never alongside a modal, but the margin costs
+   nothing. */
+.onboard-catcher{position:fixed;inset:0;z-index:100000;background:transparent}
+.onboard-highlight{position:relative;z-index:100001;outline:3px solid var(--accent-blue);outline-offset:4px;border-radius:10px;animation:onboardPulse 1.4s ease-in-out infinite}
+@keyframes onboardPulse{0%,100%{outline-color:var(--accent-blue)}50%{outline-color:rgba(109,197,255,.35)}}
+.onboard-card{position:fixed;z-index:100002;max-width:200px;background:rgba(21,16,11,.96);border:1px solid var(--border);border-radius:10px;padding:10px 28px 10px 12px;font-family:'Roboto Condensed',Arial,sans-serif;font-size:13px;line-height:1.4;color:var(--text);box-shadow:0 6px 20px rgba(0,0,0,.45)}
+.onboard-card.is-centered{max-width:240px;text-align:center;left:50%;top:50%;transform:translate(-50%,-50%);padding:18px 28px}
+.onboard-skip{position:absolute;top:2px;right:4px;background:none;border:none;color:var(--muted);font-size:18px;line-height:1;padding:6px;cursor:pointer}
+.onboard-arrow{position:absolute;width:0;height:0;border:7px solid transparent;display:none}
+.onboard-arrow.arrow-up{top:-14px;border-bottom-color:rgba(21,16,11,.96)}
+.onboard-arrow.arrow-down{bottom:-14px;border-top-color:rgba(21,16,11,.96)}
 </style>
 </head>
 <body>
@@ -1718,7 +1741,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='2.57';
+const BUILD_VERSION='3.0';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -5954,7 +5977,124 @@ setStatus('WebCodecs build: one decode pipeline drives both views — audio is t
   const initialVideoTracker=makeLoadProgress(cfg.label+' 100% (initial video)');
   loadVideoForTempoZero(100,initialVideoTracker,()=>paintAt(0)).then(()=>{initialVideoTracker.stop('good');}).catch(err=>{console.error(err);setStatus('Video failed to load: '+(err?.message||err),'error');initialVideoTracker.stop('error');});
 }
+// --- first-visit onboarding coachmark tour --------------------------------
+// (Sep 2026, real request: "a couple of splash screens... points different
+// buttons in their use... tells them to scroll down for more info on
+// landscape" — revised on request to small arrow-pointing cards next to the
+// real buttons rather than full-screen panels, advanced by a tap anywhere on
+// screen. Shown once per browser via localStorage; append ?newuser=1 to the
+// URL to force it to run again for testing regardless of that flag — bookmark
+// that URL rather than clearing storage by hand every time. Portrait/mobile
+// only: skipped entirely on desktop (pointer:fine) and if the page happens to
+// load already rotated to landscape (the tour is built around the portrait
+// layout/buttons) — in the landscape case nothing is marked as seen, so it
+// still runs the next time the page loads in portrait. If the visitor
+// rotates to landscape mid-tour, the tour ends itself (see the matchMedia
+// listener in runOnboardingTour) rather than trying to reposition cards
+// against a layout it wasn't built for.
+const ONBOARD_KEY='mosaicOnboardSeen_v1';
+function maybeStartOnboarding(){
+  if(IS_DESKTOP)return;
+  if(window.matchMedia('(orientation: landscape) and (pointer: coarse)').matches)return;
+  const forced=new URLSearchParams(location.search).get('newuser')==='1';
+  if(!forced){
+    try{if(localStorage.getItem(ONBOARD_KEY)==='1')return;}catch(e){}
+  }
+  const steps=[
+    {selectors:['#gridStageMobile'],text:'Tap any square to bring it into focus above.'},
+    {selectors:['#play'],text:'Tap Play to start — the first tap also picks up your chosen tempo.'},
+    {selectors:['#focusMuteBtn','#focusSoloBtn'],text:'Mute (M) or Solo (S) the focused instrument — instant, even mid-playback.'},
+    {selectors:['#metroBtn'],text:'Shows a live beat counter once you’re playing.'},
+    {selectors:['#flipBtn'],text:'Flips the tile view horizontally.'},
+    {selectors:[],centered:true,text:'Turn your phone sideways for a bigger landscape view — and scroll down for more pieces and notation.'}
+  ].filter(s=>s.centered||s.selectors.every(sel=>document.querySelector(sel)));
+  if(steps.length)runOnboardingTour(steps);
+}
+function runOnboardingTour(steps){
+  const tour=document.getElementById('onboardTour');
+  const catcher=document.getElementById('onboardCatcher');
+  const card=document.getElementById('onboardCard');
+  const textEl=document.getElementById('onboardText');
+  const arrow=document.getElementById('onboardArrow');
+  const skip=document.getElementById('onboardSkip');
+  if(!tour||!catcher||!card||!textEl||!arrow||!skip)return; // markup missing — fail quiet, no tour rather than a broken one
+  const landscapeMQ=window.matchMedia('(orientation: landscape) and (pointer: coarse)');
+  let i=0,activeHighlights=[];
+  function clearHighlights(){activeHighlights.forEach(el=>el.classList.remove('onboard-highlight'));activeHighlights=[];}
+  function placeStep(){
+    const step=steps[i];
+    textEl.textContent=step.text;
+    if(step.centered||!step.selectors.length){
+      card.classList.add('is-centered');
+      arrow.style.display='none';
+      card.style.top='';card.style.left='';
+      return;
+    }
+    card.classList.remove('is-centered');
+    const els=step.selectors.map(sel=>document.querySelector(sel)).filter(Boolean);
+    if(!els.length){advance();return;}
+    els.forEach(el=>{el.classList.add('onboard-highlight');activeHighlights.push(el);});
+    els[0].scrollIntoView({block:'center',behavior:'smooth'});
+    // Two rAFs: one for the scrollIntoView layout to settle, one for the
+    // card's own text-driven size (max-width/wrapped text) to be measurable
+    // via offsetWidth/offsetHeight below — same "wait a frame for layout"
+    // pattern used elsewhere in this file (e.g. nudgeRepaint's settling
+    // timeout), just via rAF instead of setTimeout since there's no fixed
+    // duration to wait out here.
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(i>=steps.length||steps[i]!==step)return; // tour moved on while we waited on the scroll/layout
+      const rects=els.map(el=>el.getBoundingClientRect());
+      const top=Math.min(...rects.map(r=>r.top)),bottom=Math.max(...rects.map(r=>r.bottom));
+      const left=Math.min(...rects.map(r=>r.left)),right=Math.max(...rects.map(r=>r.right));
+      const cx=(left+right)/2,cy=(top+bottom)/2;
+      const vw=window.innerWidth,vh=window.innerHeight;
+      const cw=card.offsetWidth,ch=card.offsetHeight;
+      const below=cy<vh/2; // card goes on whichever side of the target has more room
+      let cardTop=below?bottom+14:top-14-ch;
+      cardTop=Math.max(8,Math.min(cardTop,vh-8-ch));
+      const cardLeft=Math.max(8,Math.min(cx-cw/2,vw-8-cw));
+      card.style.top=cardTop+'px';card.style.left=cardLeft+'px';
+      arrow.style.display='';
+      arrow.className='onboard-arrow '+(below?'arrow-up':'arrow-down');
+      arrow.style.left=Math.max(12,Math.min(cx-cardLeft-7,cw-26))+'px';
+    }));
+  }
+  function finish(){
+    clearHighlights();
+    tour.hidden=true;
+    try{localStorage.setItem(ONBOARD_KEY,'1');}catch(e){}
+    catcher.removeEventListener('click',advance);
+    skip.removeEventListener('click',finish);
+    window.removeEventListener('resize',placeStep);
+    landscapeMQ.removeEventListener('change',onRotate);
+  }
+  function advance(){
+    clearHighlights();
+    i++;
+    if(i>=steps.length){finish();return;}
+    placeStep();
+  }
+  function onRotate(e){if(e.matches)finish();}
+  skip.addEventListener('click',(e)=>{e.stopPropagation();finish();});
+  catcher.addEventListener('click',advance);
+  window.addEventListener('resize',placeStep);
+  landscapeMQ.addEventListener('change',onRotate);
+  tour.hidden=false;
+  placeStep();
+}
+// Double rAF (same reasoning as placeStep()'s own comment above) so the
+// first step's target elements have their real, settled layout the moment
+// the tour starts measuring them.
+requestAnimationFrame(()=>requestAnimationFrame(()=>{try{maybeStartOnboarding();}catch(e){console.error(e);}}));
 })();
 </script>
+<div id="onboardTour" class="onboard-tour" hidden>
+  <div id="onboardCatcher" class="onboard-catcher"></div>
+  <div id="onboardCard" class="onboard-card">
+    <button id="onboardSkip" type="button" class="onboard-skip" aria-label="Skip tour">&times;</button>
+    <p id="onboardText" class="onboard-text"></p>
+    <div id="onboardArrow" class="onboard-arrow"></div>
+  </div>
+</div>
 </body>
 </html>
