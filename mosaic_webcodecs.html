@@ -1770,7 +1770,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='3.2';
+const BUILD_VERSION='3.3';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -4143,7 +4143,21 @@ function renderNotationStrip(){
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
     notationStripDesktop.hidden=true;notationStripDesktop.removeAttribute('src');
     currentLandscapeNotationSrc=null;
-    landscapeNotation.hidden=true;
+    // Real report (Sep 2026): rotating into landscape on a tile with no
+    // notation (Abakuá's Coro) blanked the ENTIRE screen, not just the
+    // notation band. Root cause: #landscapeNotation is not the band — it's
+    // the whole fixed, full-screen landscape container (video square, nav
+    // arrows, transport; see its own position:fixed;inset:0 CSS) — and this
+    // used to set landscapeNotation.hidden=true here, which (once landscape
+    // mode's own media query is satisfied — see .landscape-notation:not(
+    // [hidden]){display:flex}) took the whole landscape UI down with it, not
+    // just the notation. That line was harmless before this feature existed
+    // (src was never falsy, so this branch never ran), and is fixed now by
+    // hiding only the notation band itself, exactly like the `if` branch
+    // does while its own image is still loading — landscape mode stays
+    // fully usable regardless of whether the current tile has notation art.
+    landscapeNotationCanvas.parentElement.hidden=true;
+    landscapeNotation.hidden=false;
     debugLog('renderNotationStrip() no-notation branch');
   }
 }
