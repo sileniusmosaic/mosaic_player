@@ -1197,14 +1197,43 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    of a freshly-loaded page, never alongside a modal, but the margin costs
    nothing. */
 .onboard-catcher{position:fixed;inset:0;z-index:100000;background:transparent}
-.onboard-highlight{position:relative;z-index:100001;outline:3px solid var(--accent-blue);outline-offset:4px;border-radius:10px;animation:onboardPulse 1.4s ease-in-out infinite}
+/* Sep 2026 fix (real report: "the M and S buttons disappear completely at
+   the card that is explaining them" / "buttons... appear in different parts
+   of the screen"): this class used to also set position:relative, meaning to
+   just create a stacking context for the outline — but focusMuteBtn,
+   focusSoloBtn and metroBtn get their real on-screen position entirely from
+   position:absolute on the shared .dawBtn rule (see .dawBtn/.focusMuteBtn/
+   .focusSoloBtn/.metroBtn above), and this rule's own position:relative,
+   coming later in the stylesheet, was winning the cascade and silently
+   flipping them out of absolute positioning into normal document flow —
+   exactly while the tour had them highlighted. outline doesn't need
+   position:relative to draw correctly (it always follows the element's own
+   border box regardless of its position value), so it's dropped here rather
+   than replaced. */
+.onboard-highlight{outline:3px solid var(--accent-blue);outline-offset:4px;border-radius:10px;animation:onboardPulse 1.4s ease-in-out infinite}
 @keyframes onboardPulse{0%,100%{outline-color:var(--accent-blue)}50%{outline-color:rgba(109,197,255,.35)}}
-.onboard-card{position:fixed;z-index:100002;max-width:200px;background:rgba(21,16,11,.96);border:1px solid var(--border);border-radius:10px;padding:10px 28px 10px 12px;font-family:'Roboto Condensed',Arial,sans-serif;font-size:13px;line-height:1.4;color:var(--text);box-shadow:0 6px 20px rgba(0,0,0,.45)}
-.onboard-card.is-centered{max-width:240px;text-align:center;left:50%;top:50%;transform:translate(-50%,-50%);padding:18px 28px}
-.onboard-skip{position:absolute;top:2px;right:4px;background:none;border:none;color:var(--muted);font-size:18px;line-height:1;padding:6px;cursor:pointer}
-.onboard-arrow{position:absolute;width:0;height:0;border:7px solid transparent;display:none}
-.onboard-arrow.arrow-up{top:-14px;border-bottom-color:rgba(21,16,11,.96)}
-.onboard-arrow.arrow-down{bottom:-14px;border-top-color:rgba(21,16,11,.96)}
+.onboard-card{position:fixed;z-index:100002;max-width:230px;background:var(--panel2);border:1.5px solid var(--accent-blue);border-radius:12px;padding:13px 30px 13px 15px;font-family:'Roboto Condensed',Arial,sans-serif;font-size:15.5px;font-weight:600;line-height:1.5;color:var(--text);box-shadow:0 8px 26px rgba(0,0,0,.5)}
+.onboard-card.is-centered{max-width:260px;text-align:center;left:50%;top:50%;transform:translate(-50%,-50%);padding:16px 20px 20px}
+.onboard-skip{position:absolute;top:2px;right:4px;background:none;border:none;color:var(--muted);font-size:20px;line-height:1;padding:7px;cursor:pointer}
+.onboard-arrow,.onboard-arrow::after{position:absolute;width:0;height:0;border:9px solid transparent}
+.onboard-arrow{display:none}
+/* left is set inline by JS (points at the target's true x-center, which
+   isn't necessarily under the card's own center once the card gets clamped
+   to the viewport edge) -- only top/bottom + the two border colors (outer
+   "stroke", inner fill matching the card) are set here. */
+.onboard-arrow::after{content:'';left:-7px;border-width:7px}
+.onboard-arrow.arrow-up{top:-18px;border-bottom-color:var(--accent-blue)}
+.onboard-arrow.arrow-up::after{top:3px;border-bottom-color:var(--panel2)}
+.onboard-arrow.arrow-down{bottom:-18px;border-top-color:var(--accent-blue)}
+.onboard-arrow.arrow-down::after{bottom:3px;border-top-color:var(--panel2)}
+/* Rotate-phone hint icon (Sep 2026, real request — "maybe a rotating sign
+   for the landscape card"), shown only on the final centered step. A single
+   phone outline rotating portrait<->landscape on a loop, with a small dashed
+   arc + arrowhead behind it reinforcing the rotation direction — purely
+   decorative (aria-hidden), the card text carries the actual instruction. */
+.onboard-rotate-icon:not([hidden]){width:46px;height:46px;margin:0 auto 8px;display:block}
+.onboard-phone-g{transform-origin:21px 20px;animation:onboardRotatePhone 2.6s ease-in-out infinite}
+@keyframes onboardRotatePhone{0%,15%{transform:rotate(0deg)}45%,65%{transform:rotate(90deg)}95%,100%{transform:rotate(0deg)}}
 </style>
 </head>
 <body>
@@ -1741,7 +1770,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='3.0';
+const BUILD_VERSION='3.1';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -6001,12 +6030,12 @@ function maybeStartOnboarding(){
     try{if(localStorage.getItem(ONBOARD_KEY)==='1')return;}catch(e){}
   }
   const steps=[
-    {selectors:['#gridStageMobile'],text:'Tap any square to bring it into focus above.'},
-    {selectors:['#play'],text:'Tap Play to start — the first tap also picks up your chosen tempo.'},
-    {selectors:['#focusMuteBtn','#focusSoloBtn'],text:'Mute (M) or Solo (S) the focused instrument — instant, even mid-playback.'},
-    {selectors:['#metroBtn'],text:'Shows a live beat counter once you’re playing.'},
-    {selectors:['#flipBtn'],text:'Flips the tile view horizontally.'},
-    {selectors:[],centered:true,text:'Turn your phone sideways for a bigger landscape view — and scroll down for more pieces and notation.'}
+    {selectors:['#gridStageMobile'],text:'Tap any square below to bring it into focus up here.'},
+    {selectors:['#play'],text:'Tap Play to get going — your first tap also picks up whichever tempo you’ve chosen.'},
+    {selectors:['#focusMuteBtn','#focusSoloBtn'],text:'Mute (M) or Solo (S) the focused instrument, any time — even mid-playback.'},
+    {selectors:['#metroBtn'],text:'Once you’re playing, this shows a live beat counter.'},
+    {selectors:['#flipBtn'],text:'Flips the tile view horizontally — handy if that suits you better.'},
+    {selectors:[],centered:true,icon:'rotate',text:'One more thing — turn your phone sideways for a bigger landscape view, and scroll down for more pieces and notation.'}
   ].filter(s=>s.centered||s.selectors.every(sel=>document.querySelector(sel)));
   if(steps.length)runOnboardingTour(steps);
 }
@@ -6017,6 +6046,7 @@ function runOnboardingTour(steps){
   const textEl=document.getElementById('onboardText');
   const arrow=document.getElementById('onboardArrow');
   const skip=document.getElementById('onboardSkip');
+  const icon=document.getElementById('onboardIcon');
   if(!tour||!catcher||!card||!textEl||!arrow||!skip)return; // markup missing — fail quiet, no tour rather than a broken one
   const landscapeMQ=window.matchMedia('(orientation: landscape) and (pointer: coarse)');
   let i=0,activeHighlights=[];
@@ -6024,6 +6054,11 @@ function runOnboardingTour(steps){
   function placeStep(){
     const step=steps[i];
     textEl.textContent=step.text;
+    // Plain .hidden=... doesn't reliably remove the attribute on an <svg>
+    // element (unlike a normal HTML element) in some engines, silently
+    // leaving the rotate icon hidden on the one step meant to show it —
+    // setAttribute/removeAttribute is the reliable form for an SVG root.
+    if(icon){if(step.icon==='rotate')icon.removeAttribute('hidden');else icon.setAttribute('hidden','');}
     if(step.centered||!step.selectors.length){
       card.classList.add('is-centered');
       arrow.style.display='none';
@@ -6050,13 +6085,17 @@ function runOnboardingTour(steps){
       const vw=window.innerWidth,vh=window.innerHeight;
       const cw=card.offsetWidth,ch=card.offsetHeight;
       const below=cy<vh/2; // card goes on whichever side of the target has more room
-      let cardTop=below?bottom+14:top-14-ch;
+      let cardTop=below?bottom+18:top-18-ch;
       cardTop=Math.max(8,Math.min(cardTop,vh-8-ch));
       const cardLeft=Math.max(8,Math.min(cx-cw/2,vw-8-cw));
       card.style.top=cardTop+'px';card.style.left=cardLeft+'px';
       arrow.style.display='';
       arrow.className='onboard-arrow '+(below?'arrow-up':'arrow-down');
-      arrow.style.left=Math.max(12,Math.min(cx-cardLeft-7,cw-26))+'px';
+      // -9 (not half of the 7px inner border) centers the OUTER 9px-bordered
+      // triangle (an 18px box) on the target's true x-center; the smaller
+      // inner triangle (::after, its own -7px left offset, in CSS) rides
+      // along with it as a fixed inset, giving the two-layer "stroke" look.
+      arrow.style.left=Math.max(10,Math.min(cx-cardLeft-9,cw-28))+'px';
     }));
   }
   function finish(){
@@ -6092,6 +6131,14 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>{try{maybeStartOnboarding();
   <div id="onboardCatcher" class="onboard-catcher"></div>
   <div id="onboardCard" class="onboard-card">
     <button id="onboardSkip" type="button" class="onboard-skip" aria-label="Skip tour">&times;</button>
+    <svg id="onboardIcon" class="onboard-rotate-icon" viewBox="0 0 40 40" aria-hidden="true" hidden>
+      <path d="M8 22a12 12 0 1 1 4 9" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"></path>
+      <path d="M9.5 26l2.5 5 5-1.5" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+      <g class="onboard-phone-g">
+        <rect x="14" y="8" width="14" height="24" rx="3" fill="none" stroke="var(--accent-blue)" stroke-width="2"></rect>
+        <line x1="19" y1="28.5" x2="23" y2="28.5" stroke="var(--accent-blue)" stroke-width="1.6" stroke-linecap="round"></line>
+      </g>
+    </svg>
     <p id="onboardText" class="onboard-text"></p>
     <div id="onboardArrow" class="onboard-arrow"></div>
   </div>
