@@ -1770,7 +1770,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='3.1';
+const BUILD_VERSION='3.2';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -4034,8 +4034,19 @@ let currentLandscapeNotationSrc=null;
 // the base one while that bar is playing), else fall back to that tile's
 // 'all' (base) variant. Only when there are no admin-uploaded variants for
 // this tile at all does this fall through to the piece's existing static
-// notationStripByIndex/notationStrip — so Congo and any tile nobody's
-// touched in admin.html yet behave exactly as before this feature existed.
+// notationStripByIndex entry for it.
+// Sep 2026, real request ("when there isn't a specific notation part for an
+// instrument... just blank"): used to fall further through to
+// cfg.notationStrip/GLOBAL_NOTATION_FALLBACK, the one shared placeholder
+// image every piece defines (see e.g. Abakuá/Congo's own cfg comments —
+// Abakuá's Coro (7) and Congo's Coro 1/2 have no real art and were landing
+// on it; same thing for any bar an admin-uploaded variant doesn't cover). It
+// was never actually instrument-specific — just a "no real art yet" stand-in
+// — so returning nothing here instead is a straight improvement, not a loss
+// of any real per-instrument content. renderNotationStrip()'s own
+// no-notation branch already collapses the strip/band correctly when src is
+// falsy (see its `else` below) — it just used to be unreachable, since this
+// function always returned at least GLOBAL_NOTATION_FALLBACK before.
 function resolveNotationStripSrc(tileIndex){
   const variants=cfg.notationVariantsByIndex&&cfg.notationVariantsByIndex[tileIndex];
   if(variants&&variants.length){
@@ -4048,7 +4059,7 @@ function resolveNotationStripSrc(tileIndex){
     if(base)return base.url;
   }
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[tileIndex];
-  return perTile||cfg.notationStrip||GLOBAL_NOTATION_FALLBACK;
+  return perTile||null;
 }
 // Belt-and-suspenders for GLOBAL_NOTATION_FALLBACK (Sep 10 2026): a
 // *configured* src can still 404 at runtime — a deleted/renamed static file,
@@ -4124,10 +4135,11 @@ function renderNotationStrip(){
     landscapeNotation.hidden=false;
   }else{
     // Collapse for real (the hidden attribute takes it fully out of
-    // layout), since there's no "space above it" worth preserving. Dead
-    // in practice as of Sep 10 2026: resolveNotationStripSrc() always
-    // returns at least GLOBAL_NOTATION_FALLBACK now, so src is never
-    // falsy here — kept only as a defensive last resort.
+    // layout), since there's no "space above it" worth preserving. Live as
+    // of Sep 2026 (see resolveNotationStripSrc()'s own comment) — this is
+    // now the real "no specific notation part for this instrument right
+    // now" state (e.g. Abakuá's Coro before it has admin-uploaded art for
+    // the current bar), not just a defensive last resort.
     notationStrip.hidden=true;notationStrip.removeAttribute('src');notationStrip.classList.remove('is-off');
     notationStripDesktop.hidden=true;notationStripDesktop.removeAttribute('src');
     currentLandscapeNotationSrc=null;
