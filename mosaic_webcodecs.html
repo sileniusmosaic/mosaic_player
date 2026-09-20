@@ -1797,7 +1797,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='4.3';
+const BUILD_VERSION='4.4';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -3998,7 +3998,7 @@ function preloadNotationStrips(){
     // the same tile, every sibling's measurement is already sitting in cache
     // and the shared crop height is complete/stable from that very first draw
     // — not just from the second time each variant happens to be seen.
-    const measureOnceReady=()=>{if(entry.img.naturalWidth)measureNotationInk(entry.img);};
+    const measureOnceReady=()=>{if(entry.img.naturalWidth)measureNotationInk(entry.img,src);};
     if(entry.img.decode)entry.img.decode().then(measureOnceReady).catch(()=>{}); // best-effort — a slow/failed decode here just means the old fetch-on-demand behavior for that one image, nothing worse
     else if(entry.ready)measureOnceReady();
     else entry.waiters.push(measureOnceReady);
@@ -4035,9 +4035,22 @@ function preloadNotationStrips(){
 // fixes). Split out from the old single trimNotationWhitespace() body so a
 // tile's sibling bar-variants can be measured too, not just whichever one is
 // about to be drawn.
+// `key` should be the ORIGINAL src string as stored in cfg's variant list
+// (e.g. worker.js's relative "/api/notation-image/..." url) — the same
+// string getNotationImage()/notationImageCache use as their lookup key.
+// Falling back to img.src when no key is given looks equivalent but isn't:
+// reading img.src back off a real <img>/Image() ALWAYS returns the
+// browser-resolved ABSOLUTE URL, even if you assigned it a relative one —
+// so a caller that keys its own sibling list by the original relative
+// string (as renderNotationStrip() does, straight from cfg) would silently
+// never find a match here. Real bug, not just a test artifact: this exact
+// mismatch was why the Sep 20 2026 sibling-union fix below (Abakuá Coro)
+// still visibly resized between bar-variants even after shipping — every
+// lookup by the config's relative url missed this cache, which had only
+// ever been populated under the resolved absolute form.
 const notationInkBoundsCache=new Map();
-function measureNotationInk(img){
-  const src=img.src;
+function measureNotationInk(img,key){
+  const src=key||img.src;
   if(notationInkBoundsCache.has(src))return notationInkBoundsCache.get(src);
   const w=img.naturalWidth,h=img.naturalHeight;
   let result=null;
@@ -4081,13 +4094,13 @@ function measureNotationInk(img){
 // cropping — every variant of one tile now always shares one crop height,
 // the tightest one that still fits its busiest variant, so only switching to
 // a genuinely different TILE (expected to vary) changes the band size.
-function trimNotationWhitespace(img,canvas,siblingSrcs){
-  const own=measureNotationInk(img);
+function trimNotationWhitespace(img,canvas,siblingSrcs,ownSrc){
+  const own=measureNotationInk(img,ownSrc);
   if(!own)return false;
   const w=own.w,h=own.h;
   let top=own.top,bot=own.bot;
   (siblingSrcs||[]).forEach(src=>{
-    if(src===img.src)return;
+    if(src===ownSrc)return;
     const sib=notationInkBoundsCache.get(src);
     if(sib&&sib.w===w&&sib.h===h){top=Math.min(top,sib.top);bot=Math.max(bot,sib.bot);}
   });
@@ -4327,7 +4340,7 @@ function renderNotationStrip(){
       // is what repositions the transport row and metro cluster in response,
       // whenever that size change actually lands — decoupled from why it
       // changed, so there's nothing left here that can hang.
-      if(!trimNotationWhitespace(entry.img,landscapeNotationCanvas,siblingSrcs)){
+      if(!trimNotationWhitespace(entry.img,landscapeNotationCanvas,siblingSrcs,src)){
         // No measurable margin, an already-tight image, or a pixel-read
         // failure — fall back to drawing it untouched at full size so the
         // notation is never simply missing.
