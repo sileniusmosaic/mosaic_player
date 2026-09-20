@@ -412,12 +412,18 @@
     abakua:{
       poster:'Mosaic/Abakua/poster_abakua.jpg', cols:4, rows:2,
       notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
-      // Clave/Bembé static entries removed Sep 10 2026 — the underlying
-      // files were deleted from the repo, so these were dead links (see
-      // matching note in mosaic_webcodecs.html's MOSAICS.abakua). Mirror
-      // that file's PIECE_META here so this admin preview matches what's
-      // actually live.
-      notationStripByIndex:{}
+      // Sep 20 2026 fix: this had been left at {} (empty) since Sep 10,
+      // when Clave/Bembé's art was briefly pulled for 404ing live — but
+      // Sep 13 2026 restored a full set (Clave, Bembé, Erikundi, Quinto,
+      // Conga, Tumba, plus Cata) in mosaic_webcodecs.html's own
+      // MOSAICS.abakua.notationStripByIndex, and this admin-only mirror was
+      // never updated to match. Real, on-disk effect the whole time: the
+      // live app showed these seven instruments' real notation just fine,
+      // but the admin console's own preview/cycler had no idea they existed
+      // and showed the generic fallback for all of them instead — restored
+      // here to match mosaic_webcodecs.html exactly. Only Coro (7) has no
+      // static entry, same as the real player — it's admin-upload-only.
+      notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png',2:'Mosaic/Abakua/03_cata_abakua.png',3:'Mosaic/Abakua/04_erikundi_abakua.png',4:'Mosaic/Abakua/05_quinto_abakua.png',5:'Mosaic/Abakua/06_conga_abakua.png',6:'Mosaic/Abakua/07_tumba_abakua.png'}
     },
     congo:{
       poster:'Mosaic/Congo_Yambumba/poster_congo.jpg', cols:4, rows:2,
@@ -557,7 +563,13 @@
   function previewCandidates(id,tileIdx){
     var list=[];
     var def=defaultNotationFor(id,tileIdx);
-    if(def)list.push({kind:'default',label:'Default (site fallback)',url:def});
+    // Sep 20 2026: this "default" candidate is usually the piece's real,
+    // committed-to-the-repo per-instrument art (PIECE_META[id]
+    // .notationStripByIndex) — only truly the generic Mosaic-wordmark
+    // placeholder when a tile has neither that nor any admin upload at
+    // all. Label distinguishes the two so it's never mistaken for "nothing
+    // configured" when it's actually the real static image.
+    if(def)list.push({kind:'default',label:(def===GLOBAL_NOTATION_FALLBACK?'No image configured (generic placeholder)':'Static default (from the repo)'),url:def});
     var variants=((notationOverrides[id]&&notationOverrides[id][tileIdx])||[]).slice().sort(function(a,b){
       if(a.bars==='all')return -1;
       if(b.bars==='all')return 1;
@@ -904,6 +916,12 @@
     showView('notation');
     notationTitle.textContent=(PIECE_LABELS[id]||id)+' — notation images';
     notationBackBtn.onclick=function(){location.hash='#/piece/'+id;};
+    // Land on the best available image for whichever tile we're arriving
+    // on (usually tile 0, or wherever this piece's cycler was last left) —
+    // see preferredVariantIndex()'s comment.
+    var ps=getPreviewState(id);
+    ps.variantIndex=preferredVariantIndex(id,ps.tileIndex);
+    ps.editingBars=false;
     refreshNotationSection(id);
   }
 
@@ -1403,9 +1421,29 @@
     var ps=getPreviewState(id);
     var count=STEM_NAMES[id].length;
     ps.tileIndex=(ps.tileIndex+dir+count)%count;
-    ps.variantIndex=0;
+    ps.variantIndex=preferredVariantIndex(id,ps.tileIndex);
     ps.editingBars=false;
     renderNotationPreview(id);
+  }
+
+  // Which candidate to land on when first looking at a tile (Sep 20 2026,
+  // real request: seeing the generic "Default (site fallback)" placeholder
+  // by default meant an extra click just to see what's actually configured
+  // for a square). Prefers a real admin-uploaded base ("all bars") image,
+  // then any other admin-uploaded variant, and only falls back to index 0
+  // (whatever defaultNotationFor() resolves to — usually the piece's real
+  // static per-instrument art, occasionally the true generic placeholder)
+  // when nothing's been admin-uploaded for this tile at all. Only called at
+  // the two moments a NEW tile comes into view — moveNotationTile() and
+  // renderPieceNotation() below — never from inside renderNotationPreview()
+  // itself, so it can't fight the cycler's own prev/next clicks.
+  function preferredVariantIndex(id,tileIdx){
+    var candidates=previewCandidates(id,tileIdx);
+    var baseIdx=candidates.findIndex(function(c){return c.kind==='live'&&c.variant.bars==='all';});
+    if(baseIdx>=0)return baseIdx;
+    var liveIdx=candidates.findIndex(function(c){return c.kind==='live';});
+    if(liveIdx>=0)return liveIdx;
+    return 0;
   }
 
   function barsReadoutText(bars){
