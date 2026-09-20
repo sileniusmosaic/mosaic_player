@@ -1797,7 +1797,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='4.0';
+const BUILD_VERSION='4.1';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -6312,7 +6312,15 @@ function runOnboardingTour(steps){
 // Double rAF (same reasoning as placeStep()'s own comment above) so the
 // first step's target elements have their real, settled layout the moment
 // the tour starts measuring them.
-requestAnimationFrame(()=>requestAnimationFrame(()=>{try{maybeStartOnboarding();}catch(e){console.error(e);}}));
+// Onboarding tour paused (Sep 20 2026, real request — pulled before this
+// build's live push so it doesn't need re-testing against today's new
+// mobile-portrait mockup layout right now; nothing below it was touched, so
+// re-enabling later is just restoring this one call. See the project's own
+// notes for what still needs checking before it comes back (its first step,
+// "Tap any square below to bring it into focus up here", pointed at
+// #gridStageMobile, which the new scrollable mockups now sit right below —
+// worth a fresh look before this runs again).
+// requestAnimationFrame(()=>requestAnimationFrame(()=>{try{maybeStartOnboarding();}catch(e){console.error(e);}}));
 })();
 </script>
 <div id="onboardTour" class="onboard-tour" hidden>
