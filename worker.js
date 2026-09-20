@@ -276,13 +276,40 @@ function decodeBase64Image(input) {
   return bytes;
 }
 
-async function readConfig(env) {
-  const raw = await env.ADMIN_CONFIG.get('config', { type: 'json' });
+// Sep 20 2026: split out from readConfig/writeConfig below so "Send to live"
+// can read/write the SAME config shape against a different KV binding
+// (env.LIVE_ADMIN_CONFIG, only bound on staging — see wrangler.jsonc) rather
+// than duplicating this logic for a second store.
+async function readConfigFrom(kv) {
+  const raw = await kv.get('config', { type: 'json' });
   return normalizeConfig(raw || DEFAULT_CONFIG);
 }
-
+async function writeConfigTo(kv, cfg) {
+  await kv.put('config', JSON.stringify(cfg));
+}
+async function readConfig(env) {
+  return readConfigFrom(env.ADMIN_CONFIG);
+}
 async function writeConfig(env, cfg) {
-  await env.ADMIN_CONFIG.put('config', JSON.stringify(cfg));
+  return writeConfigTo(env.ADMIN_CONFIG, cfg);
+}
+
+// Finds-or-creates the variant id a given bars selection should be saved
+// under, within one tile's existing variant array — same "re-uploading the
+// same bars replaces that image in place, anything else is new" rule
+// notation-upload has always used. Factored out (Sep 20 2026) so
+// notation-promote-live can reuse the exact same matching behaviour when
+// copying a variant into the live store, instead of drifting from it.
+function upsertVariantId(existingVariants, bars, requestedVariantId) {
+  let variantId = (typeof requestedVariantId === 'string' && /^[a-z0-9]{4,32}$/i.test(requestedVariantId))
+    ? requestedVariantId
+    : null;
+  if (variantId && !existingVariants.some(v => v.id === variantId)) variantId = null; // unknown id — treat as "new"
+  if (!variantId) {
+    const matchingBars = existingVariants.find(v => sameBars(v.bars, bars));
+    variantId = matchingBars ? matchingBars.id : randomVariantId();
+  }
+  return variantId;
 }
 
 function checkPassphrase(request, env) {
@@ -299,6 +326,21 @@ function checkPassphrase(request, env) {
   // env.ADMIN_PASSPHRASE not yet set (secret never configured) → refuse
   // every write rather than silently accepting an empty passphrase.
   return !!env.ADMIN_PASSPHRASE && passphrase === env.ADMIN_PASSPHRASE;
+}
+
+// Sep 20 2026 ("Send to live" button): deliberately NOT checkPassphrase()
+// above — that function waves staging straight through with no passphrase
+// at all, which is fine for edits that only ever touch staging's own store,
+// but this route writes into PRODUCTION's KV even though it's called on
+// staging, so it needs its own always-required check regardless of
+// env.ENVIRONMENT. Compares against a separate LIVE_ADMIN_PASSPHRASE secret
+// (set once via `wrangler secret put LIVE_ADMIN_PASSPHRASE --env staging`,
+// same typed value as production's own ADMIN_PASSPHRASE) rather than
+// ADMIN_PASSPHRASE itself, since that secret isn't set on staging at all —
+// this is intentionally a second, explicit copy of it, not a shortcut.
+function checkLivePassphrase(request, env) {
+  const passphrase = request.headers.get('x-live-admin-passphrase') || '';
+  return !!env.LIVE_ADMIN_PASSPHRASE && passphrase === env.LIVE_ADMIN_PASSPHRASE;
 }
 
 // A random per-visit id the browser generates itself (see localStorage/
@@ -454,14 +496,7 @@ export default {
         if (!cfg.notationOverrides[pieceId]) cfg.notationOverrides[pieceId] = {};
         const existingVariants = cfg.notationOverrides[pieceId][tileIndex] || [];
 
-        let variantId = (typeof body?.variantId === 'string' && /^[a-z0-9]{4,32}$/i.test(body.variantId))
-          ? body.variantId
-          : null;
-        if (variantId && !existingVariants.some(v => v.id === variantId)) variantId = null; // unknown id — treat as "new"
-        if (!variantId) {
-          const matchingBars = existingVariants.find(v => sameBars(v.bars, bars));
-          variantId = matchingBars ? matchingBars.id : randomVariantId();
-        }
+        const variantId = upsertVariantId(existingVariants, bars, body?.variantId);
 
         const updatedAt = Date.now();
         const nextVariants = existingVariants.filter(v => v.id !== variantId);
@@ -506,6 +541,126 @@ export default {
         return corsJson(withNotationImageUrls(cfg));
       } catch (e) {
         return corsJson({ error: 'Server error while deleting: ' + (e && e.message ? e.message : String(e)) }, 500);
+      }
+    }
+
+    // Edit an existing variant's bar list in place, without touching its
+    // image bytes at all (Sep 20 2026 — real request: re-typing the bars
+    // correctly meant deleting and re-uploading the whole image again,
+    // risking a fresh mistake at the file-picking step just to fix a typo
+    // in the numbers). Body: { pieceId, tileIndex, variantId, bars }. The
+    // image stays exactly where it is (notationImgKey() is keyed by
+    // variantId, never by bars), so this is pure metadata — no KV image
+    // write, no new variant id, no local-mirror filename change.
+    if (url.pathname === '/api/admin/notation-bars-update' && request.method === 'POST') {
+      if (!checkPassphrase(request, env)) {
+        return corsJson({ error: 'Incorrect passphrase.' }, 401);
+      }
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return corsJson({ error: 'Invalid JSON body.' }, 400);
+      }
+      const pieceId = body?.pieceId;
+      const tileIndex = Number(body?.tileIndex);
+      const variantId = body?.variantId;
+      if (!KNOWN_MOSAIC_IDS.includes(pieceId)) return corsJson({ error: 'Unknown piece.' }, 400);
+      if (!Number.isInteger(tileIndex) || tileIndex < 0 || tileIndex >= STEM_COUNTS[pieceId]) {
+        return corsJson({ error: 'Invalid tile index.' }, 400);
+      }
+      if (typeof variantId !== 'string' || !variantId) return corsJson({ error: 'Missing variantId.' }, 400);
+      const bars = validateBars(body?.bars);
+      if (bars === null) {
+        return corsJson({ error: "bars must be 'all' or a non-empty list of bar numbers." }, 400);
+      }
+
+      try {
+        const cfg = await readConfig(env);
+        const existingVariants = (cfg.notationOverrides[pieceId] && cfg.notationOverrides[pieceId][tileIndex]) || [];
+        const target = existingVariants.find(v => v.id === variantId);
+        if (!target) return corsJson({ error: 'That image no longer exists — refresh and try again.' }, 404);
+        const conflict = existingVariants.find(v => v.id !== variantId && sameBars(v.bars, bars));
+        if (conflict) {
+          return corsJson({ error: 'Another image on this tile already uses those exact bars — edit or delete that one first.' }, 409);
+        }
+        target.bars = bars;
+        target.updatedAt = Date.now();
+        cfg.notationOverrides[pieceId][tileIndex] = existingVariants;
+        await writeConfig(env, cfg);
+        return corsJson(withNotationImageUrls(cfg));
+      } catch (e) {
+        return corsJson({ error: 'Server error while saving: ' + (e && e.message ? e.message : String(e)) }, 500);
+      }
+    }
+
+    // "Send to live" (Sep 20 2026) — copies ONE already-tested variant
+    // (image bytes + its bar list) from staging's own store straight into
+    // production's, server-side, so a tested image never has to go back
+    // through the browser's file picker a second time (which was itself a
+    // real source of mistakes — see CLAUDE.md). Only wired up/reachable when
+    // this Worker is running as staging (env.ENVIRONMENT==='staging') AND
+    // has the LIVE_ADMIN_CONFIG binding (see wrangler.jsonc) — on production
+    // itself this route simply doesn't exist as a meaningful action, since
+    // production has no "somewhere further along" to send to.
+    // Body: { pieceId, tileIndex, variantId }. Auth: x-live-admin-passphrase
+    // header, checked against its OWN secret (checkLivePassphrase() above),
+    // deliberately not the same as the ordinary passphrase gate — see that
+    // function's comment for why.
+    if (url.pathname === '/api/admin/notation-promote-live' && request.method === 'POST') {
+      if (env.ENVIRONMENT !== 'staging' || !env.LIVE_ADMIN_CONFIG) {
+        return corsJson({ error: 'Send to live is only available from the staging admin console.' }, 400);
+      }
+      if (!checkLivePassphrase(request, env)) {
+        return corsJson({ error: 'Incorrect live passphrase.' }, 401);
+      }
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return corsJson({ error: 'Invalid JSON body.' }, 400);
+      }
+      const pieceId = body?.pieceId;
+      const tileIndex = Number(body?.tileIndex);
+      const variantId = body?.variantId;
+      if (!KNOWN_MOSAIC_IDS.includes(pieceId)) return corsJson({ error: 'Unknown piece.' }, 400);
+      if (!Number.isInteger(tileIndex) || tileIndex < 0 || tileIndex >= STEM_COUNTS[pieceId]) {
+        return corsJson({ error: 'Invalid tile index.' }, 400);
+      }
+      if (typeof variantId !== 'string' || !variantId) return corsJson({ error: 'Missing variantId.' }, 400);
+
+      try {
+        const stagingCfg = await readConfig(env);
+        const stagingVariants = (stagingCfg.notationOverrides[pieceId] && stagingCfg.notationOverrides[pieceId][tileIndex]) || [];
+        const source = stagingVariants.find(v => v.id === variantId);
+        if (!source) return corsJson({ error: 'That image is not on staging (already promoted, or never saved there).' }, 404);
+
+        const bytes = await env.ADMIN_CONFIG.get(notationImgKey(pieceId, tileIndex, variantId), { type: 'arrayBuffer' });
+        if (!bytes) return corsJson({ error: 'Image bytes missing on staging — try re-uploading there first.' }, 404);
+
+        // Deliberately reuse the STAGING variant's own id as-is, rather than
+        // matching live's existing variants by bars (as upsertVariantId does
+        // for an ordinary upload): identity, not current bar list, is what
+        // ties a staging image to "the same image, promoted again" across
+        // repeat sends — a promote that follows a bars-only edit on staging
+        // must update the SAME live entry, even though its bars no longer
+        // match what's currently live (that's the whole point of promoting
+        // it again). Matching by bars instead would miss that and leave a
+        // stale duplicate behind under the old bar list.
+        const liveCfg = await readConfigFrom(env.LIVE_ADMIN_CONFIG);
+        if (!liveCfg.notationOverrides[pieceId]) liveCfg.notationOverrides[pieceId] = {};
+        const liveVariants = liveCfg.notationOverrides[pieceId][tileIndex] || [];
+
+        const updatedAt = Date.now();
+        const nextLiveVariants = liveVariants.filter(v => v.id !== variantId);
+        nextLiveVariants.push({ id: variantId, bars: source.bars, updatedAt });
+        liveCfg.notationOverrides[pieceId][tileIndex] = nextLiveVariants;
+
+        await env.LIVE_ADMIN_CONFIG.put(notationImgKey(pieceId, tileIndex, variantId), bytes);
+        await writeConfigTo(env.LIVE_ADMIN_CONFIG, liveCfg);
+        return corsJson({ ok: true, pieceId, tileIndex, bars: source.bars, promotedVariantId: variantId });
+      } catch (e) {
+        return corsJson({ error: 'Server error while sending to live: ' + (e && e.message ? e.message : String(e)) }, 500);
       }
     }
 

@@ -71,6 +71,20 @@
         {
           "binding": "ADMIN_CONFIG",
           "id": "ce2dcd64f14944c1906d1726e1ef6c07"
+        },
+        // Send to live (Sep 20 2026): a second binding on the SAME staging
+        // Worker, pointing at PRODUCTION's own ADMIN_CONFIG namespace id
+        // (the id at the top of this file) under a distinctly-named binding
+        // so worker.js's code can tell "my own store" (ADMIN_CONFIG) apart
+        // from "the live store" (this one) and never confuse the two. This
+        // is what lets the notation admin's "Send to live" button copy one
+        // already-tested image + its bar list straight into production
+        // without re-uploading through the browser a second time. Gated in
+        // code by its own LIVE_ADMIN_PASSPHRASE secret (see CLAUDE.md) —
+        // this binding alone doesn't skip that check.
+        {
+          "binding": "LIVE_ADMIN_CONFIG",
+          "id": "a25a0f05fe4b4bcdaa5045ce29f8379e"
         }
       ],
       "vars": {
