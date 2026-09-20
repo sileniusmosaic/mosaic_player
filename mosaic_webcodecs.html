@@ -110,6 +110,28 @@ body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba
    (see the .is-touch comment above) and wasn't asked for. Still scrolls
    (overflow-x:auto, unchanged) if a future piece count ever overflows. */
 .is-desktop .piece-strip-scroll{justify-content:center}
+/* Mobile-portrait piece mockups (Sep 20 2026, real request — "instead of the
+   three buttons at the bottom... I would like to be able to scroll down the
+   page and see a still image of the whole player repeated but with the
+   starting image of each piece"). Desktop keeps the old piece-strip-bar
+   unchanged — these two rules are the only place that decides which piece
+   switcher shows where; see buildPieceMockups() in the script for the rest. */
+html:not(.is-desktop) .piece-strip-bar{display:none}
+.is-desktop .piece-mockups{display:none}
+.piece-mockups{display:flex;flex-direction:column;gap:20px;margin-top:14px}
+.piece-mockup{all:unset;display:block;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent;font:inherit;text-align:inherit}
+.piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:9.9px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
+/* Same chrome as the real .focus-wrap/.grid-stage, same CSS-sprite-crop
+   technique buildPieceStrip()'s thumbnails already use (poster image sliced
+   via background-size/background-position) — a still image, not a second
+   decode pipeline, per the real request ("this would require too much
+   overhead... instead they are a still image"). */
+.piece-mockup-square{position:relative;aspect-ratio:1/1;background:#030405 no-repeat;border:3px solid var(--window-border);border-radius:10px;overflow:hidden}
+.piece-mockup-grid{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
+.piece-mockup-tile{position:relative;background-repeat:no-repeat;outline:1px solid #050607}
+.piece-mockup-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,4,5,.22)}
+.piece-mockup-play svg{width:44px;height:44px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
 #menuToggle{display:none}
 .menu-panel{position:fixed;inset:0;background:rgba(15,11,7,.97);z-index:50;padding:18px 16px;transform:translateY(-100%);transition:transform .25s ease}
 #menuToggle:checked ~ .menu-panel{transform:translateY(0)}
@@ -1661,6 +1683,11 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
     <label for="menuToggle" class="burger"><span></span><span></span><span></span></label>
     <div id="pieceStrip" class="piece-strip-scroll" role="tablist" aria-label="Choose a piece"></div>
   </div>
+  <!-- Mobile-portrait replacement for the piece-strip-bar above (Sep 20 2026,
+       real request) — see buildPieceMockups() in the script. Hidden outright
+       on desktop (CSS), and .piece-strip-bar is hidden outright on mobile —
+       exactly one of the two ever shows for a given layout. -->
+  <div id="pieceMockups" class="piece-mockups"></div>
   <section class="panel notation-panel" id="notationPanel" hidden>
     <p class="rail-title">Notation</p>
     <div id="notationPages" class="notation-pages"></div>
@@ -1770,7 +1797,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='3.4';
+const BUILD_VERSION='4.0';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -1941,9 +1968,52 @@ let MOSAIC_ORDER=['flipswing','abakua','congo']; // admin-console-tunable order 
 const TEMPO_PRESETS=[50,75,100]; // 25% dropped for now to reduce scope — can add back later
 function videoSourcesFor(c){return {100:c.videoBase+'100.mp4',75:c.videoBase+'75.mp4',50:c.videoBase+'50.mp4'}}
 
-let mosaicId=(new URLSearchParams(location.search).get('mosaic')||'flipswing').toLowerCase();
+// Resume-last-piece + MRU mockup order (Sep 20 2026, real request: "the user
+// is taken to the last piece they had playing not always defaulting to flip
+// swing (that is first time only first piece)... I play with 1 and then
+// scroll down and see 2 is available and click 2. 2 loads in at the top and
+// the new order is 2,1,3"). Persisted as a plain ordered array of piece ids
+// in localStorage — deliberately only ever WRITTEN from inside switchMosaic()
+// (a real, user-driven switch), never from this initial setup — so "first
+// time only first piece" falls out for free: with nothing in localStorage
+// yet, every fresh visit (and every visit before the first switch) just uses
+// MOSAIC_ORDER as-is.
+const PIECE_MRU_KEY='mosaicPieceMRU_v1';
+function loadPieceMRU(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(PIECE_MRU_KEY)||'null');
+    if(Array.isArray(raw)&&raw.length&&raw.every(id=>typeof id==='string'))return raw;
+  }catch{}
+  return null;
+}
+function savePieceMRU(order){
+  try{localStorage.setItem(PIECE_MRU_KEY,JSON.stringify(order));}catch{} // best-effort — private browsing/quota errors just mean no persistence, not a crash
+}
+// Folds `order` into exactly today's known piece ids — anything missing
+// (a piece added since the visitor's last visit, or the very first call with
+// no stored order at all) gets appended in MOSAIC_ORDER's own order — then
+// makes sure `activeId`, if given, is first. Used both at startup and any
+// time MOSAIC_ORDER itself changes (admin reorder) or the active piece
+// changes (switchMosaic()).
+function normalizePieceMRU(order,activeId){
+  let next=(order||[]).filter(id=>MOSAIC_ORDER.includes(id));
+  MOSAIC_ORDER.forEach(id=>{if(!next.includes(id))next.push(id);});
+  if(activeId){
+    const idx=next.indexOf(activeId);
+    if(idx>0){const moved=next.splice(idx,1)[0];next.unshift(moved);}
+  }
+  return next;
+}
+const storedPieceMRU=loadPieceMRU();
+
+let mosaicId=(new URLSearchParams(location.search).get('mosaic')||(storedPieceMRU&&storedPieceMRU[0])||'flipswing').toLowerCase();
 if(!MOSAICS[mosaicId])mosaicId='flipswing';
 let cfg=MOSAICS[mosaicId];
+// Display order for the mockup stack below the player (see buildPieceMockups()
+// further down) — starts from whatever was stored (or MOSAIC_ORDER, first
+// visit) with the actually-active piece pinned to the front, in case the URL
+// param above picked something other than storedPieceMRU[0].
+let pieceMRU=normalizePieceMRU(storedPieceMRU,mosaicId);
 // Debug mode (Sep 2026): ?debug=1 is the one existing "debug version of the
 // player" convention (already used below by DEBUG_LANDSCAPE/debugLog()).
 // Reused here to gate the on-screen Load Log and fps readout so normal
@@ -2054,8 +2124,14 @@ async function fetchAdminConfig(){
     // reader of cfg.metroOffsetMs (computeMetroBeatTimes, updateMetro) with
     // no extra step needed; only the order-dependent UI needs a manual redraw.
     if(orderChanged){
+      // Re-fold pieceMRU against the new MOSAIC_ORDER (any piece the admin
+      // just added lands in admin's own intended position; a visitor's own
+      // usage-driven ordering among the pieces they've already tried is left
+      // alone — see normalizePieceMRU()'s own comment).
+      pieceMRU=normalizePieceMRU(pieceMRU,mosaicId);
       buildMosaicRail();
       buildPieceStrip();
+      buildPieceMockups();
     }
   }catch(e){
     // Offline, no Worker deployed yet, CORS, whatever — the defaults already
@@ -2170,7 +2246,7 @@ function mirrorLandscapeFocus(){
   requestAnimationFrame(mirrorLandscapeFocus);
 }
 requestAnimationFrame(mirrorLandscapeFocus);
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), notationStripDesktop=$('#notationStripDesktop'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), resetBtnLandscape=$('#resetBtnLandscape'), landscapeFocusDim=$('#landscapeFocusDim'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), pieceMockups=$('#pieceMockups'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), notationStripDesktop=$('#notationStripDesktop'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), resetBtnLandscape=$('#resetBtnLandscape'), landscapeFocusDim=$('#landscapeFocusDim'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -3789,6 +3865,63 @@ function buildPieceStrip(){
     pieceStrip.appendChild(item);
   });
 }
+// Mobile-portrait piece mockups (Sep 20 2026, real request — verbatim: "when
+// in portrait mode on mobile, instead of the three buttons at the bottom...
+// I would like to be able to scroll down the page and see a still image of
+// the whole player repeated but with the starting image of each piece...
+// clicking anywhere on that player image then loads that new piece in").
+// Each mockup is the same focus-square + 4x2 grid shape the real player
+// shows before Play is ever pressed (see drawFocusPoster()/drawPoster()),
+// built out of CSS background-position sprite crops of that piece's own
+// poster — same technique buildPieceStrip()'s thumbnails already use — never
+// a second video/canvas/audio instance ("this would require too much
+// overhead", per the request): just a cheap, honest-looking still image at
+// the real player's own scale.
+function buildPieceMockup(id){
+  const m=MOSAICS[id];
+  const card=document.createElement('button');
+  card.type='button';card.className='piece-mockup';card.setAttribute('aria-label','Switch to '+m.label);
+
+  const label=document.createElement('div');label.className='piece-mockup-label';
+  const name=document.createElement('span');name.textContent=m.label;
+  const hint=document.createElement('span');hint.className='piece-mockup-hint';hint.textContent='TAP TO OPEN';
+  label.appendChild(name);label.appendChild(hint);
+
+  const square=document.createElement('div');square.className='piece-mockup-square';
+  square.style.backgroundImage='url('+m.poster+')';
+  square.style.backgroundSize=(m.cols*100)+'% '+(m.rows*100)+'%';
+  square.style.backgroundPosition='0% 0%'; // tile 0 — the same tile drawFocusPoster() shows first, before any tap
+  const play=document.createElement('div');play.className='piece-mockup-play';
+  play.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(12,9,6,.55)" stroke="rgba(241,230,208,.85)" stroke-width="1.5"></circle><path d="M9.5 7.5l8 4.5-8 4.5z" fill="#f1e6d0"></path></svg>';
+  square.appendChild(play);
+
+  const gridEl=document.createElement('div');gridEl.className='piece-mockup-grid';
+  gridEl.style.gridTemplateColumns='repeat('+m.cols+',1fr)';
+  gridEl.style.gridTemplateRows='repeat('+m.rows+',1fr)';
+  for(let i=0;i<m.tileCount;i++){
+    const t=document.createElement('div');t.className='piece-mockup-tile';
+    t.style.backgroundImage='url('+m.poster+')';
+    t.style.backgroundSize=(m.cols*100)+'% '+(m.rows*100)+'%';
+    const px=m.cols>1?(i%m.cols)/(m.cols-1)*100:0, py=m.rows>1?Math.floor(i/m.cols)/(m.rows-1)*100:0;
+    t.style.backgroundPosition=px+'% '+py+'%';
+    gridEl.appendChild(t);
+  }
+  card.appendChild(label);card.appendChild(square);card.appendChild(gridEl);
+  card.addEventListener('click',()=>{if(id!==mosaicId)switchMosaic(id);});
+  return card;
+}
+// Rebuilds the scrollable stack of every OTHER piece's mockup, in pieceMRU
+// order (most-recently-used first, current piece excluded) — called
+// everywhere buildPieceStrip() is, so it always mirrors the current piece +
+// MRU order: initial load, switchMosaic() (a real switch — reorders MRU
+// too), and fetchAdminConfig() if the admin-configured order changed.
+function buildPieceMockups(){
+  if(!pieceMockups)return;
+  pieceMockups.innerHTML='';
+  pieceMRU.filter(id=>id!==mosaicId&&MOSAICS[id]).forEach(id=>{
+    pieceMockups.appendChild(buildPieceMockup(id));
+  });
+}
 // Renders whatever notation pages the current piece has (cfg.notation — an
 // array of image filenames, page 1 first) directly below the player, or
 // hides the whole section for a piece that doesn't have any yet. Plain
@@ -4989,6 +5122,12 @@ async function switchMosaic(id){
     engine.decodedFrameCount=0; // fresh baseline for the stall watchdog on the new piece
 
     mosaicId=id;cfg=MOSAICS[id];
+    // Move this piece to the front of the MRU mockup order and persist it —
+    // the one and only place this ever gets written to localStorage (see
+    // PIECE_MRU_KEY's own comment), so a real switch is what "counts" as the
+    // visitor's new "last piece played".
+    pieceMRU=normalizePieceMRU(pieceMRU,id);
+    savePieceMRU(pieceMRU);
     LOOP_END=cfg.loopEnd;NAMES=cfg.names;TILE_COLS=cfg.cols;TILE_ROWS=cfg.rows;TILE_COUNT=cfg.tileCount;
     VIDEO_SOURCES=videoSourcesFor(cfg);STEM_URLS=cfg.stemFiles;
     videoCycle=LOOP_END;pausedPos=0;selected=0;
@@ -5045,7 +5184,7 @@ async function switchMosaic(id){
     gctx.fillStyle='#030405';gctx.fillRect(0,0,grid.width,grid.height);
     focusCtx.fillStyle='#030405';focusCtx.fillRect(0,0,focusCanvas.width,focusCanvas.height);
 
-    buildControls();buildMosaicRail();buildPieceStrip();
+    buildControls();buildMosaicRail();buildPieceStrip();buildPieceMockups();
     // Sep 12 2026 fix: buildControls() just rebuilt tileEls/muteBtns/soloBtns
     // fresh for the new piece, but the muted/soloed arrays were already
     // zeroed further up (before those elements even existed) — nothing had
@@ -5685,7 +5824,7 @@ metroBtn.disabled=!metroReady();
 setMetroActive(countInOn&&metroReady());
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
-buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
+buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
 
 // Usage analytics (Sep 10 2026, revised Sep 11 2026) — anonymous, minimal,
