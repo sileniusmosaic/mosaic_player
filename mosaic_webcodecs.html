@@ -1797,7 +1797,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='4.1';
+const BUILD_VERSION='4.3';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -2080,6 +2080,12 @@ async function fetchAdminConfig(){
     // this block's own job is just to force that next paint to actually
     // happen right away instead of waiting for some unrelated redraw.
     let currentPieceTileOrderChanged=false;
+    // Mobile-portrait mockups (Sep 20 2026) show OTHER pieces, not just the
+    // active one, so a tile-order edit to any piece — not only the one
+    // currently open — needs its own rebuild below; tracked separately from
+    // currentPieceTileOrderChanged, which only ever gated the active piece's
+    // own on-screen grid/engine repaint.
+    let anyTileOrderChanged=false;
     if(remote.tileOrder&&typeof remote.tileOrder==='object'){
       for(const id of Object.keys(MOSAICS)){
         const arr=remote.tileOrder[id];
@@ -2088,6 +2094,7 @@ async function fetchAdminConfig(){
         const same=Array.isArray(prev)&&prev.length===arr.length&&arr.every((v,k)=>prev[k]===v);
         if(!same){
           MOSAICS[id].tileOrder=arr;
+          anyTileOrderChanged=true;
           if(id===mosaicId)currentPieceTileOrderChanged=true;
         }
       }
@@ -2098,6 +2105,7 @@ async function fetchAdminConfig(){
       if(engine.decodedFrameCount>0)engine.render(currentPos()); // already playing/paused-on-video — repaint the live frame in the new layout
       else drawPoster();
     }
+    if(anyTileOrderChanged)buildPieceMockups(); // covers a non-active piece's reorder too, which currentPieceTileOrderChanged alone never would
     // Per-bar / per-tile notation overrides (Sep 9 2026, admin console
     // upload panel) — see resolveNotationStripSrc() and worker.js's own
     // notationOverrides/notationImgKey comments. Each variant already
@@ -3877,6 +3885,15 @@ function buildPieceStrip(){
 // a second video/canvas/audio instance ("this would require too much
 // overhead", per the request): just a cheap, honest-looking still image at
 // the real player's own scale.
+// currentTileOrder() (above) only ever reads the ACTIVE piece's cfg.tileOrder
+// — buildPieceMockup() below needs the same per-piece admin reorder for
+// pieces that AREN'T the active one, so this is the same identity-fallback
+// logic, just parameterized by id instead of always reading the live cfg.
+function tileOrderFor(id){
+  const m=MOSAICS[id];
+  const t=m.tileOrder;
+  return (Array.isArray(t)&&t.length===m.tileCount)?t:Array.from({length:m.tileCount},(_,i)=>i);
+}
 function buildPieceMockup(id){
   const m=MOSAICS[id];
   const card=document.createElement('button');
@@ -3898,7 +3915,14 @@ function buildPieceMockup(id){
   const gridEl=document.createElement('div');gridEl.className='piece-mockup-grid';
   gridEl.style.gridTemplateColumns='repeat('+m.cols+',1fr)';
   gridEl.style.gridTemplateRows='repeat('+m.rows+',1fr)';
-  for(let i=0;i<m.tileCount;i++){
+  // order[slot] is the logical tile shown at grid position `slot` — same
+  // semantics as currentTileOrder()[slot]/buildControls()'s own order.forEach
+  // (the admin-console "reorder the squares" feature). The crop position
+  // (px/py) is always keyed by the LOGICAL index — exactly like tileSource()
+  // — only which grid CELL it lands in (DOM append order, via `slot`) moves.
+  const order=tileOrderFor(id);
+  for(let slot=0;slot<m.tileCount;slot++){
+    const i=order[slot];
     const t=document.createElement('div');t.className='piece-mockup-tile';
     t.style.backgroundImage='url('+m.poster+')';
     t.style.backgroundSize=(m.cols*100)+'% '+(m.rows*100)+'%';
@@ -3968,7 +3992,16 @@ function preloadNotationStrips(){
     // renderNotationStrip()'s landscape loader reads from — no duplicate
     // fetch for whichever tile is already selected.
     const entry=getNotationImage(src);
-    if(entry.img.decode)entry.img.decode().catch(()=>{}); // best-effort — a slow/failed decode here just means the old fetch-on-demand behavior for that one image, nothing worse
+    // Also pre-measures this image's own ink bounds into notationInkBoundsCache
+    // (Sep 20 2026 — see trimNotationWhitespace()'s comment) once it's actually
+    // decoded, so that by the time playback swaps to a DIFFERENT bar-variant of
+    // the same tile, every sibling's measurement is already sitting in cache
+    // and the shared crop height is complete/stable from that very first draw
+    // — not just from the second time each variant happens to be seen.
+    const measureOnceReady=()=>{if(entry.img.naturalWidth)measureNotationInk(entry.img);};
+    if(entry.img.decode)entry.img.decode().then(measureOnceReady).catch(()=>{}); // best-effort — a slow/failed decode here just means the old fetch-on-demand behavior for that one image, nothing worse
+    else if(entry.ready)measureOnceReady();
+    else entry.waiters.push(measureOnceReady);
   });
 }
 // The always-visible single-line strip under the focus square (cfg.notationStrip)
@@ -3996,38 +4029,75 @@ function preloadNotationStrips(){
 // autocropping a scanned page to its printed area) and draws just that
 // region, plus a little breathing room, onto landscapeNotationCanvas.
 // Portrait's own .notation-strip <img> is untouched by any of this.
-function trimNotationWhitespace(img,canvas){
+//
+// Per-image measurement, cached by src (Sep 20 2026 follow-up — see the
+// trimNotationWhitespace() comment just below for the real report this
+// fixes). Split out from the old single trimNotationWhitespace() body so a
+// tile's sibling bar-variants can be measured too, not just whichever one is
+// about to be drawn.
+const notationInkBoundsCache=new Map();
+function measureNotationInk(img){
+  const src=img.src;
+  if(notationInkBoundsCache.has(src))return notationInkBoundsCache.get(src);
   const w=img.naturalWidth,h=img.naturalHeight;
-  if(!w||!h)return false;
-  const src=document.createElement('canvas');src.width=w;src.height=h;
-  const sctx=src.getContext('2d',{willReadFrequently:true});
-  sctx.drawImage(img,0,0);
-  let data;
-  try{data=sctx.getImageData(0,0,w,h).data;}
-  catch(e){console.warn('Landscape notation auto-trim: could not read image pixels, showing it untrimmed.',e);return false;}
-  // A row counts as real content only once enough of its width is
-  // meaningfully non-white — filters out stray anti-aliasing specks at the
-  // very top/bottom rows of an otherwise-blank margin.
-  const minDarkPx=Math.max(3,Math.round(w*0.004));
-  let top=0,bot=h-1;
-  const rowIsContent=y=>{
-    const rowStart=y*w*4;let dark=0;
-    for(let x=0;x<w;x++){
-      const i=rowStart+x*4;
-      if(data[i]<210||data[i+1]<210||data[i+2]<210){if(++dark>=minDarkPx)return true;}
-    }
-    return false;
-  };
-  while(top<h&&!rowIsContent(top))top++;
-  while(bot>top&&!rowIsContent(bot))bot--;
-  if(top>=bot)return false; // effectively blank image — nothing sensible to crop to
+  let result=null;
+  if(w&&h){
+    const src2=document.createElement('canvas');src2.width=w;src2.height=h;
+    const sctx=src2.getContext('2d',{willReadFrequently:true});
+    sctx.drawImage(img,0,0);
+    try{
+      const data=sctx.getImageData(0,0,w,h).data;
+      // A row counts as real content only once enough of its width is
+      // meaningfully non-white — filters out stray anti-aliasing specks at
+      // the very top/bottom rows of an otherwise-blank margin.
+      const minDarkPx=Math.max(3,Math.round(w*0.004));
+      const rowIsContent=y=>{
+        const rowStart=y*w*4;let dark=0;
+        for(let x=0;x<w;x++){
+          const i=rowStart+x*4;
+          if(data[i]<210||data[i+1]<210||data[i+2]<210){if(++dark>=minDarkPx)return true;}
+        }
+        return false;
+      };
+      let top=0,bot=h-1;
+      while(top<h&&!rowIsContent(top))top++;
+      while(bot>top&&!rowIsContent(bot))bot--;
+      if(top<bot)result={top,bot,w,h}; // else: effectively blank image — nothing sensible to crop to
+    }catch(e){console.warn('Landscape notation auto-trim: could not read image pixels for '+src,e);}
+  }
+  notationInkBoundsCache.set(src,result);
+  return result;
+}
+// Real report (Sep 20 2026): two admin-uploaded per-bar variants for the
+// same tile (Abakuá Coro), identical PNG dimensions, but one visibly "busier"
+// than the other — since the old version of this function measured and
+// cropped each image entirely on its own, the sparser variant cropped
+// shorter than the busier one, so the video square visibly grew/shrank every
+// time playback (or admin preview) swapped between them mid-piece. Fixed by
+// unioning ink bounds across every OTHER known variant of the same tile
+// (`siblingSrcs`, already-measured ones only — see preloadNotationStrips(),
+// which now measures every variant up front specifically so this union is
+// complete from the very first draw, not just from the second) before
+// cropping — every variant of one tile now always shares one crop height,
+// the tightest one that still fits its busiest variant, so only switching to
+// a genuinely different TILE (expected to vary) changes the band size.
+function trimNotationWhitespace(img,canvas,siblingSrcs){
+  const own=measureNotationInk(img);
+  if(!own)return false;
+  const w=own.w,h=own.h;
+  let top=own.top,bot=own.bot;
+  (siblingSrcs||[]).forEach(src=>{
+    if(src===img.src)return;
+    const sib=notationInkBoundsCache.get(src);
+    if(sib&&sib.w===w&&sib.h===h){top=Math.min(top,sib.top);bot=Math.max(bot,sib.bot);}
+  });
   const contentH=bot-top+1;
   const pad=Math.round(contentH*0.12); // small breathing room, like a printed margin
   const cropTop=Math.max(0,top-pad),cropBot=Math.min(h-1,bot+pad);
   const cropH=cropBot-cropTop+1;
   if(cropH>=h*0.92)return false; // margin's already negligible — not worth cropping
   canvas.width=w;canvas.height=cropH;
-  canvas.getContext('2d').drawImage(src,0,cropTop,w,cropH,0,0,w,cropH);
+  canvas.getContext('2d').drawImage(img,0,cropTop,w,cropH,0,0,w,cropH);
   return true;
 }
 // Bug fixed Sep 2026 (third attempt — reported still happening after the
@@ -4208,6 +4278,13 @@ function notationSrcFallback(imgEl,failedSrc){
 function renderNotationStrip(){
   const src=resolveNotationStripSrc(selected);
   debugLog('renderNotationStrip() called, src='+src);
+  // Every OTHER admin-uploaded variant this same tile could swap to (bar-
+  // specific or the base 'all' one) — see trimNotationWhitespace()'s comment:
+  // passed through so a mid-playback swap between two variants of ONE tile
+  // shares a single crop height instead of each re-cropping to its own
+  // content and visibly resizing the square. A tile with no admin variants
+  // only ever has the one possible src, so this is simply empty there.
+  const siblingSrcs=(cfg.notationVariantsByIndex&&cfg.notationVariantsByIndex[selected])?cfg.notationVariantsByIndex[selected].map(v=>v.url):[];
   if(src){
     notationStrip.onerror=function(){notationSrcFallback(notationStrip,src);};
     notationStripDesktop.onerror=function(){notationSrcFallback(notationStripDesktop,src);};
@@ -4250,7 +4327,7 @@ function renderNotationStrip(){
       // is what repositions the transport row and metro cluster in response,
       // whenever that size change actually lands — decoupled from why it
       // changed, so there's nothing left here that can hang.
-      if(!trimNotationWhitespace(entry.img,landscapeNotationCanvas)){
+      if(!trimNotationWhitespace(entry.img,landscapeNotationCanvas,siblingSrcs)){
         // No measurable margin, an already-tight image, or a pixel-read
         // failure — fall back to drawing it untouched at full size so the
         // notation is never simply missing.
