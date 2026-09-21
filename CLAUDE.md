@@ -96,13 +96,20 @@ he enters it correctly.
   secret (set via `wrangler secret put ADMIN_PASSPHRASE`, never committed to
   the repo). On STAGING, there is no admin passphrase at all (see above) —
   do not confuse the two, or assume one implies anything about the other.
-- **Notation admin UI** (Sep 20 2026 rewrite): the notation-images page is
-  now one instrument at a time — outer arrows cycle the 8 squares, inner
-  arrows cycle that square's uploaded images, "Edit" changes just an
-  existing image's bar list in place (`/api/admin/notation-bars-update`, no
-  re-upload). Both the login screen and every page show an unmissable
-  STAGING/LIVE banner (`admin.html`'s `IS_STAGING`, from `location.hostname`
-  — same signal the staging passphrase-bypass already used).
+- **Notation admin UI** (Sep 20 2026 rewrite, wide-layout redesign Sep 21
+  2026): the notation-images page is one instrument at a time — outer
+  arrows (now fixed-position, aligned to the preview tile's own left/right
+  edges) cycle the 8 squares. The old inner "cycle through images one at a
+  time" arrows are gone; instead the right-hand side of the page lists
+  every uploaded image for the current instrument at once, sorted
+  lowest-bar-first, each with its own readable thumbnail, bar list, and
+  "Edit" button that changes just that image's bar list in place
+  (`/api/admin/notation-bars-update`, no re-upload). The preview tile
+  itself sits in a fixed-width sticky left column so it stays in place
+  while scrolling the list. Both the login screen and every page show an
+  unmissable STAGING/LIVE banner (`admin.html`'s `IS_STAGING`, from
+  `location.hostname` — same signal the staging passphrase-bypass already
+  used).
 - **Send to live**: on staging only, a variant's action row gets a "Send to
   live" button that copies that exact tested image (bytes + bar list)
   straight into production's own KV, server-side
@@ -120,3 +127,20 @@ he enters it correctly.
   `npx wrangler secret put LIVE_ADMIN_PASSPHRASE --env staging`, typing the
   same passphrase as production's `ADMIN_PASSPHRASE` when prompted. Until
   that's set, "Send to live" will 401 every time.
+- **Live → staging notation mirror** (Sep 21 2026): the reverse direction —
+  for when a notation edit happens straight on the live admin console
+  instead of staging. Automatic, no button: any notation upload / bars-only
+  edit / delete made on production is best-effort replayed into staging's
+  own store right after it saves, via a new `STAGING_ADMIN_CONFIG` binding
+  on the top-level (production) Worker in `wrangler.jsonc`, pointing at
+  staging's own `ADMIN_CONFIG` namespace id — the mirror image of staging's
+  `LIVE_ADMIN_CONFIG` binding above. See
+  `mirrorNotationUpsertToStaging()`/`mirrorNotationDeleteToStaging()` in
+  `worker.js`. No passphrase gate of its own (unlike "Send to live") —
+  it only ever runs from inside a write already gated by production's own
+  `ADMIN_PASSPHRASE` check, and it's write-only, never read for anything
+  security-sensitive. Fails silently (logs, doesn't throw) if the binding
+  isn't deployed yet or the mirror write has a problem — never blocks or
+  fails the real edit on production. Needs a real `wrangler deploy` (no
+  `--env`, i.e. to production) before it does anything, since it's a new
+  binding in `wrangler.jsonc`.
