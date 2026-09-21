@@ -10,6 +10,14 @@
   *{box-sizing:border-box;}
   body{margin:0;min-height:100vh;background:#0b0c10;color:#e8e8ec;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
   .wrap{max-width:640px;margin:0 auto;padding:24px 16px 80px;}
+  /* ---- Wide view (Sep 21 2026): the notation-images page specifically asked
+     for much more of a desktop screen's width — every other admin page (menu,
+     metro, order, stems) stays at the original narrow column, which already
+     suits their short single-column controls fine. showView() toggles this
+     class on #console itself (id+class beats the plain .wrap rule above on
+     specificity, no !important needed) only while the notation view is
+     showing. ---- */
+  #console.wide-view{max-width:1200px;}
 
   /* ---- STAGING/LIVE banner (Sep 20 2026) — pinned above EVERYTHING,
      including the passphrase gate, so which environment you're editing is
@@ -73,13 +81,27 @@
   .stem-reset{width:auto!important;padding:0 10px!important;font-size:12px!important;color:#9a9aa5;}
   .stem-unit{color:#9a9aa5;font-size:13px;}
 
-  /* ---- Notation image uploads (Sep 9 2026, cycler rewrite Sep 20 2026) ---- */
-  .notation-add{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:10px;margin-top:4px;border-top:1px dashed #22232b;}
-  .notation-bars-hint{font-size:12px;color:#9a9aa5;white-space:nowrap;}
-  .notation-add input[type=text]{width:110px;background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:8px;font-size:13px;}
-  .notation-add input[type=file]{flex:1;min-width:140px;font-size:12px;color:#9a9aa5;}
-  .notation-add button{background:#6c5ce7;color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  /* ---- Notation image uploads (Sep 9 2026, cycler rewrite Sep 20 2026,
+     stacked-column layout Sep 21 2026) — this form now lives in the fixed
+     360px left column (see .notation-editor-left) rather than a wide free
+     row, so it's a plain vertical stack (file picker + its preview
+     thumbnail on one line, bars hint+input on the next, button below) —
+     wrapping an inline row at 360px produced cramped, half-cut-off text. ---- */
+  .notation-add{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding-top:10px;margin-top:4px;border-top:1px dashed #22232b;}
+  .notation-add-filerow{display:flex;align-items:center;gap:10px;}
+  .notation-bars-hint{font-size:12px;color:#9a9aa5;}
+  .notation-add input[type=text]{width:100%;background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:8px;font-size:13px;}
+  .notation-add input[type=file]{flex:1;min-width:0;font-size:12px;color:#9a9aa5;}
+  .notation-add button{background:#6c5ce7;color:#fff;border:none;border-radius:6px;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;}
   .notation-add button:disabled{opacity:.5;cursor:default;}
+  /* Sep 21 2026: a small preview of whatever's currently chosen in the file
+     picker, BEFORE staging — real report: with no way to see the file
+     you'd picked, a wrong-file mistake wasn't caught until well into the
+     bars/staging step. Hidden (width:0, no border) until a file's actually
+     selected, so it never reserves dead space in the row on first load. */
+  .notation-add-preview{width:0;height:44px;border-radius:6px;overflow:hidden;background:#fff;border:0 solid #33343d;flex:0 0 auto;transition:width .1s;}
+  .notation-add-preview.show{width:44px;border-width:1px;}
+  .notation-add-preview img{display:block;width:100%;height:100%;object-fit:contain;}
   .notation-status{font-size:12px;color:#9a9aa5;margin-top:6px;min-height:16px;}
   .notation-status.ok{color:#4cd964;}
   .notation-status.err{color:#ff6b6b;}
@@ -88,23 +110,23 @@
   /* ---- Tile cycler (Sep 20 2026): the outer prev/next pair that moves
      between an instrument's 8 squares — same round-button look as the
      existing inner (image-variant) cycler below, just a size up and sat
-     above the square instead of below it. ---- */
-  .notation-tile-cycler{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px;}
-  .notation-tile-cycler button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer;flex:0 0 auto;}
+     above the square instead of below it.
+     Sep 21 2026, real report: with the old centered flexbox row, the label's
+     own width (name + "(3/8)" + an occasional "Draft pending" badge, all
+     different lengths per instrument) changed the ROW's total width, and
+     since the whole row was centered as a unit, the prev/next buttons
+     visibly shifted left/right every time the label text changed length —
+     "makes fast clicking really difficult because I've got to move my mouse
+     around". Fixed with CSS Grid instead of centered flex: the two button
+     columns are a FIXED track width (matching the button's own fixed 38px
+     size, so they never resize) and only the middle label column flexes —
+     the buttons now sit at the same two x-positions no matter what the
+     label says. ---- */
+  .notation-tile-cycler{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;gap:14px;margin-bottom:10px;}
+  .notation-tile-cycler button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer;}
   .notation-tile-cycler button:disabled{opacity:.35;cursor:default;}
-  .notation-tile-label{font-size:14px;font-weight:700;text-align:center;min-width:150px;}
+  .notation-tile-label{font-size:14px;font-weight:700;text-align:center;}
   .notation-tile-sub{font-size:11px;color:#9a9aa5;text-align:center;font-weight:400;margin-top:1px;}
-
-  /* ---- Bar-list readout + inline edit (Sep 20 2026): replaces "delete and
-     re-upload" for a plain typo/renumbering fix — the image itself is
-     untouched, only the metadata changes (see worker.js's
-     notation-bars-update route). ---- */
-  .notation-bars-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
-  .notation-bars-readout{font-size:13px;color:#c8c8d0;}
-  .notation-bars-readout b{color:#e8e8ec;}
-  .notation-bars-edit-btn{background:#22232b;border:1px solid #33343d;color:#8a8fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap;}
-  .notation-bars-editing{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
-  .notation-bars-editing input[type=text]{width:150px;background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:8px;font-size:13px;}
 
   /* ---- Send to live (Sep 20 2026) — only rendered on the staging host; see
      IS_STAGING. Kept visually distinct (green, matches the staging banner)
@@ -116,19 +138,41 @@
      bar-specific/base image can be checked for alignment/consistency right
      here rather than needing the live app open in another tab. ---- */
   .notation-preview{margin-bottom:14px;}
-  /* Sep 10 2026: square + strip sit beside the instrument/mode/sync info
-     instead of below it (was a stacked column eating vertical space before
-     the scrolling tile list even starts) — wraps back to stacked on a
-     narrow viewport since the side column has a min-width. Frame is sized
-     to 75% of its original 320px per his request, freeing more room below. */
-  .notation-preview-body{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;}
-  .notation-preview-side{flex:1 1 150px;min-width:150px;display:flex;flex-direction:column;gap:8px;}
+  /* ---- Sep 21 2026 rewrite: the "lower set of arrows" (the inner
+     variant-by-variant cycler) is gone — real report: it made it impossible
+     to scan a tile's whole set of bar-by-bar images at once, you had to
+     click through them one at a time and remember what you'd seen. Replaced
+     by a two-column layout: a FIXED-width left column (outer instrument
+     cycler, the one live-look preview, its actions, and the add-image form)
+     that stays put — same width, same position — no matter what's in the
+     right column, plus a right column holding every one of this
+     instrument's uploaded images at once, sorted lowest-bar-first, each
+     with its own readable thumbnail + bar list + Edit button, so the whole
+     sequence can be scanned top-to-bottom without touching an arrow.
+     grid-template-columns uses a fixed px left track (not fr/minmax) so its
+     width genuinely never changes — the "stay in the same place" ask,
+     satisfied at the layout level rather than by convention. Falls back to
+     one column on a narrow viewport (the notation page is still usable on
+     his phone, just no longer the primary design target — see CLAUDE.md's
+     desktop-first note on this page). ---- */
+  .notation-editor{display:grid;grid-template-columns:360px minmax(320px,1fr);gap:28px;align-items:start;}
+  @media (max-width:860px){.notation-editor{grid-template-columns:1fr;}}
+  /* position:sticky (not fixed — this only needs to stay put relative to the
+     page's own scroll, not the viewport) keeps the preview/upload column
+     visible while scrolling down a long right-hand list — directly serves
+     "scan down... work out the flow" without losing the preview it's being
+     checked against. */
+  .notation-editor-left{position:sticky;top:8px;display:flex;flex-direction:column;gap:14px;}
   .notation-preview-modebar{display:flex;flex-direction:column;align-items:flex-start;gap:6px;}
   .notation-preview-instrument{font-size:13px;font-weight:700;}
   .notation-mode-toggle{display:flex;gap:2px;background:#1a1b21;border:1px solid #33343d;border-radius:8px;padding:3px;flex-wrap:wrap;}
   .notation-mode-toggle button{background:none;border:none;color:#9a9aa5;font-size:11px;padding:6px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;}
   .notation-mode-toggle button.active{background:#6c5ce7;color:#fff;}
-  .notation-preview-frame{max-width:240px;flex:0 0 240px;}
+  /* Sep 21 2026: 240px -> 300px (25% larger, by request) and a fixed WIDTH
+     (not max-width, which could still shrink in a cramped flex row) now
+     that the frame lives in its own fixed-width grid column — it renders at
+     the exact same size and position for every instrument/image. */
+  .notation-preview-frame{width:300px;}
   /* The square itself: overflow:hidden clips the overlay strip to match the
      real .focus-wrap's rounded-corner clipping (see mosaic_webcodecs.html's
      own CSS comment on .notation-strip). aspect-ratio:1/1 mirrors the real
@@ -148,16 +192,35 @@
   .notation-preview-frame.mode-desktop .notation-preview-strip-below{display:block;}
   .notation-preview-frame.mode-mobile .notation-preview-strip-overlay{display:block;}
   .notation-preview-frame.mode-mobile .notation-preview-strip-below{display:none;}
-  .notation-preview-cycler{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px;}
-  .notation-preview-cycler button{background:#22232b;border:1px solid #33343d;color:#e8e8ec;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;}
-  .notation-preview-cycler button:disabled{opacity:.35;cursor:default;}
-  .notation-preview-label{font-size:12px;color:#c8c8d0;text-align:center;min-width:140px;}
   .notation-preview-actions{display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
   .notation-preview-actions button{border-radius:6px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
   .notation-preview-actions .primary{background:#6c5ce7;color:#fff;}
   .notation-preview-actions .danger{background:none;border:1px solid #4a2a2a;color:#ff6b6b;}
   .notation-preview-actions .neutral{background:#22232b;border:1px solid #33343d;color:#e8e8ec;}
   .notation-preview-note{font-size:12px;color:#9a9aa5;text-align:center;margin-top:8px;}
+
+  /* ---- Notation variant list (Sep 21 2026) — replaces the old inner
+     cycler. One row per uploaded image for the current instrument, already
+     in the same lowest-bar-first order previewCandidates() always sorted
+     in, so "scan down" reads top-to-bottom as the bar sequence. Each row's
+     own thumbnail is a REAL, readable size (140px, not a tiny icon) per his
+     explicit ask — big enough to actually check the notation's content at a
+     glance, not just confirm an image exists. ---- */
+  .notation-list{display:flex;flex-direction:column;gap:10px;}
+  .notation-list-empty{color:#6a6a75;font-size:13px;font-style:italic;padding:8px 2px;}
+  .notation-list-row{display:flex;align-items:center;gap:14px;background:#15161c;border:1px solid #24252e;border-radius:10px;padding:10px;}
+  .notation-list-row.is-draft{border-color:#5a4a1a;background:#1a1710;}
+  .notation-list-row.is-active{border-color:#6c5ce7;}
+  .notation-list-thumb{width:140px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:#fff;border:1px solid #33343d;cursor:pointer;padding:0;line-height:0;}
+  .notation-list-thumb img{display:block;width:100%;height:auto;}
+  .notation-list-info{flex:1;min-width:0;}
+  .notation-list-bars{font-size:14px;font-weight:700;}
+  .notation-list-sub{font-size:11px;color:#9a9aa5;margin-top:3px;}
+  .notation-list-actions{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;}
+  .notation-list-edit-btn{background:#22232b;border:1px solid #33343d;color:#8a8fff;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;white-space:nowrap;}
+  .notation-list-editing{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;}
+  .notation-list-editing input[type=text]{width:150px;background:#1a1b21;border:1px solid #33343d;color:#e8e8ec;border-radius:6px;padding:8px;font-size:13px;}
+  .notation-list-editing .notation-status{flex-basis:100%;}
 
   /* ---- Piece settings hub (Sep 10 2026): tapping a piece now opens a short
      menu of its settings pages instead of dumping every card on one long
@@ -322,7 +385,7 @@
     <div id="notationPreview"></div>
 
     <div class="card">
-      <p class="sub" id="notationIntro" style="margin-bottom:0;">Outer arrows: move between instruments. Inner arrows: cycle through that instrument's images (if it has more than one). "Edit" changes just the bar numbers, without touching the picture. Nothing goes live until you press Save to live — or, once you've checked it here, Send to live promotes that exact tested image straight to production.</p>
+      <p class="sub" id="notationIntro" style="margin-bottom:0;">Arrows at the top move between instruments. Every uploaded image for the current instrument is listed on the right, lowest bar first — click a thumbnail to preview it on the left, or Edit to change just its bar numbers without touching the picture. Nothing goes live until you press Save to live — or, once you've checked it here, Send to live promotes that exact tested image straight to production.</p>
     </div>
   </div>
 
@@ -483,6 +546,10 @@
   var VIEWS={menu:menuView,hub:pieceHubView,metro:pieceMetroView,order:pieceOrderView,stems:pieceStemsView,notation:pieceNotationView,usage:usageView};
   function showView(name){
     Object.keys(VIEWS).forEach(function(k){VIEWS[k].hidden=(k!==name);});
+    // Sep 21 2026: only the notation-images page gets the wider #console —
+    // see its own CSS comment. Toggled here rather than per-view so it can
+    // never be left on by mistake when navigating away.
+    consoleEl.classList.toggle('wide-view',name==='notation');
   }
 
   var saveBtn=document.getElementById('saveBtn');
@@ -537,6 +604,15 @@
   // {file, bars, barsText, objectUrl}. Lost on page reload — by design, this
   // is a single-sitting review tool, not a second storage system.
   var drafts={};
+  // The "choose a file" thumbnail's own throwaway object URL (Sep 21 2026) —
+  // separate from a staged draft's own objectUrl above, and much shorter-
+  // lived: replaced (and the old one revoked) every time a different file is
+  // picked in the add-image form, and again once that file is actually
+  // staged, since stageDraft() makes its own independent object URL from the
+  // same File. Kept at this outer scope (not inside renderNotationPreview)
+  // specifically so the PREVIOUS render's URL can be revoked even after its
+  // own DOM nodes are already gone.
+  var pendingFilePreviewUrl=null;
   // Which tile/variant/mode each piece's preview panel is currently showing
   // — kept per piece (previewState[id]) so switching pieces and back doesn't
   // lose your place. mode: 'auto' (follows this admin session's own pointer
@@ -544,7 +620,13 @@
   // mosaic_webcodecs.html) | 'mobile' | 'desktop'.
   var previewState={};
   function getPreviewState(id){
-    if(!previewState[id])previewState[id]={tileIndex:0,variantIndex:0,mode:'auto',editingBars:false};
+    // editingVariantId (Sep 21 2026, replaces the old single editingBars
+    // boolean): which ONE variant's bars are currently mid-edit in the new
+    // list column, by its server-assigned id, or null for none. Tracked by
+    // id rather than list position since saving an edit can re-sort the
+    // list (bars changing its place in the lowest-bar-first order) — an
+    // index would silently point at the wrong row afterward.
+    if(!previewState[id])previewState[id]={tileIndex:0,variantIndex:0,mode:'auto',editingVariantId:null};
     return previewState[id];
   }
   function resolvedPreviewMode(mode){
@@ -921,7 +1003,7 @@
     // see preferredVariantIndex()'s comment.
     var ps=getPreviewState(id);
     ps.variantIndex=preferredVariantIndex(id,ps.tileIndex);
-    ps.editingBars=false;
+    ps.editingVariantId=null;
     refreshNotationSection(id);
   }
 
@@ -1338,7 +1420,7 @@
       // rather than onto the now-detached one passed into this function.
       refreshNotationSection(id);
       return writeLocalMirror(id,tileIdx,draftBars,draftFile).then(function(res){
-        var freshStatus=notationPreview.querySelector('.notation-status');
+        var freshStatus=document.getElementById('notationMainStatus');
         if(!freshStatus)return;
         if(res.skipped){
           freshStatus.textContent='Saved — live for everyone now.';freshStatus.className='notation-status ok';
@@ -1414,15 +1496,16 @@
   }
 
   // Moves the tile cycler to another instrument (dir=-1/+1, wraps both
-  // ways). Resets variantIndex/editingBars rather than trying to carry them
-  // across — a different tile has an unrelated set of images, so "stay on
-  // variant 2" would usually land on the wrong thing anyway.
+  // ways). Resets variantIndex/editingVariantId rather than trying to carry
+  // them across — a different tile has an unrelated set of images, so "stay
+  // on variant 2" (or "keep editing that same variant id") would usually
+  // land on the wrong thing anyway.
   function moveNotationTile(id,dir){
     var ps=getPreviewState(id);
     var count=STEM_NAMES[id].length;
     ps.tileIndex=(ps.tileIndex+dir+count)%count;
     ps.variantIndex=preferredVariantIndex(id,ps.tileIndex);
-    ps.editingBars=false;
+    ps.editingVariantId=null;
     renderNotationPreview(id);
   }
 
@@ -1454,8 +1537,10 @@
   // worker.js's notation-bars-update route: the image itself is completely
   // untouched, only its metadata changes, so this never re-uploads
   // anything. On success, re-finds the same variant (by id) in the
-  // refreshed candidate list, since re-sorting by bars can move it to a
-  // different cycler position.
+  // refreshed candidate list — re-sorting by bars (the whole point of "I'll
+  // put that in bar five instead") can move its position in the list, and
+  // also makes it the one shown in the big left-hand preview, so the result
+  // of the edit is immediately visible there.
   function saveBarsEdit(id,tileIdx,variant,rawText,statusEl){
     var barCount=BAR_COUNTS[id];
     var bars='all';
@@ -1469,28 +1554,32 @@
     notationApi('/api/admin/notation-bars-update',{pieceId:id,tileIndex:tileIdx,variantId:variant.id,bars:bars}).then(function(cfg){
       applyNotationOverrides(cfg.notationOverrides);
       var ps=getPreviewState(id);
-      ps.editingBars=false;
+      ps.editingVariantId=null;
       var list=previewCandidates(id,tileIdx);
       var idx=list.findIndex(function(c){return c.variant&&c.variant.id===variant.id;});
       ps.variantIndex=idx>=0?idx:0;
       refreshNotationSection(id);
-      var freshStatus=notationPreview.querySelector('.notation-status');
+      var freshStatus=document.getElementById('notationMainStatus');
       if(freshStatus){freshStatus.textContent='Bars updated.';freshStatus.className='notation-status ok';}
     }).catch(function(e){
       if(e.message!=='unauthorized'){statusEl.textContent='Save failed: '+e.message;statusEl.className='notation-status err';}
     });
   }
 
-  // The live-look preview panel, now the WHOLE notation page rather than a
-  // pinned strip above a scrolling list (Sep 20 2026 rewrite — by request:
-  // one instrument at a time, cycled with arrows, instead of 8 rows to
-  // scroll past). Three nested levels: the outer tile cycler picks WHICH of
-  // the piece's squares you're looking at; the square itself is a real crop
-  // of the piece's poster, same crop math the player uses for its tile
-  // thumbnails; the inner variant cycler (unchanged from the original
-  // design) picks which of that tile's images is currently shown on it.
-  // Rebuilt from scratch on every call; cheap (a handful of DOM nodes),
-  // called after every tile-move/stage/save/delete/cycle/mode-change/edit.
+  // The live-look preview panel (Sep 20 2026 rewrite, right-hand list added
+  // Sep 21 2026 — by request: one instrument at a time via the outer
+  // cycler, but its images are no longer browsed one-at-a-time with an
+  // inner cycler — every uploaded image for the current instrument now
+  // shows at once in a scannable list to the right, in the same
+  // lowest-bar-first order the old cycler already used internally. The
+  // outer tile cycler still picks WHICH of the piece's 8 squares is in
+  // view; the left column's one live-look square is a real crop of the
+  // piece's poster, same crop math the player uses for its tile
+  // thumbnails, showing whichever candidate is currently selected (via a
+  // list-row thumbnail click, or wherever preferredVariantIndex() landed on
+  // arrival). Rebuilt from scratch on every call; cheap (a modest number of
+  // DOM nodes even with the list), called after every
+  // tile-move/stage/save/delete/select/mode-change/edit.
   function renderNotationPreview(id){
     notationPreview.innerHTML='';
     var meta=PIECE_META[id];
@@ -1504,12 +1593,12 @@
     if(ps.variantIndex>=candidates.length)ps.variantIndex=candidates.length-1;
     if(ps.variantIndex<0)ps.variantIndex=0;
     var current=candidates[ps.variantIndex];
-    if(current.kind!=='live')ps.editingBars=false; // only a live variant has bars worth editing
     var mode=resolvedPreviewMode(ps.mode);
 
     var wrap=document.createElement('div');wrap.className='notation-preview';
 
-    // ---- Outer cycler: which square (instrument) ----
+    // ---- Outer cycler: which square (instrument) — fixed-position arrows,
+    // see this class's own CSS comment for why it's a grid now. ----
     var tileCycler=document.createElement('div');tileCycler.className='notation-tile-cycler';
     var tilePrev=document.createElement('button');tilePrev.type='button';tilePrev.textContent='‹';tilePrev.setAttribute('aria-label','Previous instrument');
     tilePrev.addEventListener('click',function(){moveNotationTile(id,-1);});
@@ -1527,7 +1616,13 @@
     tileCycler.appendChild(tilePrev);tileCycler.appendChild(tileLabelWrap);tileCycler.appendChild(tileNext);
     wrap.appendChild(tileCycler);
 
-    var body=document.createElement('div');body.className='notation-preview-body';
+    // ---- Two-column editor: fixed-width left column (one live-look
+    // preview + its actions + the add-image form) that never moves, and a
+    // right column listing every uploaded image for this instrument at
+    // once. See .notation-editor's own CSS comment. ----
+    var editor=document.createElement('div');editor.className='notation-editor';
+    var left=document.createElement('div');left.className='notation-editor-left';
+    var right=document.createElement('div');right.className='notation-editor-right';
 
     var frame=document.createElement('div');frame.className='notation-preview-frame mode-'+mode;
 
@@ -1551,16 +1646,14 @@
     belowStrip.appendChild(belowImg);
     frame.appendChild(belowStrip);
 
-    body.appendChild(frame);
+    left.appendChild(frame);
 
-    // Side column (Sep 10 2026): sync status + mode toggle sit BESIDE the
-    // square — #localSyncBar is an existing persistent element (see the
-    // HTML skeleton), re-parented in here each render rather than
-    // recreated; renderLocalSyncBar() still finds it fine via
-    // getElementById regardless of where it's nested.
-    var side=document.createElement('div');side.className='notation-preview-side';
+    // #localSyncBar is an existing persistent element (see the HTML
+    // skeleton), re-parented in here each render rather than recreated;
+    // renderLocalSyncBar() still finds it fine via getElementById
+    // regardless of where it's nested.
     var syncBarEl=document.getElementById('localSyncBar');
-    if(syncBarEl)side.appendChild(syncBarEl);
+    if(syncBarEl)left.appendChild(syncBarEl);
 
     var modebar=document.createElement('div');modebar.className='notation-preview-modebar';
     var modeLabel=document.createElement('div');modeLabel.className='notation-preview-instrument';modeLabel.textContent='Preview as:';
@@ -1573,49 +1666,10 @@
       toggle.appendChild(btn);
     });
     modebar.appendChild(modeLabel);modebar.appendChild(toggle);
-    side.appendChild(modebar);
-    body.appendChild(side);
-
-    wrap.appendChild(body);
-
-    // ---- Inner cycler: which image on this square ----
-    var cycler=document.createElement('div');cycler.className='notation-preview-cycler';
-    var prevBtn=document.createElement('button');prevBtn.type='button';prevBtn.textContent='‹';prevBtn.disabled=candidates.length<2;
-    var label=document.createElement('div');label.className='notation-preview-label';
-    label.textContent=current.label+' ('+(ps.variantIndex+1)+'/'+candidates.length+')';
-    var nextBtn=document.createElement('button');nextBtn.type='button';nextBtn.textContent='›';nextBtn.disabled=candidates.length<2;
-    prevBtn.addEventListener('click',function(){ps.variantIndex=(ps.variantIndex-1+candidates.length)%candidates.length;ps.editingBars=false;renderNotationPreview(id);});
-    nextBtn.addEventListener('click',function(){ps.variantIndex=(ps.variantIndex+1)%candidates.length;ps.editingBars=false;renderNotationPreview(id);});
-    cycler.appendChild(prevBtn);cycler.appendChild(label);cycler.appendChild(nextBtn);
-    wrap.appendChild(cycler);
-
-    // ---- Bars readout + inline edit (live variants only) ----
-    if(current.kind==='live'){
-      if(ps.editingBars){
-        var editRow=document.createElement('div');editRow.className='notation-bars-editing';
-        var editInput=document.createElement('input');editInput.type='text';
-        editInput.value=current.variant.bars==='all'?'':current.variant.bars.join(', ');
-        editInput.placeholder='blank = all bars';
-        var editSave=document.createElement('button');editSave.type='button';editSave.className='notation-bars-edit-btn';editSave.textContent='Save';
-        var editCancel=document.createElement('button');editCancel.type='button';editCancel.className='notation-bars-edit-btn';editCancel.textContent='Cancel';
-        var editStatus=document.createElement('div');editStatus.className='notation-status';editStatus.style.flexBasis='100%';editStatus.style.textAlign='center';
-        editSave.addEventListener('click',function(){saveBarsEdit(id,tileIdx,current.variant,editInput.value,editStatus);});
-        editCancel.addEventListener('click',function(){ps.editingBars=false;renderNotationPreview(id);});
-        editRow.appendChild(editInput);editRow.appendChild(editSave);editRow.appendChild(editCancel);editRow.appendChild(editStatus);
-        wrap.appendChild(editRow);
-      }else{
-        var barsRow=document.createElement('div');barsRow.className='notation-bars-row';
-        var readout=document.createElement('div');readout.className='notation-bars-readout';
-        readout.innerHTML='<b>'+barsReadoutText(current.variant.bars)+'</b>';
-        var editBtn=document.createElement('button');editBtn.type='button';editBtn.className='notation-bars-edit-btn';editBtn.textContent='Edit';
-        editBtn.addEventListener('click',function(){ps.editingBars=true;renderNotationPreview(id);});
-        barsRow.appendChild(readout);barsRow.appendChild(editBtn);
-        wrap.appendChild(barsRow);
-      }
-    }
+    left.appendChild(modebar);
 
     var actions=document.createElement('div');actions.className='notation-preview-actions';
-    var status=document.createElement('div');status.className='notation-status';status.style.textAlign='center';
+    var status=document.createElement('div');status.id='notationMainStatus';status.className='notation-status';status.style.textAlign='center';
     if(current.kind==='draft'){
       var save=document.createElement('button');save.type='button';save.className='primary';save.textContent='Save to live';
       save.addEventListener('click',function(){save.disabled=true;publishDraft(id,tileIdx,status);});
@@ -1664,18 +1718,33 @@
       addBase.addEventListener('click',function(){promptReplaceImage(id,tileIdx,'all');});
       actions.appendChild(addBase);
     }
-    wrap.appendChild(actions);
-    wrap.appendChild(status);
+    left.appendChild(actions);
+    left.appendChild(status);
 
-    // ---- Add a new image for this tile (collapsed into the panel itself
-    // now — Sep 20 2026 — rather than one row per tile in a scrolling list
-    // below it; scoped to whichever tile the outer cycler is currently
-    // on). Stages a draft exactly as before — nothing uploads until Save
-    // to live above. ----
+    // ---- Add a new image for this tile — scoped to whichever tile the
+    // outer cycler is currently on. Stages a draft, same as before; nothing
+    // uploads until Save to live above. Sep 21 2026: a live thumbnail of
+    // whatever file is currently chosen, BEFORE staging — see
+    // .notation-add-preview's own CSS comment for the report this fixes. ----
     var barCount=BAR_COUNTS[id];
     var addWrap=document.createElement('div');addWrap.className='notation-add';
-    var addLabel=document.createElement('span');addLabel.className='notation-bars-hint';addLabel.textContent='Add a new image for '+STEM_NAMES[id][tileIdx]+':';addLabel.style.flexBasis='100%';
+    var addLabel=document.createElement('span');addLabel.className='notation-bars-hint';addLabel.textContent='Add a new image for '+STEM_NAMES[id][tileIdx]+':';
+    var fileRow=document.createElement('div');fileRow.className='notation-add-filerow';
+    var filePreview=document.createElement('div');filePreview.className='notation-add-preview';
+    var filePreviewImg=document.createElement('img');filePreviewImg.alt='';
+    filePreview.appendChild(filePreviewImg);
     var fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='image/png';
+    fileInput.addEventListener('change',function(){
+      if(pendingFilePreviewUrl){URL.revokeObjectURL(pendingFilePreviewUrl);pendingFilePreviewUrl=null;}
+      var chosen=fileInput.files&&fileInput.files[0];
+      if(chosen){
+        pendingFilePreviewUrl=URL.createObjectURL(chosen);
+        filePreviewImg.src=pendingFilePreviewUrl;
+        filePreview.classList.add('show');
+      }else{
+        filePreview.classList.remove('show');
+      }
+    });
     var barsInput=null,barsHint=null;
     if(barCount){
       barsHint=document.createElement('span');barsHint.className='notation-bars-hint';
@@ -1699,17 +1768,90 @@
         barsText=bars.join(', ');
       }
       stageDraft(id,tileIdx,file,bars,barsText);
+      if(pendingFilePreviewUrl){URL.revokeObjectURL(pendingFilePreviewUrl);pendingFilePreviewUrl=null;} // stageDraft() made its own independent object URL from the same file — this one's served its purpose
       refreshNotationSection(id);
     });
 
+    fileRow.appendChild(fileInput);
+    fileRow.appendChild(filePreview);
     addWrap.appendChild(addLabel);
-    addWrap.appendChild(fileInput);
+    addWrap.appendChild(fileRow);
     if(barsHint)addWrap.appendChild(barsHint);
     if(barsInput)addWrap.appendChild(barsInput);
     addWrap.appendChild(stageBtn);
     addWrap.appendChild(addStatus);
-    wrap.appendChild(addWrap);
+    left.appendChild(addWrap);
 
+    editor.appendChild(left);
+
+    // ---- Right column: every uploaded image for this instrument at once,
+    // lowest-bar-first (previewCandidates() already sorts 'live' entries
+    // this way — base/"all bars" first, then ascending by first bar
+    // number), each with a real readable thumbnail, its bar list, and an
+    // Edit button. A staged-but-unsaved draft shows too, distinctly
+    // bordered, so it's never invisible mid-review. Replaces the old
+    // one-at-a-time inner cycler entirely. ----
+    var list=document.createElement('div');list.className='notation-list';
+    var rows=candidates.filter(function(c){return c.kind==='live'||c.kind==='draft';});
+    if(!rows.length){
+      var empty=document.createElement('div');empty.className='notation-list-empty';
+      empty.textContent='No uploaded images yet for '+STEM_NAMES[id][tileIdx]+' — the preview on the left is showing the site default.';
+      list.appendChild(empty);
+    }else{
+      rows.forEach(function(c){
+        var candidateIdx=candidates.indexOf(c);
+        var row=document.createElement('div');
+        row.className='notation-list-row'+(c.kind==='draft'?' is-draft':'')+(candidateIdx===ps.variantIndex?' is-active':'');
+
+        var thumbBtn=document.createElement('button');thumbBtn.type='button';thumbBtn.className='notation-list-thumb';
+        thumbBtn.setAttribute('aria-label','Preview this image');
+        var thumbImg=document.createElement('img');thumbImg.src=c.url;thumbImg.alt='';
+        thumbBtn.appendChild(thumbImg);
+        thumbBtn.addEventListener('click',function(){
+          ps.variantIndex=candidateIdx;
+          ps.editingVariantId=null;
+          renderNotationPreview(id);
+        });
+        row.appendChild(thumbBtn);
+
+        var info=document.createElement('div');info.className='notation-list-info';
+        if(c.kind==='draft'){
+          var draftBars=document.createElement('div');draftBars.className='notation-list-bars';draftBars.textContent=c.label;
+          var draftSub=document.createElement('div');draftSub.className='notation-list-sub';draftSub.textContent='Not saved yet — use Save to live on the left.';
+          info.appendChild(draftBars);info.appendChild(draftSub);
+          row.appendChild(info);
+        }else if(ps.editingVariantId===c.variant.id){
+          var editRow=document.createElement('div');editRow.className='notation-list-editing';
+          var editInput=document.createElement('input');editInput.type='text';
+          editInput.value=c.variant.bars==='all'?'':c.variant.bars.join(', ');
+          editInput.placeholder='blank = all bars';
+          var editSave=document.createElement('button');editSave.type='button';editSave.className='notation-list-edit-btn';editSave.textContent='Save';
+          var editCancel=document.createElement('button');editCancel.type='button';editCancel.className='notation-list-edit-btn';editCancel.textContent='Cancel';
+          var editStatus=document.createElement('div');editStatus.className='notation-status';
+          editSave.addEventListener('click',function(){saveBarsEdit(id,tileIdx,c.variant,editInput.value,editStatus);});
+          editCancel.addEventListener('click',function(){ps.editingVariantId=null;renderNotationPreview(id);});
+          editRow.appendChild(editInput);editRow.appendChild(editSave);editRow.appendChild(editCancel);editRow.appendChild(editStatus);
+          info.appendChild(editRow);
+          row.appendChild(info);
+        }else{
+          var barsLine=document.createElement('div');barsLine.className='notation-list-bars';barsLine.textContent=barsReadoutText(c.variant.bars);
+          var barsSub=document.createElement('div');barsSub.className='notation-list-sub';barsSub.textContent='Updated '+formatRelativeTime(c.variant.updatedAt);
+          info.appendChild(barsLine);info.appendChild(barsSub);
+          row.appendChild(info);
+
+          var rowActions=document.createElement('div');rowActions.className='notation-list-actions';
+          var editBtn=document.createElement('button');editBtn.type='button';editBtn.className='notation-list-edit-btn';editBtn.textContent='Edit';
+          editBtn.addEventListener('click',function(){ps.editingVariantId=c.variant.id;renderNotationPreview(id);});
+          rowActions.appendChild(editBtn);
+          row.appendChild(rowActions);
+        }
+        list.appendChild(row);
+      });
+    }
+    right.appendChild(list);
+    editor.appendChild(right);
+
+    wrap.appendChild(editor);
     notationPreview.appendChild(wrap);
   }
 
