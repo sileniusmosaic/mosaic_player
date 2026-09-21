@@ -294,6 +294,63 @@ async function writeConfig(env, cfg) {
   return writeConfigTo(env.ADMIN_CONFIG, cfg);
 }
 
+// Live -> staging notation mirror (Sep 21 2026, by request): staging is
+// meant to be where notation gets tested before "Send to live" promotes it,
+// but in practice edits sometimes happen straight on the live admin console
+// instead (it's just open, or staging isn't front of mind in the moment) —
+// those used to sit on production with no way back, so staging silently
+// drifted out of date and stopped being a trustworthy preview of what's
+// actually live. This pair of helpers makes the return trip automatic: every
+// notation write made ON PRODUCTION (upload, bars-only edit, delete) is
+// best-effort replayed into staging's own store right after it succeeds, via
+// a new STAGING_ADMIN_CONFIG binding (wrangler.jsonc's top-level
+// kv_namespaces, pointing at staging's existing namespace id — the mirror
+// image of staging's own LIVE_ADMIN_CONFIG binding). Call sites are guarded
+// with `env.ENVIRONMENT !== 'staging'` so this only ever fires on production
+// — staging's own edits already land directly in its own store and must
+// never re-trigger this, or every ordinary staging edit would immediately
+// stomp the very "before" state this exists to protect. Deliberately
+// swallows its own errors: a mirror hiccup (or the binding not being
+// deployed yet) must never fail, or even slow down noticeably, the real
+// production write it's shadowing.
+async function mirrorNotationUpsertToStaging(env, pieceId, tileIndex, variantId, bars, imageBytes) {
+  if (!env.STAGING_ADMIN_CONFIG) return; // binding not deployed yet (see wrangler.jsonc) — no-op until it is
+  try {
+    const stagingCfg = await readConfigFrom(env.STAGING_ADMIN_CONFIG);
+    if (!stagingCfg.notationOverrides[pieceId]) stagingCfg.notationOverrides[pieceId] = {};
+    const existing = stagingCfg.notationOverrides[pieceId][tileIndex] || [];
+    // A bars-only edit has no image bytes of its own (see notation-bars-update
+    // below). If this is also the FIRST time this variant id has ever reached
+    // staging, there's nothing there to keep its bars in sync with — pull the
+    // bytes from production's own store instead, which is guaranteed to have
+    // them (that's where the edit this is mirroring just happened).
+    let bytesToWrite = imageBytes || null;
+    if (!bytesToWrite && !existing.some(v => v.id === variantId)) {
+      bytesToWrite = await env.ADMIN_CONFIG.get(notationImgKey(pieceId, tileIndex, variantId), { type: 'arrayBuffer' });
+    }
+    const nextVariants = existing.filter(v => v.id !== variantId);
+    nextVariants.push({ id: variantId, bars, updatedAt: Date.now() });
+    stagingCfg.notationOverrides[pieceId][tileIndex] = nextVariants;
+    if (bytesToWrite) await env.STAGING_ADMIN_CONFIG.put(notationImgKey(pieceId, tileIndex, variantId), bytesToWrite);
+    await writeConfigTo(env.STAGING_ADMIN_CONFIG, stagingCfg);
+  } catch (e) {
+    console.error('mirrorNotationUpsertToStaging failed:', pieceId, tileIndex, variantId, e && e.message ? e.message : e);
+  }
+}
+async function mirrorNotationDeleteToStaging(env, pieceId, tileIndex, variantId) {
+  if (!env.STAGING_ADMIN_CONFIG) return;
+  try {
+    const stagingCfg = await readConfigFrom(env.STAGING_ADMIN_CONFIG);
+    const existing = (stagingCfg.notationOverrides[pieceId] && stagingCfg.notationOverrides[pieceId][tileIndex]) || [];
+    stagingCfg.notationOverrides[pieceId][tileIndex] = existing.filter(v => v.id !== variantId);
+    if (!stagingCfg.notationOverrides[pieceId][tileIndex].length) delete stagingCfg.notationOverrides[pieceId][tileIndex];
+    await env.STAGING_ADMIN_CONFIG.delete(notationImgKey(pieceId, tileIndex, variantId));
+    await writeConfigTo(env.STAGING_ADMIN_CONFIG, stagingCfg);
+  } catch (e) {
+    console.error('mirrorNotationDeleteToStaging failed:', pieceId, tileIndex, variantId, e && e.message ? e.message : e);
+  }
+}
+
 // Finds-or-creates the variant id a given bars selection should be saved
 // under, within one tile's existing variant array — same "re-uploading the
 // same bars replaces that image in place, anything else is new" rule
@@ -503,8 +560,14 @@ export default {
         nextVariants.push({ id: variantId, bars, updatedAt });
         cfg.notationOverrides[pieceId][tileIndex] = nextVariants;
 
-        await env.ADMIN_CONFIG.put(notationImgKey(pieceId, tileIndex, variantId), bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+        const imageBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        await env.ADMIN_CONFIG.put(notationImgKey(pieceId, tileIndex, variantId), imageBuffer);
         await writeConfig(env, cfg);
+        // Mirror this upload back into staging if it just happened on
+        // production directly — see mirrorNotationUpsertToStaging() above.
+        if (env.ENVIRONMENT !== 'staging') {
+          await mirrorNotationUpsertToStaging(env, pieceId, tileIndex, variantId, bars, imageBuffer);
+        }
         return corsJson({ ...withNotationImageUrls(cfg), savedVariantId: variantId });
       } catch (e) {
         return corsJson({ error: 'Server error while saving: ' + (e && e.message ? e.message : String(e)) }, 500);
@@ -538,6 +601,11 @@ export default {
         if (!cfg.notationOverrides[pieceId][tileIndex].length) delete cfg.notationOverrides[pieceId][tileIndex];
         await env.ADMIN_CONFIG.delete(notationImgKey(pieceId, tileIndex, variantId));
         await writeConfig(env, cfg);
+        // Mirror this deletion back into staging if it just happened on
+        // production directly — see mirrorNotationDeleteToStaging() above.
+        if (env.ENVIRONMENT !== 'staging') {
+          await mirrorNotationDeleteToStaging(env, pieceId, tileIndex, variantId);
+        }
         return corsJson(withNotationImageUrls(cfg));
       } catch (e) {
         return corsJson({ error: 'Server error while deleting: ' + (e && e.message ? e.message : String(e)) }, 500);
@@ -588,6 +656,14 @@ export default {
         target.updatedAt = Date.now();
         cfg.notationOverrides[pieceId][tileIndex] = existingVariants;
         await writeConfig(env, cfg);
+        // Mirror this bars edit back into staging if it just happened on
+        // production directly — see mirrorNotationUpsertToStaging() above.
+        // No image bytes here (this route never touches them); the helper
+        // pulls them from production itself if staging doesn't have this
+        // variant yet.
+        if (env.ENVIRONMENT !== 'staging') {
+          await mirrorNotationUpsertToStaging(env, pieceId, tileIndex, variantId, bars, null);
+        }
         return corsJson(withNotationImageUrls(cfg));
       } catch (e) {
         return corsJson({ error: 'Server error while saving: ' + (e && e.message ? e.message : String(e)) }, 500);

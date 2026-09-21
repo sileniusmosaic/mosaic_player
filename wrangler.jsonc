@@ -11,6 +11,23 @@
     {
       "binding": "ADMIN_CONFIG",
       "id": "a25a0f05fe4b4bcdaa5045ce29f8379e"
+    },
+    // Live -> staging notation mirror (Sep 21 2026): the mirror image of
+    // staging's own LIVE_ADMIN_CONFIG binding below — points production at
+    // staging's namespace id under a distinctly-named binding, so worker.js
+    // can tell "my own store" apart from "staging's store" and never confuse
+    // the two. Lets a notation edit made directly on the live admin console
+    // (upload, bars-only edit, delete) get automatically replayed into
+    // staging right after it saves on production, so staging never silently
+    // drifts out of date with what's actually live. See
+    // mirrorNotationUpsertToStaging()/mirrorNotationDeleteToStaging() in
+    // worker.js. No extra passphrase gate needed here (unlike "Send to
+    // live") — this binding only ever gets written to, never read for
+    // anything security-sensitive, from code already gated by production's
+    // own ADMIN_PASSPHRASE check.
+    {
+      "binding": "STAGING_ADMIN_CONFIG",
+      "id": "ce2dcd64f14944c1906d1726e1ef6c07"
     }
   ],
   // Usage analytics (Sep 10 2026, see worker.js's own comment near
