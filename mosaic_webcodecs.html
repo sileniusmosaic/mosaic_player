@@ -129,7 +129,21 @@ html:not(.is-desktop) .piece-strip-bar{display:none}
    overhead... instead they are a still image"). */
 .piece-mockup-square{position:relative;aspect-ratio:1/1;background:#030405 no-repeat;border:3px solid var(--window-border);border-radius:10px;overflow:hidden}
 .piece-mockup-grid{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
-.piece-mockup-tile{position:relative;background-repeat:no-repeat;outline:1px solid #050607}
+.piece-mockup-tile{position:relative;background-repeat:no-repeat;outline:1px solid #050607;transform:translateZ(0);backface-visibility:hidden}
+/* transform:translateZ(0)/backface-visibility:hidden above (Sep 25 2026, real
+   report — "tile number eight on Flip Swing sometimes doesn't load on the
+   preview when I scroll down from a playing [mosaic]... is blank"): every
+   tile is the SAME shared poster image, just cropped to a different
+   background-position, so this isn't a data/index bug (buildPieceMockup()'s
+   crop math is identical and correct for every tile/piece — confirmed by
+   reading it) — it matches a known Safari/WebKit issue where a plain
+   background-image on an element scrolled into view can occasionally fail to
+   paint until something forces a repaint, more likely the more elements
+   share one big image resource across a scrolling container (exactly this
+   list). Forcing each tile onto its own GPU compositing layer is the
+   standard fix for that class of bug. Can't be fully confirmed from here
+   (needs a real device + real scrolling to reproduce "sometimes") — flag if
+   it still happens after this. */
 .piece-mockup-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,4,5,.22)}
 .piece-mockup-play svg{width:44px;height:44px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
 #menuToggle{display:none}
@@ -709,32 +723,40 @@ html:not(.is-desktop) #settingsBtn{display:none}
    percentages alone. */
 #flipBtn .flip-icon,#flipBtnLandscape .flip-icon{width:86.4%;height:86.4%;object-fit:contain}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
-/* Portrait rebuilt as a 5-column row (Sep 25 2026, real request — "fit in
-   that row five buttons... reset, play, 50, 75, 100... the outer two being
-   in the same place they are at the moment, and the middle three being
-   equally spaced in the middle"): Reset joins this row as its new leftmost
-   button now that the old .transport row is gone on portrait (see
-   buildTempoButtons() in the JS, which appends it here first, and .panel's
-   own comment for why that row disappears). Reused the exact
-   fixed-outer-columns technique .is-desktop already used below for the same
-   "outer two flush to the row's true edges, inner ones share what's left"
-   goal — Reset's own 55px column flush-lands on the row's left edge (== the
-   focus square's left edge, same alignment logic as everywhere else in this
-   file) and 100%'s mirrors it on the right, with Play/50/75 splitting the
-   middle three 1fr tracks evenly. Desktop is untouched (still 4 columns, no
-   Reset — see the .is-desktop override right below, unchanged). */
-.tempo-buttons{display:grid;grid-template-columns:55px 1fr 1fr 1fr 55px;gap:5px;margin-top:0;justify-items:center}
-/* Desktop-only (Sep 7 2026) — see the real report quoted on .is-desktop
-   .tempo-strip above. Sizing the outer two columns to exactly the button
-   width (55px) means "centered in a 55px column" collapses to "flush against
-   the column's — and so the row's — edge": Play's left edge lands exactly on
-   .tempo-strip's left edge, and the 100% button's right edge lands exactly
-   on its right edge, with 50%/75% splitting whatever's left in between via
-   the two 1fr tracks. Same technique the portrait rule above now reuses for
-   its own 5-button row, just with Reset instead of Play as the flush-left
-   anchor there (desktop keeps Reset out of this row entirely, in its own
-   .transport row instead). */
-.is-desktop .tempo-buttons{grid-template-columns:55px 1fr 1fr 55px}
+/* Portrait rebuilt as a 5-button flex row (Sep 25 2026, real request — "fit
+   in that row five buttons... reset, play, 50, 75, 100"; switched from a
+   fixed-outer-columns CSS grid to plain flex the same day, second real
+   report — the grid version put 50/75 off-center because the grid's
+   "leftover space" started at the edge of Reset/100's own fixed 55px
+   columns, not at their actual centers, so Play/50/75 ended up bunched
+   toward the middle instead of evenly spaced: "make the play button halfway
+   between reset and 50, and 75 halfway between 50 and 100"). Five buttons of
+   the SAME width (55px each) with justify-content:space-between means the
+   gap between every adjacent pair of edges is identical, and since the
+   buttons are equal width that's exactly the same as every adjacent pair of
+   CENTERS being equally spaced too — which is exactly "reset/100 flush to
+   the row's true edges, 50 plumb in the middle, play/75 each the exact
+   midpoint of their neighbors" with no extra math needed. Reset itself still
+   moves here from the old .transport row (see buildTempoButtons() in the JS,
+   and .panel's own comment for why that row disappears on portrait).
+   Desktop is untouched — still its own 4-column grid, no Reset — see the
+   .is-desktop override right below, which now has to restate display:grid
+   and justify-items:center since this base rule no longer implies grid at
+   all. */
+.tempo-buttons{display:flex;justify-content:space-between;align-items:center;gap:5px;margin-top:0}
+/* Desktop-only (Sep 7 2026, grid-template-columns; display/justify-items
+   made explicit here Sep 25 2026 once the base rule above switched to flex
+   for portrait — see its own comment) — see the real report quoted on
+   .is-desktop .tempo-strip above. Sizing the outer two columns to exactly
+   the button width (55px) means "centered in a 55px column" collapses to
+   "flush against the column's — and so the row's — edge": Play's left edge
+   lands exactly on .tempo-strip's left edge, and the 100% button's right
+   edge lands exactly on its right edge, with 50%/75% splitting whatever's
+   left in between via the two 1fr tracks. (This grid technique still works
+   fine for exactly 4 equal-width buttons — the unevenness that pushed
+   portrait to flex only shows up once a 5th button is added, per that rule's
+   own comment — so desktop keeps it unchanged rather than switching too.) */
+.is-desktop .tempo-buttons{display:grid;grid-template-columns:55px 1fr 1fr 55px;justify-items:center}
 /* Circular, matched to the metro/manuscript overlays (Sep 2026, real report —
    "make the play/50/75/100 buttons circular... same size as the notation and
    metronome overlays and all the same white colour, no blue"; .metroBtn/
@@ -5099,7 +5121,14 @@ function updateTempoUI(){[...tempoButtons.querySelectorAll('button'),...landscap
 // buttons (including playBtnLandscape, which lives in that same container),
 // and duplicating that at every call site would be easy to miss one of.
 function setTempoButtonsDisabled(disabled){
-  [tempoButtons,landscapeTransport].forEach(container=>container.querySelectorAll('button').forEach(b=>b.disabled=disabled));
+  // :not(#reset) added Sep 25 2026, real report — Reset moved into
+  // #tempoButtons on portrait (see buildTempoButtons()) so it started getting
+  // swept up in this sweep and greying out during ordinary tempo-bank loads;
+  // Reset should always stay tappable (it already has its own separate,
+  // momentary disable/re-enable around its own async work — see reset()) so
+  // it's excluded here regardless of which container it's currently in. A
+  // no-op on landscapeTransport, which never contains #reset.
+  [tempoButtons,landscapeTransport].forEach(container=>container.querySelectorAll('button:not(#reset)').forEach(b=>b.disabled=disabled));
 }
 // Thin wrapper, same reasoning as ensurePrepared() above: registers this load
 // as the one Reset/switchMosaic() can cancel, then delegates to the real

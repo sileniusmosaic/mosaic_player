@@ -31,6 +31,29 @@ class WebCodecsVideoEngine {
     this.gridLeftCtx = gridCanvasLeft ? gridCanvasLeft.getContext('2d', { alpha: false }) : null;
     this.gridRightCtx = gridCanvasRight ? gridCanvasRight.getContext('2d', { alpha: false }) : null;
     this.focusCtx = focusCanvas.getContext('2d', { alpha: false });
+    // Best interpolation available for every drawImage scale in this engine
+    // (Sep 25 2026, real report — "the preview main square seems very low
+    // res, is it possible to raise the resolution"): imageSmoothingQuality
+    // defaults to the browser's cheapest ('low') setting, which shows up most
+    // on drawFocusFromSource()'s upscale — it draws a cols x rows crop of the
+    // decoded frame (480x480 for a standard 4x2/1920x960 composite) up to the
+    // focus canvas's own pixel size (480-520 CSS px times devicePixelRatio,
+    // so often a ~3x enlargement on a modern phone). This makes that
+    // unavoidable upscale look as smooth/detailed as the browser's own
+    // resampling can manage — it cannot manufacture detail the source frame
+    // doesn't have, so the focus square is still fundamentally capped at the
+    // per-tile resolution baked into the composite video by the ffmpeg build
+    // (see Mosaic/<piece>/raw/build_*_all_tempos.sh) — matching the "playing
+    // video"'s own full quality would need a second, higher-resolution encode
+    // of just the selected clip, decoded only while it's the focused tile; a
+    // real project, not a one-line fix. Applied to every context here
+    // (grid ones downscale rather than upscale, but high-quality resampling
+    // helps avoid moire there too, at negligible extra cost either way).
+    for (const c of [this.gridCtx, this.gridLeftCtx, this.gridRightCtx, this.focusCtx]) {
+      if (!c) continue;
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = 'high';
+    }
     this.onStatus = onStatus || (() => {});
     this.onError = onError || (() => {});
     this.decoder = null;
