@@ -136,16 +136,22 @@ html:not(.is-desktop) .piece-strip-bar{display:none}
    tile is the SAME shared poster image, just cropped to a different
    background-position, so this isn't a data/index bug (buildPieceMockup()'s
    crop math is identical and correct for every tile/piece — confirmed by
-   reading it) — it matches a known Safari/WebKit issue where a plain
-   background-image on an element scrolled into view can occasionally fail to
-   paint until something forces a repaint, more likely the more elements
-   share one big image resource across a scrolling container (exactly this
-   list). Forcing each tile onto its own GPU compositing layer is the
-   standard fix for that class of bug. Can't be fully confirmed from here
-   (needs a real device + real scrolling to reproduce "sometimes") — flag if
-   it still happens after this. */
+   reading it). First written as a Safari/WebKit-specific compositing theory;
+   the real report turned out to be Chrome, not Safari, so this alone was
+   never the actual fix (left in place — harmless, may still help Safari —
+   but see pieceMockupTileObserver in the script for the real, browser-
+   agnostic fix: forcing a repaint the moment each tile scrolls into view,
+   the same nudgeRepaint() technique already used for an unrelated Chrome/
+   Safari paint glitch on the landscape notation). */
 .piece-mockup-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,4,5,.22)}
-.piece-mockup-play svg{width:44px;height:44px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
+/* 44px -> 55px (Sep 25 2026, real report — "make that play button the same
+   size as the play button that's in the actual working mosaic above, for
+   continuity"): matches the real #play button's own outer diameter
+   (.tempo-buttons button — see that rule). This SVG draws its own circle
+   (r=11 of a 24x24 viewBox) rather than relying on a button's border-radius
+   for the circular chrome the real button gets from its own CSS, so scaling
+   the whole SVG up is what makes the two read as literally the same size. */
+.piece-mockup-play svg{width:55px;height:55px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
 #menuToggle{display:none}
 .menu-panel{position:fixed;inset:0;background:rgba(15,11,7,.97);z-index:50;padding:18px 16px;transform:translateY(-100%);transition:transform .25s ease}
 #menuToggle:checked ~ .menu-panel{transform:translateY(0)}
@@ -1225,7 +1231,18 @@ html:not(.is-desktop) #settingsBtn{display:none}
    proportion of the new size. */
 .muteBtn.muteBtn-landscape,.dawBtn.resetBtn-landscape,.soloBtn.soloBtn-landscape{width:55px;height:55px}
 .resetBtn-landscape .reset-icon{width:48px;height:48px}
-.muteBtn-landscape,.soloBtn-landscape{font-size:30px}
+/* Two classes each (not the bare .muteBtn-landscape/.soloBtn-landscape this
+   used to be) — Sep 25 2026, real report: the S/M letters read "really
+   small" in landscape after the slot reshuffle moved these two buttons into
+   #landscapeTransport's grid (see applyLandscapeSlotLayout()). Once they're
+   descendants of that grid, ".landscape-transport button{font-size:15.6px}"
+   (a class+element selector) actually OUTRANKS a single-class selector like
+   the old ".muteBtn-landscape{font-size:30px}" — same specificity math as
+   the button's own width/height rule just above, which already uses two
+   classes for exactly this reason and was never affected. Matching that
+   pattern here restores the 30px letter regardless of which container the
+   button currently lives in. */
+.muteBtn.muteBtn-landscape,.soloBtn.soloBtn-landscape{font-size:30px}
 /* Landscape square-navigation arrows (Sep 2026, rewritten Sep 2026 — see the
    architecture note near the top of the script block for the full "why").
    Used to be positioned by JS: measure .landscape-video-area, wait for two
@@ -3791,6 +3808,26 @@ function nudgeRepaint(el){
   void el.offsetHeight;
   requestAnimationFrame(()=>{el.style.opacity='';});
 }
+// Piece-mockup tile blank-on-scroll fix (Sep 25 2026, real report — "tile
+// number eight on Flip Swing sometimes doesn't load on the preview when I
+// scroll down", later confirmed to be Chrome, not Safari — see the CSS
+// comment on .piece-mockup-tile for the earlier Safari-specific theory this
+// replaces as the real fix). Every .piece-mockup-tile shares one big poster
+// image cropped via background-position — exactly the shape of bug
+// nudgeRepaint() above already exists to work around (it was written for a
+// similar occasional-paint-glitch report on the landscape notation). Rather
+// than betting on one browser's compositing model again, this applies that
+// same proven, browser-agnostic fix directly to the actual trigger: forces
+// one repaint the moment a tile scrolls into view, then stops watching it
+// (once painted correctly, a background-image tile doesn't spontaneously go
+// blank again — only the "just scrolled into view" moment is at risk).
+const pieceMockupTileObserver=new IntersectionObserver((entries)=>{
+  entries.forEach(entry=>{
+    if(!entry.isIntersecting)return;
+    nudgeRepaint(entry.target);
+    pieceMockupTileObserver.unobserve(entry.target);
+  });
+},{rootMargin:'50px'});
 // Arrow vertical positioning is now pure CSS — see .landscapeArrow and
 // --mute-top in the <style> above. No JS measurement, no freeze, nothing to
 // call here any more; this comment stands in place of the old
@@ -4177,6 +4214,7 @@ function buildPieceMockup(id){
     const px=m.cols>1?(i%m.cols)/(m.cols-1)*100:0, py=m.rows>1?Math.floor(i/m.cols)/(m.rows-1)*100:0;
     t.style.backgroundPosition=px+'% '+py+'%';
     gridEl.appendChild(t);
+    pieceMockupTileObserver.observe(t); // see its own comment — forces a repaint the moment this tile scrolls into view
   }
   card.appendChild(label);card.appendChild(square);card.appendChild(gridEl);
   card.addEventListener('click',()=>{if(id!==mosaicId)switchMosaic(id);});
