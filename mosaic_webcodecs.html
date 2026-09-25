@@ -224,10 +224,25 @@ html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
    button, which desktop still shows — see the .is-desktop override below. */
 /* Sep 25 2026: moved from top-left to top-right (the beat-counter's old
    spot — see #focusSettingsMenu's comment near .focus-wrap's markup), so
-   left:auto/right:10px replaces the old left:10px on every layout now; the
-   old .is-desktop-only left:75px override is gone since there's no longer a
-   desktop-only neighbor on this side to dodge. */
+   left:auto/right:10px replaces the old left:10px on this (desktop, and the
+   shared base) rule. Moved AGAIN the same day, portrait only (see the
+   html:not(.is-desktop) override right below) — the beat-counter came back
+   to top-right after all (its numbers need to stay visible), so the label
+   went to the bottom instead; desktop keeps this top-right position
+   unchanged since desktop's dropdown still holds the beat-counter. */
 .focus-label{position:absolute;top:10px;right:10px;left:auto;z-index:4;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px}
+/* Portrait-only (Sep 25 2026, real request — "move the instrument name to
+   center bottom, really quite close to the bottom... as close to the bottom
+   as the instrument names are to the top in the small squares"): bottom:4px
+   mirrors .tile-name's own top:4px inset exactly, centered horizontally via
+   left:50%+translate instead of right:10px. Safe on mobile specifically
+   because mobile portrait never shows the notation strip that otherwise
+   anchors to this same bottom edge (see .focus-bottom-overlay/.notation-strip
+   — "go to landscape" is the only way to see notation on a phone), so
+   nothing else occupies this space to collide with. Border/background were
+   already part of the base rule above (kept here unchanged, just repositioned
+   — the "with a border" from the request is already satisfied by those). */
+html:not(.is-desktop) .focus-label{top:auto;bottom:4px;right:auto;left:50%;transform:translateX(-50%)}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -370,21 +385,30 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
 .focusSettingsBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
 .focusSettingsBtn .settings-icon{width:33.6px;height:33.6px}
 .focusSettingsBtn[aria-expanded="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-/* The dropdown itself: "down and out to the right" of the settings button,
-   per the request, offset low enough (top:75px = the button's own 55px
-   height + a 10px gap, same math as every other paired-button offset in this
-   file) that it clears the desktop-only #manuscriptBtn sitting at top:10px
-   right next to it — see .manuscriptBtn's own comment. A column of exactly
-   the three buttons it holds, nothing wider: no explicit width, so an
+/* The dropdown itself: originally "down and out to the right" of the
+   settings button on every layout (left:25px) — narrowed to portrait-only
+   the same day (see the html:not(.is-desktop) override right below): real
+   follow-up request, "directly below [the settings button] in a column,
+   which would eventually get to the solo button if it were to continue" —
+   so portrait now aligns it flush with the button's own left edge
+   (left:10px) instead of offsetting right, forming one straight left-edge
+   column with #focusSettingsBtn above and #focusSoloBtn below. Desktop keeps
+   the original offset unchanged. Vertical offset (top:75px = the button's
+   own 55px height + a 10px gap, same math as every other paired-button
+   offset in this file) is unchanged either way — it already clears the
+   desktop-only #manuscriptBtn sitting at top:10px, see its own comment, and
+   is just as valid as a "directly below" offset for portrait. A column of
+   exactly the buttons it holds, nothing wider: no explicit width, so an
    absolutely-positioned block with no width set shrink-wraps to its content
-   by default, and align-items:center keeps all three centered on that same
-   column regardless of each button's own width. Uses the same :not([hidden])
+   by default, and align-items:center keeps every button centered on that
+   same column regardless of its own width. Uses the same :not([hidden])
    pattern as #bufferingSpinner/#notationStrip elsewhere in this file (see
    the long-form comment on this menu's own markup, near .focus-wrap) instead
    of a separate [hidden] override rule. */
-.focus-settings-menu{position:absolute;top:75px;left:25px;z-index:6;flex-direction:column;align-items:center;gap:8px}
+.focus-settings-menu{position:absolute;top:75px;left:10px;z-index:6;flex-direction:column;align-items:center;gap:8px}
+.is-desktop .focus-settings-menu{left:25px}
 .focus-settings-menu:not([hidden]){display:flex}
-/* The three buttons inside: metroBtn already carries its own border (via
+/* The buttons inside: metroBtn already carries its own border (via
    .dawBtn) but countInBtn/flipBtn used to get theirs from `.transport
    button` — gone now that they've left the transport row, so it's replaced
    here. Also resets metroBtn's own absolute top/right offsets (from
@@ -493,6 +517,15 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    grid's right edge, not just approximately near them. */
 .is-desktop .tempo-strip{width:796px;margin-left:auto;margin-right:auto}
 .panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
+/* Portrait-only (Sep 25 2026, real request — "there will now just be one row
+   of buttons below the small squares"): with #reset moved into
+   #tempoButtons and #settingsBtn hidden (see both their own comments), this
+   .transport row has nothing left in it on portrait (.transport-mid/the
+   timeline was already display:none there) — hiding the whole section
+   avoids leaving an empty bordered box where the row used to be. Desktop is
+   untouched; its .transport row still holds Reset/Timeline/Settings as
+   before. */
+html:not(.is-desktop) .panel{display:none}
 /* Down to a 2-column grid (Sep 25 2026 — was 4, since Count-in and Flip both
    moved out into #focusSettingsMenu the same day, see their markup comment
    near .focus-wrap): just Reset and #settingsBtn (the burger-menu one) left
@@ -581,6 +614,17 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    position override needed for #settingsBtn itself on either layout. */
 #settingsBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
 #settingsBtn .settings-icon{width:33.6px;height:33.6px}
+/* Portrait-only (Sep 25 2026, real request — "we don't need two settings
+   buttons"): the new #focusSettingsBtn up in the focus square covers what
+   this one used to (a second way into the burger menu, see this button's own
+   comment above), and the burger icon in .piece-strip-bar is still there as
+   the original always-visible entry point either way, so nothing is actually
+   lost by hiding this one. Desktop is untouched — its dropdown didn't take
+   over this button's job there. See .panel's own rule further down for why
+   the whole transport row disappears on portrait now that this and #reset
+   (moved into .tempo-buttons, see buildTempoButtons() in the JS) have both
+   left it. */
+html:not(.is-desktop) #settingsBtn{display:none}
 /* Flip button (Sep 12 2026, real request): identical circular chrome to
    #reset/#settingsBtn above — same 55px size, same var(--text)-on-dark
    background, same border weight — so the icon sits inside the exact same
@@ -665,16 +709,31 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    percentages alone. */
 #flipBtn .flip-icon,#flipBtnLandscape .flip-icon{width:86.4%;height:86.4%;object-fit:contain}
 .time{font-variant-numeric:tabular-nums;margin-left:auto;font-size:14.3px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
-.tempo-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:0;justify-items:center}
+/* Portrait rebuilt as a 5-column row (Sep 25 2026, real request — "fit in
+   that row five buttons... reset, play, 50, 75, 100... the outer two being
+   in the same place they are at the moment, and the middle three being
+   equally spaced in the middle"): Reset joins this row as its new leftmost
+   button now that the old .transport row is gone on portrait (see
+   buildTempoButtons() in the JS, which appends it here first, and .panel's
+   own comment for why that row disappears). Reused the exact
+   fixed-outer-columns technique .is-desktop already used below for the same
+   "outer two flush to the row's true edges, inner ones share what's left"
+   goal — Reset's own 55px column flush-lands on the row's left edge (== the
+   focus square's left edge, same alignment logic as everywhere else in this
+   file) and 100%'s mirrors it on the right, with Play/50/75 splitting the
+   middle three 1fr tracks evenly. Desktop is untouched (still 4 columns, no
+   Reset — see the .is-desktop override right below, unchanged). */
+.tempo-buttons{display:grid;grid-template-columns:55px 1fr 1fr 1fr 55px;gap:5px;margin-top:0;justify-items:center}
 /* Desktop-only (Sep 7 2026) — see the real report quoted on .is-desktop
-   .tempo-strip above. The mobile rule above centers each 55px button inside
-   an equal 1fr column, which insets Play/the 100% button noticeably from
-   the row's own edges. Sizing the outer two columns to exactly the button
-   width (55px) instead means "centered in a 55px column" collapses to "flush
-   against the column's — and so the row's — edge": Play's left edge lands
-   exactly on .tempo-strip's left edge, and the 100% button's right edge
-   lands exactly on its right edge, with 50%/75% splitting whatever's left
-   in between via the two 1fr tracks. */
+   .tempo-strip above. Sizing the outer two columns to exactly the button
+   width (55px) means "centered in a 55px column" collapses to "flush against
+   the column's — and so the row's — edge": Play's left edge lands exactly on
+   .tempo-strip's left edge, and the 100% button's right edge lands exactly
+   on its right edge, with 50%/75% splitting whatever's left in between via
+   the two 1fr tracks. Same technique the portrait rule above now reuses for
+   its own 5-button row, just with Reset instead of Play as the flush-left
+   anchor there (desktop keeps Reset out of this row entirely, in its own
+   .transport row instead). */
 .is-desktop .tempo-buttons{grid-template-columns:55px 1fr 1fr 55px}
 /* Circular, matched to the metro/manuscript overlays (Sep 2026, real report —
    "make the play/50/75/100 buttons circular... same size as the notation and
@@ -1540,7 +1599,13 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
              beat-counter here in the focus square, count-in and flip/mirror
              down in the main transport row — moved together behind
              #focusSettingsBtn above (Sep 25 2026, real request, staging-only
-             experiment). Order top to bottom: metro, count-in, flip. Hidden
+             experiment). Order top to bottom: metro, count-in, flip. Metro
+             moved back OUT again the same day, portrait only (see
+             applyPortraitControlLayout() in the JS) — its live beat-count
+             number needs to always be visible, not hidden behind a click —
+             so on portrait this menu only ever shows count-in/flip; the
+             markup here is unconditional (desktop's canonical structure),
+             with the JS doing the one-time portrait move at load. Hidden
              by default via the plain [hidden] attribute, toggled by
              #focusSettingsBtn's click handler (see JS). Uses the same
              :not([hidden]) display-override pattern as #bufferingSpinner/
@@ -4977,8 +5042,33 @@ async function ensurePreparedImpl(tracker,myGen){
 }
 function buildTempoButtons(){
   tempoButtons.innerHTML='';
+  // Portrait-only (Sep 25 2026, real request): Reset joins this row as its
+  // new leftmost button, moved here (out of the old .transport row — see
+  // .panel's own CSS comment for why that row disappears on portrait) rather
+  // than duplicated, since it's the same real button with the same click
+  // handler either way. Must happen before playBtn is appended, and before
+  // .tempo-buttons' 5-column CSS expects it (see that rule's own comment).
+  // Desktop is untouched — IS_DESKTOP is read once at load same as every
+  // other layout decision in this file, so Reset simply stays put in
+  // .transport there, never reaching this branch.
+  if(!IS_DESKTOP)tempoButtons.appendChild(resetBtn);
   tempoButtons.appendChild(playBtn); // Play + 50/75/100 share one row, in that order
   TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));tempoButtons.appendChild(b)});updateTempoUI();
+}
+// Portrait-only (Sep 25 2026, real request — "the metronome needs to be on
+// the screen... put the metronome back to where the instrument name is in
+// the top right"): moves #metroBtn out of #focusSettingsMenu back to its own
+// spot directly in the focus square, since its live beat-count number needs
+// to always be visible rather than hidden behind a dropdown click. Desktop
+// keeps the beat-counter inside the dropdown, unchanged — this whole
+// function is a no-op there. insertBefore over appendChild so it lands in
+// the same source-order slot #metroBtn originally held (right before
+// #manuscriptBtn), not tacked on at the end after #focusLabel/etc.
+function applyPortraitControlLayout(){
+  if(IS_DESKTOP)return;
+  if(!metroBtn||!focusWrap)return;
+  if(manuscriptBtn&&manuscriptBtn.parentElement===focusWrap)focusWrap.insertBefore(metroBtn,manuscriptBtn);
+  else focusWrap.appendChild(metroBtn);
 }
 // Landscape transport's tempo presets (Sep 2026): #playBtnLandscape is
 // already in the markup (a real button, mirrored via syncLandscapePlayBtn()
@@ -5987,7 +6077,7 @@ metroBtn.disabled=!metroReady();
 setMetroActive(countInOn&&metroReady());
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
-buildControls();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
+buildControls();applyPortraitControlLayout();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
 
 // Usage analytics (Sep 10 2026, revised Sep 11 2026) — anonymous, minimal,
