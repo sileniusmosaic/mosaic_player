@@ -222,8 +222,12 @@ html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
    nothing else lives in that corner any more (v2.27 hid the manuscript
    button there for mobile); shifted right on desktop to clear that same
    button, which desktop still shows — see the .is-desktop override below. */
-.focus-label{position:absolute;top:10px;left:10px;z-index:4;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px}
-.is-desktop .focus-label{left:75px}
+/* Sep 25 2026: moved from top-left to top-right (the beat-counter's old
+   spot — see #focusSettingsMenu's comment near .focus-wrap's markup), so
+   left:auto/right:10px replaces the old left:10px on every layout now; the
+   old .is-desktop-only left:75px override is gone since there's no longer a
+   desktop-only neighbor on this side to dodge. */
+.focus-label{position:absolute;top:10px;right:10px;left:auto;z-index:4;background:rgba(21,16,11,.82);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -357,8 +361,45 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
 .metroBtn.is-counting-in .metro-icon{display:none}
 .metroBtn.is-counting-in .metro-num{display:block}
 .metroBtn:disabled{opacity:.3;cursor:default}
-/* Manuscript toggle (Aug 2026): top-left of the focus square, mirroring the
-   beat counter at top-right. Turns the notation overlay (now anchored to
+/* Focus-square settings button + dropdown (Sep 25 2026, real request —
+   relocate reset/count-in/mirror/metronome behind a settings button, top
+   left of the focus square, "more conventional place for a dropdown"). Same
+   .dawBtn-based 55px circle as every other focus-square overlay button, just
+   in the corner .manuscriptBtn used to have (see its own comment right
+   below for where that moved). */
+.focusSettingsBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+.focusSettingsBtn .settings-icon{width:33.6px;height:33.6px}
+.focusSettingsBtn[aria-expanded="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+/* The dropdown itself: "down and out to the right" of the settings button,
+   per the request, offset low enough (top:75px = the button's own 55px
+   height + a 10px gap, same math as every other paired-button offset in this
+   file) that it clears the desktop-only #manuscriptBtn sitting at top:10px
+   right next to it — see .manuscriptBtn's own comment. A column of exactly
+   the three buttons it holds, nothing wider: no explicit width, so an
+   absolutely-positioned block with no width set shrink-wraps to its content
+   by default, and align-items:center keeps all three centered on that same
+   column regardless of each button's own width. Uses the same :not([hidden])
+   pattern as #bufferingSpinner/#notationStrip elsewhere in this file (see
+   the long-form comment on this menu's own markup, near .focus-wrap) instead
+   of a separate [hidden] override rule. */
+.focus-settings-menu{position:absolute;top:75px;left:25px;z-index:6;flex-direction:column;align-items:center;gap:8px}
+.focus-settings-menu:not([hidden]){display:flex}
+/* The three buttons inside: metroBtn already carries its own border (via
+   .dawBtn) but countInBtn/flipBtn used to get theirs from `.transport
+   button` — gone now that they've left the transport row, so it's replaced
+   here. Also resets metroBtn's own absolute top/right offsets (from
+   .metroBtn above) back to a normal flow position, since .dawBtn makes it
+   position:absolute by default and this menu is a plain flex column, not an
+   overlay each child positions itself within. */
+.focus-settings-menu>button{position:static;top:auto;right:auto;left:auto;bottom:auto;display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--text);color:var(--text)}
+.focus-settings-menu>button:disabled{opacity:.5}
+/* Manuscript toggle (Aug 2026): used to be top-left of the focus square,
+   mirroring the beat counter at top-right — moved one slot right Sep 25 2026
+   (left:10px -> left:75px) to make room for #focusSettingsBtn, which took
+   over its old spot (see that button's own comment above). Desktop-only (see
+   the display:none rule below), so this never collides with the also-Sep-25
+   #focusSettingsMenu dropdown, which opens low enough (top:75px) to clear
+   this row entirely regardless. Turns the notation overlay (now anchored to
    the bottom of the focus square — see .notation-strip) on and off. Icon
    (Aug 31 2026 — reference-sheet option "M8"): two beamed eighth notes,
    outline style. Recolored Sep 2026 alongside .metroBtn above to fix the
@@ -367,7 +408,7 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    button, in both resting and is-active looks (unlike the metronome, which
    deliberately keeps a cream/purple off/on distinction — this one was asked
    to just match mute, no on/off difference). */
-.manuscriptBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+.manuscriptBtn{top:10px;left:75px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
 /* Mobile portrait no longer offers a notation toggle at all (Sep 2026, real
    request) — landscape's own notation band is unconditional/always-on (see
    the comment near .landscape-focus-dim/"Deliberately NOT gated on
@@ -452,54 +493,37 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    grid's right edge, not just approximately near them. */
 .is-desktop .tempo-strip{width:796px;margin-left:auto;margin-right:auto}
 .panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
-/* Rebuilt as a 4-column grid (Sep 12 2026, real request — add a Flip button
-   under 100%, move Settings to under 75%, exact alignment even though it
-   costs the scrubber some width): column-for-column IDENTICAL to
-   #tempoButtons' own grid (repeat(4,1fr) here, 55px 1fr 1fr 55px on desktop
-   — see .is-desktop .transport below), so whatever sits in column N here
-   lands at exactly the same x as column N up there, with no more hand-tuned
-   nudge fudge-factors needed (the old flex-row version only ever
-   approximated this — see the now-removed 4.375px nudge comments this
-   replaced). Reset/column1 under Play, Flip/column4 under 100% — always true
-   on both layouts. Columns 2/3 differ by layout: on mobile portrait the
-   timeline is hidden outright (.transport-mid{display:none} below) so
-   #settingsBtn/#countInBtn — next in source order — become columns 2/3
-   instead, landing under 50%/75% (Sep 13 2026, real request — "swap countin
-   and setting buttons": Settings now before Count-in in the markup, the
-   reverse of how they first shipped, purely a markup reorder — see
-   #settingsBtn's own comment below); on desktop the timeline stays put in
-   column 2 (unaffected by that reorder — #countInBtn sits after #settingsBtn
-   in source order either way, and is excluded from the flow entirely on
-   desktop regardless, see next) with #settingsBtn following it into column 3
-   same as always, and #countInBtn is pulled out of grid flow entirely
-   (position:absolute) to sit centered on the seam between columns 2/3
-   instead (see #countInBtn's own desktop rule, below .transport-mid).
-   justify-items:center matches .tempo-buttons so each 55px circle centers in
-   its own column exactly like Play/50/75/100 do above it. position:relative
-   is what #countInBtn's desktop absolute positioning resolves against. */
-/* margin:0 -12px (measured via a headless render, same technique as the old
-   4.375px nudge this replaces): .panel's own border(2px)+padding(10px)=12px
-   insets .transport from .panel's outer edge, while .tempo-buttons sits
-   directly in .tempo-strip with no such inset — without this, the two grids'
-   columns would land ~9-12px apart instead of exactly matching. This cancels
-   that inset exactly so both grids share the identical effective width/x. */
-.transport{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;align-items:center;justify-items:center;margin:0 -12px}
-/* Desktop-only (Sep 7 2026 originally; grid-template-columns override added
-   Sep 12 2026 alongside the .transport rewrite above): same width-matched,
-   centered box as .is-desktop .tempo-strip, nested one level deeper inside
-   .panel's own padding — centering a box inside a symmetrically-padded
-   container lands at the identical absolute x as centering it directly
-   inside .app, so no extra offset math is needed to account for .panel's
-   padding. The column template match with .is-desktop .tempo-buttons (both
-   55px 1fr 1fr 55px) is what actually delivers the exact alignment; the
-   width+centering here is what makes sure both rows' columns start at the
-   same x to begin with. */
-.is-desktop .transport{width:796px;margin-left:auto;margin-right:auto;grid-template-columns:55px 1fr 1fr 55px}
-/* Reset/Settings/Flip are each their own grid cell now (see .transport
-   above) — no explicit grid-column needed since they're already in source
-   order 1/3/4 with the timeline wrapper (below) taking column 2 on desktop
-   (column 2 is #countInBtn instead on mobile portrait — see .transport's own
-   comment above). */
+/* Down to a 2-column grid (Sep 25 2026 — was 4, since Count-in and Flip both
+   moved out into #focusSettingsMenu the same day, see their markup comment
+   near .focus-wrap): just Reset and #settingsBtn (the burger-menu one) left
+   in mobile-portrait flow now, so repeat(2,1fr) is all that's needed —
+   .transport-mid stays hidden on mobile same as before (see its own rule
+   below), so it doesn't factor in here.
+   margin:0 -12px (measured via a headless render, same technique as the old
+   4.375px nudge from before this was a grid at all): .panel's own
+   border(2px)+padding(10px)=12px insets .transport from .panel's outer edge,
+   while .tempo-buttons sits directly in .tempo-strip with no such inset —
+   without this, the two grids' columns would land ~9-12px apart instead of
+   exactly matching. This cancels that inset exactly so both grids share the
+   identical effective width/x. */
+.transport{position:relative;display:grid;grid-template-columns:repeat(2,1fr);gap:5px;align-items:center;justify-items:center;margin:0 -12px}
+/* Desktop-only (Sep 7 2026 originally; grid-template-columns pared down to
+   3 tracks Sep 25 2026 alongside the .transport rewrite above, was
+   55px 1fr 1fr 55px — the trailing 55px column was Flip's, now gone): same
+   width-matched, centered box as .is-desktop .tempo-strip, nested one level
+   deeper inside .panel's own padding — centering a box inside a
+   symmetrically-padded container lands at the identical absolute x as
+   centering it directly inside .app, so no extra offset math is needed to
+   account for .panel's padding. Width stays 796px unchanged — it's shared
+   with .is-desktop .focus-column/.tempo-strip for cross-row alignment (see
+   their own comments) and doesn't depend on how many columns divide it up;
+   losing a column just means the remaining 1fr tracks (the timeline and
+   #settingsBtn's own column) split the freed-up space between them. */
+.is-desktop .transport{width:796px;margin-left:auto;margin-right:auto;grid-template-columns:55px 1fr 1fr}
+/* Reset/Settings are each their own grid cell (see .transport above) — no
+   explicit grid-column needed since they're already in source order 1/2(/3
+   on desktop, with the timeline wrapper between them there — see
+   .transport-mid below). */
 /* display:inline-flex (Aug 30 2026) — these buttons went icon-only (no more
    "Reset"/"Settings" text), so centering their single SVG child needs flex
    the same way the tempo-buttons row already centers its own content. */
@@ -528,20 +552,14 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    confirmed via a headless render, same verification technique used
    throughout this row's original alignment work. */
 .is-desktop .transport-mid{display:flex;padding-right:38px}
-/* #countInBtn desktop placement (Sep 13 2026, real request — "half way
-   between the 50 and 75 buttons"): pulled out of grid flow (position:
-   absolute removes an element from grid placement entirely, per spec) so it
-   can sit centered on the seam between columns 2/3 instead of inside either
-   one — that seam IS the row's exact horizontal center here, since columns
-   2/3 are equal 1fr tracks flanked by matching 55px end columns (see
-   .is-desktop .transport above), so left:50% needs no further offset.
-   Removing it from flow also means the OTHER four items (Reset/Timeline/
-   Settings/Flip) simply fall back into their original four-column places
-   unchanged, same as before this button existed. z-index lifts it above the
-   (shortened, but still adjacent) timeline. Mobile portrait needs none of
-   this — see .transport's own comment for why #countInBtn is already a
-   normal in-flow grid item there. */
-.is-desktop #countInBtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2}
+/* #countInBtn used to have its own desktop-only absolute-position rule here
+   (centered on the seam between the timeline and #settingsBtn's columns) —
+   removed Sep 25 2026 now that Count-in lives in #focusSettingsMenu instead
+   (see its markup comment near .focus-wrap and .focus-settings-menu's CSS),
+   which lays all three of its buttons out itself and needs no per-button
+   desktop override. padding-right:38px above is now vestigial slack rather
+   than load-bearing clearance, but harmless to leave — the timeline just
+   ends slightly short of the column edge. */
 /* #reset made circular (Sep 2026, real report — same request as the tempo
    row above: match the metro/manuscript overlays, 55px, var(--text)-on-dark,
    no accent color). Its position comes entirely from the grid now (see
@@ -1503,11 +1521,82 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
         <canvas id="mosaicFocus" class="focus-video"></canvas>
         <div class="focus-dim"></div>
         <div class="focus-solo-dim"></div>
-        <!-- Manuscript toggle: top-left, mirrors the beat counter at
-             top-right. Icon (Aug 31 2026, reference-sheet option "M8"): two
-             beamed eighth notes over a 6-line staff behind them — filled
-             noteheads/beam, stroked stems, thin staff lines drawn first so
-             the solid noteheads occlude them, matching the reference art. -->
+        <!-- Focus-square settings button (Sep 25 2026, real request —
+             "relocate reset/count-in/mirror/metronome behind the settings
+             button... top left, more conventional place for a dropdown"):
+             top-left, toggles #focusSettingsMenu right below/beside it.
+             Reuses the same gear artwork as the transport row's own
+             #settingsBtn — a different button entirely: that one still opens
+             the full menu-panel via #menuToggle, unchanged; this one only
+             opens the small dropdown. Takes over the slot #manuscriptBtn used
+             to sit in — manuscriptBtn shifted one slot right (left:75px) to
+             make room, see its own comment below. -->
+        <button id="focusSettingsBtn" type="button" class="dawBtn focusSettingsBtn" aria-label="Instrument controls" aria-expanded="false" aria-controls="focusSettingsMenu">
+          <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
+          </svg>
+        </button>
+        <!-- The three controls that used to live on their own — metronome/
+             beat-counter here in the focus square, count-in and flip/mirror
+             down in the main transport row — moved together behind
+             #focusSettingsBtn above (Sep 25 2026, real request, staging-only
+             experiment). Order top to bottom: metro, count-in, flip. Hidden
+             by default via the plain [hidden] attribute, toggled by
+             #focusSettingsBtn's click handler (see JS). Uses the same
+             :not([hidden]) display-override pattern as #bufferingSpinner/
+             #notationStrip elsewhere in this file (see their own CSS
+             comments) rather than a separate `[hidden]{display:none}`
+             override rule — a same-specificity author `display` rule always
+             beats the UA [hidden] rule regardless of ID/class specificity, so
+             scoping the declaration itself to :not([hidden]) is the only
+             reliable fix. -->
+        <div id="focusSettingsMenu" class="focus-settings-menu" hidden>
+          <!-- Beat counter icon (Aug 31 2026, reference-sheet option "T7"):
+               outline case, pendulum arm + weight, a vertical tick/tempo
+               scale, and two small feet — see the .metro-icon rules above
+               for which parts are stroked vs. filled. Moved into this menu
+               Sep 25 2026 — see #focusSettingsMenu's own comment above. -->
+          <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
+            <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path class="metro-case" d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
+              <circle class="metro-foot" cx="8" cy="20.9" r="0.9"></circle>
+              <circle class="metro-foot" cx="16" cy="20.9" r="0.9"></circle>
+              <g class="metro-ticks">
+                <line x1="12" y1="8" x2="12" y2="8.01"></line>
+                <line x1="12" y1="11" x2="12" y2="11.01"></line>
+                <line x1="12" y1="14" x2="12" y2="14.01"></line>
+                <line x1="12" y1="17" x2="12" y2="17.01"></line>
+              </g>
+              <line class="metro-arm" x1="9.5" y1="19" x2="17.5" y2="2.5"></line>
+              <rect class="metro-weight" x="14.7" y="6.3" width="2.6" height="2.6" transform="rotate(45 16 7.6)"></rect>
+            </svg>
+            <span id="metroNum" class="metro-num"></span>
+          </button>
+          <!-- Count-in button (Sep 13 2026 originally, moved into this menu
+               Sep 25 2026): a smaller-scale twin of #metroBtn's own stopwatch
+               styling; syncCountInBtn() (see JS) keeps this, countInBtnLandscape
+               and the pre-existing Settings-row checkbox all in sync. -->
+          <button id="countInBtn" type="button" aria-label="Count-in: off">
+            <svg class="countin-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle class="countin-case" cx="12" cy="13.3" r="7.6"></circle>
+              <rect class="countin-crown" x="10.1" y="1.2" width="3.8" height="2.4" rx="1.1"></rect>
+              <line class="countin-hand" x1="12" y1="13.3" x2="6.98" y2="16.2"></line>
+            </svg>
+          </button>
+          <!-- Flip button (Sep 12 2026 originally, moved into this menu Sep 25
+               2026): instant tap, no menu of its own — see flipViewOn/
+               syncFlipBtn() in the JS. -->
+          <button id="flipBtn" type="button" class="flipBtn" aria-label="Flip view: off">
+            <img class="flip-icon" src="flip-icon.png" alt="">
+          </button>
+        </div>
+        <!-- Manuscript toggle: shifted one slot right (Sep 25 2026, was
+             top:10px;left:10px) to make room for #focusSettingsBtn in its old
+             spot — see that button's own comment above. Icon (Aug 31 2026,
+             reference-sheet option "M8"): two beamed eighth notes over a
+             6-line staff behind them — filled noteheads/beam, stroked stems,
+             thin staff lines drawn first so the solid noteheads occlude them,
+             matching the reference art. -->
         <button id="manuscriptBtn" type="button" class="dawBtn manuscriptBtn" aria-label="Manuscript notation: off">
           <svg class="manuscript-icon" viewBox="0 0 24 24" aria-hidden="true">
             <g class="staff-line">
@@ -1524,26 +1613,6 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
             <ellipse class="note-head" cx="16.2" cy="15.6" rx="2.3" ry="1.7" transform="rotate(-18 16.2 15.6)"></ellipse>
           </svg>
         </button>
-        <!-- Beat counter icon (Aug 31 2026, reference-sheet option "T7"):
-             outline case, pendulum arm + weight, a vertical tick/tempo
-             scale, and two small feet — see the .metro-icon rules above
-             for which parts are stroked vs. filled. -->
-        <button id="metroBtn" type="button" class="dawBtn metroBtn" aria-label="Beat counter: off" disabled>
-          <svg class="metro-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path class="metro-case" d="M7 20.5h10L13.4 3.5h-2.8L7 20.5z"></path>
-            <circle class="metro-foot" cx="8" cy="20.9" r="0.9"></circle>
-            <circle class="metro-foot" cx="16" cy="20.9" r="0.9"></circle>
-            <g class="metro-ticks">
-              <line x1="12" y1="8" x2="12" y2="8.01"></line>
-              <line x1="12" y1="11" x2="12" y2="11.01"></line>
-              <line x1="12" y1="14" x2="12" y2="14.01"></line>
-              <line x1="12" y1="17" x2="12" y2="17.01"></line>
-            </g>
-            <line class="metro-arm" x1="9.5" y1="19" x2="17.5" y2="2.5"></line>
-            <rect class="metro-weight" x="14.7" y="6.3" width="2.6" height="2.6" transform="rotate(45 16 7.6)"></rect>
-          </svg>
-          <span id="metroNum" class="metro-num"></span>
-        </button>
         <!-- Focus-square mute/solo (Sep 2026, mobile portrait only) — see the
              CSS comment above .focusMuteBtn for the full reasoning. Bottom
              corners so they never collide with manuscript/beat-counter above.
@@ -1553,10 +1622,14 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
         <button id="focusSoloBtn" type="button" class="dawBtn focusSoloBtn" aria-label="Solo">S</button>
         <div id="bufferingSpinner" class="buffering-spinner" hidden><div class="spinner"></div><span>Loading…</span></div>
         <!-- Instrument title (Sep 2026, moved out of the bottom overlay below
-             to its own top-left position — real request, matches .tile-name's
-             move on the small squares. On desktop this sits to the right of
-             the manuscript button rather than under it — see the
-             .is-desktop .focus-label CSS override. -->
+             to its own fixed position — real request, matches .tile-name's
+             move on the small squares. Moved again Sep 25 2026, top-left to
+             top-right, swapping with the beat-counter's old spot now that the
+             beat-counter itself moved into #focusSettingsMenu and the new
+             #focusSettingsBtn took over top-left — see that button's own
+             comment above. Same position on mobile and desktop now (no more
+             .is-desktop override needed, since the desktop-only manuscript
+             button it used to dodge sits on the opposite side). -->
         <div id="focusLabel" class="focus-label">Clave</div>
         <!-- Notation strip: used to be grouped with the label above it in one
              flex column (see .focus-bottom-overlay) so the label always sat
@@ -1637,43 +1710,13 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
           <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
         </svg>
       </button>
-      <!-- Count-in button (Sep 13 2026, real request; moved here, after
-           Settings, same day — "swap countin and setting buttons": Settings
-           is back in source order right after Reset/before the timeline
-           (landing under 50% on mobile portrait, same slot it held before
-           Count-in existed), and this is now next instead. Where it actually
-           LANDS still differs by layout — see .transport-mid/.transport's own
-           CSS comments:
-             - mobile portrait: the timeline is hidden entirely (for now, per
-               direct request — "let's lose the progress bar and see if I can
-               live without it") so this becomes the grid's column-3 item,
-               landing under 75%.
-             - desktop: the timeline stays, so this is pulled OUT of grid flow
-               (position:absolute) and centered on the seam between the 50%/
-               75% columns instead, per the ask ("half way between the 50 and
-               75 buttons"), with the timeline shortened to leave it room —
-               unaffected by this reorder either way, since being excluded
-               from the flow means its source-order position doesn't matter
-               on desktop (see its own CSS rule for why).
-           Icon/behavior is a smaller-scale twin of #metroBtn's own stopwatch
-           styling; syncCountInBtn() (see JS) keeps this, countInBtnLandscape
-           and the pre-existing Settings-row checkbox all in sync. -->
-      <button id="countInBtn" type="button" aria-label="Count-in: off">
-        <svg class="countin-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle class="countin-case" cx="12" cy="13.3" r="7.6"></circle>
-          <rect class="countin-crown" x="10.1" y="1.2" width="3.8" height="2.4" rx="1.1"></rect>
-          <line class="countin-hand" x1="12" y1="13.3" x2="6.98" y2="16.2"></line>
-        </svg>
-      </button>
-      <!-- Flip button (Sep 12 2026, real request; icon replaced Sep 13 2026 —
-           see flip-icon.png's own note below): replaces the old Settings-menu
-           toggle entirely (see JS comment near flipViewOn/syncFlipBtn()
-           below) — instant tap, no menu. See .flipBtn's CSS comment for why
-           the circle itself is the shared button chrome, not part of the
-           icon. -->
-      <button id="flipBtn" type="button" class="flipBtn" aria-label="Flip view: off">
-        <img class="flip-icon" src="flip-icon.png" alt="">
-      </button>
+      <!-- Count-in and Flip/mirror both moved into #focusSettingsMenu, up in
+           the focus square, Sep 25 2026 (real request — "relocate the reset
+           button, the count in button, the mirror button, and the metronome
+           button behind the settings button" — Reset stays here untouched
+           per the same request's own correction). See their markup and
+           #focusSettingsMenu's comment near #focusSettingsBtn, up near
+           #manuscriptBtn, for both. -->
     </div>
   </section>
   <!-- Piece navigation, moved here (Aug 2026) from the very top of the page
@@ -2254,7 +2297,7 @@ function mirrorLandscapeFocus(){
   requestAnimationFrame(mirrorLandscapeFocus);
 }
 requestAnimationFrame(mirrorLandscapeFocus);
-const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), pieceMockups=$('#pieceMockups'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), notationStripDesktop=$('#notationStripDesktop'), settingsBtn=$('#settingsBtn'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), resetBtnLandscape=$('#resetBtnLandscape'), landscapeFocusDim=$('#landscapeFocusDim'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
+const controls=$('#gridControls'), controlsLeft=$('#gridControlsLeft'), controlsRight=$('#gridControlsRight'), focusWrap=$('#focusWrap'), focusLabel=$('#focusLabel'), mosaicRail=$('#mosaicRail'), mosaicBrowseList=$('#mosaicBrowseList'), pieceStrip=$('#pieceStrip'), pieceMockups=$('#pieceMockups'), notationPanel=$('#notationPanel'), notationPages=$('#notationPages'), notationStrip=$('#notationStrip'), notationStripDesktop=$('#notationStripDesktop'), settingsBtn=$('#settingsBtn'), focusSettingsBtn=$('#focusSettingsBtn'), focusSettingsMenu=$('#focusSettingsMenu'), landscapeNotation=$('#landscapeNotation'), landscapeNotationCanvas=$('#landscapeNotationCanvas'), landscapeNotationLabel=$('#landscapeNotationLabel'), metroBtnLandscape=$('#metroBtnLandscape'), metroNumLandscape=$('#metroNumLandscape'), muteBtnLandscape=$('#muteBtnLandscape'), resetBtnLandscape=$('#resetBtnLandscape'), landscapeFocusDim=$('#landscapeFocusDim'), landscapeArrowLeft=$('#landscapeArrowLeft'), landscapeArrowRight=$('#landscapeArrowRight'), landscapeTransport=$('#landscapeTransport'), playBtnLandscape=$('#playBtnLandscape');
 // Piece name now appears twice in the DOM — once in the mobile focus-square
 // overlay, once in the desktop page-header — so it's set by class, not id.
 function setPieceNameText(t){document.querySelectorAll('.piece-name').forEach(el=>el.textContent=t);}
@@ -5846,6 +5889,36 @@ playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('c
 // screen yet, just another way in until the menu panel grows its own
 // Settings/Notation Library/Latency/Help/About sections.
 if(settingsBtn)settingsBtn.addEventListener('click',()=>{const mt=document.getElementById('menuToggle');if(mt)mt.checked=true;});
+// Focus-square settings dropdown (Sep 25 2026, real request — see
+// #focusSettingsMenu's own markup/CSS comments near .focus-wrap for the full
+// story): a plain toggle on the [hidden] attribute, same pattern already
+// used throughout this file for show/hide state (#bufferingSpinner,
+// #notationStrip, etc.) rather than a class, plus aria-expanded on the
+// button itself for the accessible state. A separate, unrelated button/menu
+// from #settingsBtn's burger-menu panel just above — same "settings" word,
+// two different things, on purpose left as two different ids/functions
+// rather than trying to unify them.
+if(focusSettingsBtn&&focusSettingsMenu){
+  focusSettingsBtn.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    const willOpen=focusSettingsMenu.hidden;
+    focusSettingsMenu.hidden=!willOpen;
+    focusSettingsBtn.setAttribute('aria-expanded',willOpen?'true':'false');
+  });
+  // Tap-anywhere-else-to-close: unlike the full-screen menu-panel above, this
+  // dropdown is a small floating element with plenty of page around it, so
+  // it needs its own outside-click listener rather than relying on itself as
+  // a backdrop. Skips any click that lands on the button (its own click
+  // handler above already toggled it — this would immediately re-close it)
+  // or inside the menu itself (a tap on Metro/Count-in/Flip should trigger
+  // that control, not also dismiss the menu first).
+  document.addEventListener('click',(e)=>{
+    if(focusSettingsMenu.hidden)return;
+    if(e.target.closest('#focusSettingsBtn,#focusSettingsMenu'))return;
+    focusSettingsMenu.hidden=true;
+    focusSettingsBtn.setAttribute('aria-expanded','false');
+  });
+}
 // Tap-anywhere-blank-to-close (Sep 2026): the menu-panel already covers the
 // full screen while open, so it doubles as its own backdrop — no separate
 // overlay element needed. Close on any click that isn't on a real control
