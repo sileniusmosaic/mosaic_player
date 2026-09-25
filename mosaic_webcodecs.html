@@ -1274,6 +1274,18 @@ html:not(.is-desktop) #settingsBtn{display:none}
    fill, so the dark background every button here shares stays put). */
 .landscape-transport button.active{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 .landscape-transport button:disabled{opacity:.4}
+/* .landscape-tempo-btn (Sep 25 2026, real request — full landscape button
+   reshuffle): the 50/75/100 buttons used to get ALL their circular chrome
+   for free from the ".landscape-transport button" descendant selector just
+   above, because they always lived inside #landscapeTransport. The reshuffle
+   moves all three of them OUT to become standalone right-cluster/edge
+   buttons (see applyLandscapeSlotLayout()), so they need that same chrome
+   as their own class instead — this is a duplicate of the three rules just
+   above, not a replacement (a tempo button that stays in the grid on some
+   future remap still matches both selectors harmlessly). */
+.landscape-tempo-btn{font:inherit;border:2px solid var(--text);border-radius:50%;padding:0;background:#0c0906;color:var(--text);font-size:15.6px;font-weight:700;width:var(--cluster-size);height:var(--cluster-size);display:flex;align-items:center;justify-content:center;gap:4px}
+.landscape-tempo-btn.active{background:#0c0906;color:var(--text);border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+.landscape-tempo-btn:disabled{opacity:.4}
 .landscape-transport .play-icon{width:26.4px;height:26.4px}
 /* Same loading-fill/is-loading/reset-instant treatment as the real #play
    button (see #play and its neighbors above) — duplicated here rather than
@@ -3869,6 +3881,112 @@ function positionLandscapeTransport(){
 // unconditionally, whenever it's called. CLUSTER_W/GAP mirror the values
 // .metroBtn/.muteBtn-landscape/.resetBtn-landscape's own CSS already uses
 // for sizing and spacing (also var(--cluster-size) now — see the CSS).
+// Landscape "slot" system (Sep 25 2026, real request — a full 9-button
+// reshuffle: "the reset button... to be where the stopwatch button is; the
+// metronome... where the reset button is; ... the flip screen mirror
+// button can be where the metronome button is; the stopwatch... where the
+// 50 is; solo... where the 75 is; mute... where the 100 is" — a single,
+// consistent 9-element cycle once fully untangled). Rather than hand-editing
+// each button's own CSS class (which also carries non-positional styling —
+// metro's oversized digit font, the tempo buttons' shared chrome, etc.), the
+// 9 controls are named here by the SLOT they occupy (named after that
+// slot's original geometric role, not whichever control used to sit there),
+// so a future remap is just editing this one assignment instead of
+// rewriting positioning code again. Six slots are free-standing
+// absolute-positioned buttons (the two right-side 2x2 clusters, plus the
+// left/right edge buttons beside the nav arrows); three are grid cells
+// inside #landscapeTransport (Play's own 2x2 grid — see .landscape-transport).
+// Every element keeps its own identity class untouched (click handler, icon,
+// active/disabled sync all still work exactly as before) — only inline
+// position styles change, which always win over any class/ID rule
+// regardless of specificity (see abs() below), so there's no cascade fight
+// with e.g. #countInBtnLandscape's own top/left rule or .soloBtn's own
+// left:4px.
+const LANDSCAPE_SLOT_ASSIGNMENT={
+  clusterTopFar:'flip',      // was Metro's slot
+  clusterTopNear:'metro',    // was Reset's slot
+  clusterBottomFar:'p75',    // was Mute's slot
+  clusterBottomNear:'p50',   // was Solo's slot
+  edgeLeft:'reset',          // was Count-in's slot
+  edgeRight:'p100',          // was Flip's slot
+  gridSecond:'countIn',      // was 50%'s grid cell (row1col2 — Play is row1col1, fixed in markup)
+  gridThird:'solo',          // was 75%'s grid cell (row2col1)
+  gridFourth:'mute'          // was 100%'s grid cell (row2col2)
+};
+function landscapeTempoBtn(p){return document.querySelector('.landscape-tempo-btn[data-p="'+p+'"]');}
+// Resolves a LANDSCAPE_SLOT_ASSIGNMENT value to its actual element. metro/
+// reset/mute are explicit consts (see the big controls declaration); solo/
+// countIn/flip rely on the browser's implicit DOM-id-to-global lookup, same
+// as every other reference to them in this file.
+function landscapeSlotEl(control){
+  switch(control){
+    case'flip':return flipBtnLandscape;
+    case'metro':return metroBtnLandscape;
+    case'reset':return resetBtnLandscape;
+    case'countIn':return countInBtnLandscape;
+    case'solo':return soloBtnLandscape;
+    case'mute':return muteBtnLandscape;
+    case'p50':return landscapeTempoBtn(50);
+    case'p75':return landscapeTempoBtn(75);
+    case'p100':return landscapeTempoBtn(100);
+    default:return null;
+  }
+}
+// Sets an element to a free-standing absolute position, clearing whichever
+// of top/right/left it doesn't use to 'auto' so no stale value from the
+// element's own CSS class survives the move (an inline style always beats
+// a class/ID rule for the SAME property, but an inline style this function
+// never sets leaves that class's own value in effect — clearing all three
+// plus bottom avoids that).
+function abs(el,top,right,left){
+  if(!el)return;
+  el.style.position='absolute';
+  el.style.top=top;
+  el.style.right=right;
+  el.style.left=left;
+  el.style.bottom='auto';
+}
+// Applies LANDSCAPE_SLOT_ASSIGNMENT above. Called once from the init chain,
+// right after buildLandscapeTransport() creates the .landscape-tempo-btn
+// elements this depends on. The two right-side clusters' precise `right`
+// px (how far from the true screen edge) is NOT set here — that depends on
+// the square's rendered geometry, which is positionLandscapeMetroCluster()'s
+// job (rewritten below to read from these same slots) and gets filled in on
+// the very next layout pass (landscapeClusterNeedsRecompute already starts
+// true — see its own comment). This function only fixes each slot's ROW
+// (top: cluster-top vs mute-top) and SIDE (edge vs cluster), plus moves the
+// 3 grid occupants into #landscapeTransport itself.
+function applyLandscapeSlotLayout(){
+  // The 6 free-standing slots must be direct children of #landscapeNotation
+  // (the same parent flip/metro/reset/mute/solo already have) — NOT of
+  // #landscapeTransport. That container is itself position:absolute, so any
+  // position:absolute child positions relative to ITS box instead of the
+  // screen. This matters specifically for the 50/75/100 buttons: they start
+  // out as children of #landscapeTransport (see buildLandscapeTransport()),
+  // and two of the three land in a free-standing slot here — reparenting
+  // them out first is what makes their top/right/left resolve against the
+  // real screen edges instead of #landscapeTransport's own box.
+  [
+    [LANDSCAPE_SLOT_ASSIGNMENT.clusterTopFar,'var(--cluster-top)','','auto'],
+    [LANDSCAPE_SLOT_ASSIGNMENT.clusterTopNear,'var(--cluster-top)','','auto'],
+    [LANDSCAPE_SLOT_ASSIGNMENT.clusterBottomFar,'var(--mute-top)','','auto'],
+    [LANDSCAPE_SLOT_ASSIGNMENT.clusterBottomNear,'var(--mute-top)','','auto'],
+    [LANDSCAPE_SLOT_ASSIGNMENT.edgeLeft,'calc(var(--cluster-top) + var(--cluster-size) + 10px)','auto','12px'],
+    [LANDSCAPE_SLOT_ASSIGNMENT.edgeRight,'calc(var(--cluster-top) + var(--cluster-size) + 10px)','12px','auto']
+  ].forEach(([control,top,right,left])=>{
+    const el=landscapeSlotEl(control);
+    if(!el)return;
+    if(el.parentElement!==landscapeNotation)landscapeNotation.appendChild(el);
+    abs(el,top,right,left);
+  });
+  [LANDSCAPE_SLOT_ASSIGNMENT.gridSecond,LANDSCAPE_SLOT_ASSIGNMENT.gridThird,LANDSCAPE_SLOT_ASSIGNMENT.gridFourth].forEach(control=>{
+    const el=landscapeSlotEl(control);
+    if(!el)return;
+    el.style.position='static';
+    el.style.top='auto';el.style.right='auto';el.style.left='auto';el.style.bottom='auto';
+    landscapeTransport.appendChild(el);
+  });
+}
 function positionLandscapeMetroCluster(){
   const squareRight=landscapeFocusCanvas.getBoundingClientRect().right;
   const insets=getSafeAreaInsets();
@@ -3887,14 +4005,14 @@ function positionLandscapeMetroCluster(){
   // combined group anchoring the edge rather than two disconnected islands
   // with a growing gap between them on any wide screen.
   const centeredRight=minRight;
-  metroBtnLandscape.style.right=centeredRight+'px';
-  muteBtnLandscape.style.right=centeredRight+'px';
-  // Solo (Sep 2026, moved here from its own former left-side placement —
-  // real request: "left of the mute button and under the reset button")
-  // shares reset's column, one cluster-width+gap further from the edge than
-  // metro/mute — same reasoning as reset originally: sits directly below it.
-  resetBtnLandscape.style.right=(centeredRight+CLUSTER_W+GAP)+'px';
-  soloBtnLandscape.style.right=(centeredRight+CLUSTER_W+GAP)+'px';
+  // Rewritten Sep 25 2026 (landscape slot reshuffle) to apply these two px
+  // values to whichever elements the CURRENT slot assignment puts in each
+  // column, rather than hardcoding metro/mute (near) and reset/solo (far) —
+  // see LANDSCAPE_SLOT_ASSIGNMENT above.
+  const farRight=centeredRight+'px';
+  const nearRight=(centeredRight+CLUSTER_W+GAP)+'px';
+  [LANDSCAPE_SLOT_ASSIGNMENT.clusterTopFar,LANDSCAPE_SLOT_ASSIGNMENT.clusterBottomFar].forEach(control=>{const el=landscapeSlotEl(control);if(el)el.style.right=farRight;});
+  [LANDSCAPE_SLOT_ASSIGNMENT.clusterTopNear,LANDSCAPE_SLOT_ASSIGNMENT.clusterBottomNear].forEach(control=>{const el=landscapeSlotEl(control);if(el)el.style.right=nearRight;});
 }
 // Reverted (Sep 2026): every tile lives in the single #gridControls grid on
 // both mobile and desktop now — see the CSS/markup comments near
@@ -5100,7 +5218,16 @@ function applyPortraitControlLayout(){
 // "landscape tempo" concept to keep in sync, just another button invoking
 // the one real function).
 function buildLandscapeTransport(){
-  TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));landscapeTransport.appendChild(b)});
+  // .landscape-tempo-btn added Sep 25 2026 (real request — full landscape
+  // button reshuffle): these three buttons no longer necessarily live inside
+  // #landscapeTransport once applyLandscapeSlotLayout() (below) runs — two of
+  // them move out to become standalone right-cluster buttons — so they need
+  // their own class carrying the full circular chrome .landscape-transport
+  // button used to provide purely by descendant selector (see that rule's
+  // own CSS comment) plus a stable way for updateTempoUI()/
+  // setTempoButtonsDisabled() to find them wherever they've ended up (see
+  // both those functions' own comments).
+  TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.className='landscape-tempo-btn';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));landscapeTransport.appendChild(b)});
   // Sep 4 2026 fix: buildTempoButtons() runs before this (see the init call
   // chain) and already calls updateTempoUI() once — but these buttons don't
   // exist yet at that point, so its landscapeTransport pass found nothing to
@@ -5113,22 +5240,33 @@ function buildLandscapeTransport(){
 // Covers both rows in one pass — a button with no data-p (#play/
 // #playBtnLandscape) always fails +undefined===tempoPercent, so this never
 // mis-marks either Play button "active" any more than the portrait-only
-// version used to.
-function updateTempoUI(){[...tempoButtons.querySelectorAll('button'),...landscapeTransport.querySelectorAll('button')].forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
+// version used to. Queries .landscape-tempo-btn by class (Sep 25 2026 —
+// see buildLandscapeTransport()'s comment) rather than
+// landscapeTransport.querySelectorAll('button'), because applyLandscapeSlotLayout()
+// below moves two of the three landscape tempo buttons OUT of
+// #landscapeTransport entirely — the class finds them wherever the current
+// slot layout has put them.
+function updateTempoUI(){[...tempoButtons.querySelectorAll('button'),...document.querySelectorAll('.landscape-tempo-btn')].forEach(b=>b.classList.toggle('active',+b.dataset.p===tempoPercent));}
 // Replaces 5 identical `tempoButtons.querySelectorAll('button').forEach(b=>
 // b.disabled=...)` call sites scattered through the tempo/prepare/switch
-// flow (Sep 2026) — each now also needs to reach the landscape transport's
-// buttons (including playBtnLandscape, which lives in that same container),
-// and duplicating that at every call site would be easy to miss one of.
+// flow (Sep 2026). Rewritten Sep 25 2026 (landscape slot reshuffle): the
+// three landscape tempo-preset buttons can now live outside
+// #landscapeTransport (see updateTempoUI()'s comment just above), so they're
+// found by their .landscape-tempo-btn class instead of by container;
+// playBtnLandscape is handled explicitly since it's the one #landscapeTransport
+// occupant this function still needs to reach directly (it carries no
+// .landscape-tempo-btn class — it's a fixed real button, not a generated
+// preset).
 function setTempoButtonsDisabled(disabled){
   // :not(#reset) added Sep 25 2026, real report — Reset moved into
   // #tempoButtons on portrait (see buildTempoButtons()) so it started getting
   // swept up in this sweep and greying out during ordinary tempo-bank loads;
   // Reset should always stay tappable (it already has its own separate,
   // momentary disable/re-enable around its own async work — see reset()) so
-  // it's excluded here regardless of which container it's currently in. A
-  // no-op on landscapeTransport, which never contains #reset.
-  [tempoButtons,landscapeTransport].forEach(container=>container.querySelectorAll('button:not(#reset)').forEach(b=>b.disabled=disabled));
+  // it's excluded here regardless of which container it's currently in.
+  tempoButtons.querySelectorAll('button:not(#reset)').forEach(b=>b.disabled=disabled);
+  if(playBtnLandscape)playBtnLandscape.disabled=disabled;
+  document.querySelectorAll('.landscape-tempo-btn').forEach(b=>b.disabled=disabled);
 }
 // Thin wrapper, same reasoning as ensurePrepared() above: registers this load
 // as the one Reset/switchMosaic() can cancel, then delegates to the real
@@ -6106,7 +6244,7 @@ metroBtn.disabled=!metroReady();
 setMetroActive(countInOn&&metroReady());
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
-buildControls();applyPortraitControlLayout();buildTempoButtons();buildLandscapeTransport();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
+buildControls();applyPortraitControlLayout();buildTempoButtons();buildLandscapeTransport();applyLandscapeSlotLayout();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
 
 // Usage analytics (Sep 10 2026, revised Sep 11 2026) — anonymous, minimal,
