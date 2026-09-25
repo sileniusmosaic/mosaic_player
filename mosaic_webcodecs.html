@@ -250,11 +250,12 @@ html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
    to top-right after all (its numbers need to stay visible), so the label
    went to the bottom instead; desktop keeps this top-right position
    unchanged since desktop's dropdown still holds the beat-counter. */
-/* Padding 5px/10px -> 4.5px/9px (10% smaller box, real request), background
-   alpha .82 -> .62 (~25% more transparent, same request — see the matching
-   change on .landscape-notation-label, its landscape counterpart. Both used
-   to share the exact same background/padding values and still do.) */
-.focus-label{position:absolute;top:10px;right:10px;left:auto;z-index:4;background:rgba(21,16,11,.62);border:1px solid var(--border);padding:4.5px 9px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px}
+/* Second real-request pass, same day: padding 4.5px/9px -> 3.6px/7.2px
+   (another 20% smaller box), background alpha .62 -> .68 (another 10% more
+   opaque). See the matching change on .landscape-notation-label, its
+   landscape counterpart — both boxes have shared identical background/
+   padding values through every pass of this and still do. */
+.focus-label{position:absolute;top:10px;right:10px;left:auto;z-index:4;background:rgba(21,16,11,.68);border:1px solid var(--border);padding:3.6px 7.2px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px}
 /* Portrait-only (Sep 25 2026, real request — "move the instrument name to
    center bottom, really quite close to the bottom... as close to the bottom
    as the instrument names are to the top in the small squares"): bottom:4px
@@ -1168,11 +1169,12 @@ html:not(.is-desktop) #settingsBtn{display:none}
    container query unit support — dropped as an invalid declaration (not
    applied) by any browser that understands cqw, so only one of the two
    ever takes effect. */
-/* Padding 5px/10px -> 4.5px/9px, background alpha .82 -> .62 — see the
-   matching change on .focus-label (portrait/desktop's own instrument-name
-   label) for the real request this mirrors; both boxes used to share
-   identical background/padding values and still do. */
-.landscape-notation-label{position:absolute;left:10px;top:10px;background:rgba(21,16,11,.62);border:1px solid var(--border);padding:4.5px 9px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15px;font-size:clamp(13px,12.7px + 0.65cqw,15px);color:var(--text);pointer-events:none}
+/* Second real-request pass, same day: padding 4.5px/9px -> 3.6px/7.2px,
+   background alpha .62 -> .68 — see the matching change on .focus-label
+   (portrait/desktop's own instrument-name label) for the real request this
+   mirrors; both boxes have shared identical background/padding values
+   through every pass of this and still do. */
+.landscape-notation-label{position:absolute;left:10px;top:10px;background:rgba(21,16,11,.68);border:1px solid var(--border);padding:3.6px 7.2px;border-radius:6px;font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15px;font-size:clamp(13px,12.7px + 0.65cqw,15px);color:var(--text);pointer-events:none}
 /* Landscape metronome (Aug 31 2026) — see the markup comment on
    #metroBtnLandscape. Only top/right are overridden (same safe-area-aware
    treatment as the label above, mirrored to the opposite corner); every
