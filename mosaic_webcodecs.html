@@ -23,7 +23,21 @@
      rule, not a bug here) and then reopened from that icon. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Mosaic — Abakuá</title>
+<title>Groove Mosaic</title>
+<!-- Link previews (Sep 26 2026): WhatsApp/iMessage/Slack etc. read these
+     static tags only — they never run the JS that later sets the per-piece
+     tab title — so the shared-link card now says "Groove Mosaic" instead of
+     whichever piece happened to be hardcoded here. -->
+<meta name="description" content="Play along with a real band, one part at a time. Every instrument filmed and recorded separately — slow it down, loop it, mute or solo any part.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Groove Mosaic">
+<meta property="og:title" content="Groove Mosaic">
+<meta property="og:description" content="Play along with a real band, one part at a time. Every instrument filmed and recorded separately — slow it down, loop it, mute or solo any part.">
+<meta property="og:url" content="https://groovemosaic.com/">
+<meta property="og:image" content="https://groovemosaic.com/Mosaic/Flip_Swing/poster_flip_swing.jpg">
+<meta property="og:image:width" content="1920">
+<meta property="og:image:height" content="960">
+<meta name="twitter:card" content="summary_large_image">
 <!-- Typeface direction (Aug 2026 redesign): Roboto Condensed everywhere,
      replacing the earlier Arial-everywhere pass. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2073,7 +2087,7 @@ document.documentElement.classList.toggle('is-touch',!IS_DESKTOP);
 // minor back to 0, for a big systemic change or a real new feature. Nothing
 // else to wire up — every .build-version-badge element picks it up
 // automatically below.
-const BUILD_VERSION='4.4';
+const BUILD_VERSION='4.5';
 document.querySelectorAll('.build-version-badge').forEach(el=>{el.textContent='v'+BUILD_VERSION;});
 // --- per-mosaic configuration -------------------------------------------
 // Each entry describes everything that differs between pieces: tile names,
@@ -5725,7 +5739,7 @@ async function switchMosaic(id){
     }
     if(ctx)ensureGains(true);
 
-    document.title='Mosaic — '+cfg.label;
+    document.title='Groove Mosaic — '+cfg.label;
     setPieceNameText(cfg.label);
     poster.src=cfg.poster;
     renderNotation();renderNotationStrip();preloadNotationStrips();
@@ -6412,7 +6426,7 @@ timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginS
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause()});window.addEventListener('pagehide',()=>{if(playing)pause()});
 poster.addEventListener('load',drawPoster);if(poster.complete)drawPoster();
 sizeFocusCanvas();
-document.title='Mosaic — '+cfg.label;
+document.title='Groove Mosaic — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
 // Beat counter default on a genuinely FRESH page load (Sep 12 2026, real
