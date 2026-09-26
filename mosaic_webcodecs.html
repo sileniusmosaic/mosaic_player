@@ -409,7 +409,27 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    below for where that moved). */
 .focusSettingsBtn{top:10px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
 .focusSettingsBtn .settings-icon{width:33.6px;height:33.6px}
-.focusSettingsBtn[aria-expanded="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+/* Icon swap (Sep 26 2026, real request — full redesign of this button on
+   portrait): desktop keeps the original gear + dropdown exactly as it was
+   (see the markup comment on #focusSettingsBtn for why the gear <svg> is
+   still right there in the HTML, just CSS-hidden on portrait — nothing
+   about it was deleted, so it's trivial to bring back if ever wanted here
+   again). Portrait shows 4 small circles instead and the button becomes a
+   plain declutter toggle rather than a dropdown launcher — see the JS click
+   handler and the .hide-focus-overlay rules below for what pressing it now
+   does. Four circles, 2x2, in a 24x24 viewBox: r=3 (d=6), centers 10px
+   apart on each axis (7 and 17) — that puts the gap between edge and the
+   button's own edge, AND the gap between the two circles themselves, at an
+   identical 4px each ("equal space between each other and the outer", per
+   the request) by construction: 3*4 + 2*6 = 24. currentColor rather than a
+   literal white — every other icon in this button family already inherits
+   its color from the button (var(--text), a near-white cream), so this
+   reads as "little white circles" while staying consistent with the rest
+   of the set. */
+.focusSettingsBtn .circles-icon{width:33.6px;height:33.6px;fill:currentColor}
+.is-desktop .focusSettingsBtn .circles-icon{display:none}
+html:not(.is-desktop) .focusSettingsBtn .settings-icon{display:none}
+.focusSettingsBtn[aria-expanded="true"],.focusSettingsBtn[aria-pressed="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 /* The dropdown itself: originally "down and out to the right" of the
    settings button on every layout (left:25px) — narrowed to portrait-only
    the same day (see the html:not(.is-desktop) override right below): real
@@ -442,6 +462,39 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    overlay each child positions itself within. */
 .focus-settings-menu>button{position:static;top:auto;right:auto;left:auto;bottom:auto;display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--text);color:var(--text)}
 .focus-settings-menu>button:disabled{opacity:.5}
+/* Portrait-only Flip/Count-in positions (Sep 26 2026, real request — the
+   settings/circles redesign): both buttons are moved out of
+   #focusSettingsMenu entirely on portrait (see applyPortraitControlLayout()
+   in the JS — #focusSettingsMenu itself is never opened there any more, see
+   the click handler), becoming fixed siblings in the focus square exactly
+   like #metroBtn/#manuscriptBtn already are. "Relocate the mirror button to
+   where the count-in button is... and put the count-in button below the
+   metronome, in the same plane" — Flip takes the top-left dropdown's old
+   slot (directly below Settings, same left edge), Count-in takes the
+   mirror-image slot on the right (directly below Metro, same right edge).
+   top:75px on both = the button above's own 55px height + a 10px gap, the
+   same paired-button offset already used throughout this file (see e.g.
+   .focus-settings-menu's own top:75px, which this replaces on portrait).
+   Desktop is completely untouched — these two stay inside the dropdown
+   there, unaffected by any of this. */
+html:not(.is-desktop) #flipBtn{position:absolute;top:75px;left:10px;right:auto;bottom:auto;z-index:4}
+html:not(.is-desktop) #countInBtn{position:absolute;top:75px;right:10px;left:auto;bottom:auto;z-index:4}
+/* Declutter toggle (Sep 26 2026, real request, portrait only): "the app will
+   default to having all the buttons on so the user knows that they're
+   there. But when you press this button... all the buttons that overlay the
+   focus square will disappear... not the reset button, the play button, the
+   50/75/100, they will stay" — plus a same-message follow-up asking for
+   every instrument name (the focus square's own label AND every small
+   tile's) to disappear too. html.hide-focus-overlay is toggled by
+   #focusSettingsBtn's click handler (see JS) — starts absent, so everything
+   below shows by default, matching "the user knows that they're there".
+   :not(.is-desktop) doubly guards what the JS already only ever does on
+   portrait, same defensive-CSS pattern used throughout this file. */
+html.hide-focus-overlay:not(.is-desktop) #metroBtn,
+html.hide-focus-overlay:not(.is-desktop) #countInBtn,
+html.hide-focus-overlay:not(.is-desktop) #flipBtn,
+html.hide-focus-overlay:not(.is-desktop) .focus-label,
+html.hide-focus-overlay:not(.is-desktop) .tile-name{display:none}
 /* Manuscript toggle (Aug 2026): used to be top-left of the focus square,
    mirroring the beat counter at top-right — moved one slot right Sep 25 2026
    (left:10px -> left:75px) to make room for #focusSettingsBtn, which took
@@ -664,14 +717,24 @@ html:not(.is-desktop) #settingsBtn{display:none}
    has HIGHER specificity — one class + one type — than a single class alone
    does), the exact same reason #reset/#settingsBtn already use an ID
    selector instead of a class for this. */
-#flipBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
+/* border-color -> full border + color (Sep 26 2026, real request — the
+   settings/circles redesign): both this rule and #countInBtn's own version
+   below used to lean on `.focus-settings-menu>button{border:2px solid
+   var(--text);color:var(--text)}` for their actual border WIDTH/style and
+   icon color (currentColor — see .countin-case etc.) whenever they lived
+   inside that menu. Portrait now moves both buttons out of the menu
+   entirely (see applyPortraitControlLayout() in the JS) to become their own
+   fixed-position siblings, so each needs to be fully self-sufficient
+   regardless of which element wraps it — this is a strict superset of what
+   was already showing on desktop (same values), so it's a no-op there. */
+#flipBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border:2px solid var(--text);color:var(--text)}
 #flipBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 /* Count-in button (Sep 13 2026, real request): the on-main-transport twin of
    Flip above, replacing the old Settings-menu-only toggle with an instant
    tap (the Settings row checkbox — see countInToggle further down — is left
    in place too, both now kept in sync by syncCountInBtn()). Identical
    circular chrome/active-ring recipe as #reset/#settingsBtn/#flipBtn. */
-#countInBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border-color:var(--text)}
+#countInBtn{border-radius:50%;width:55px;height:55px;padding:0;background:#0c0906;border:2px solid var(--text);color:var(--text)}
 #countInBtn.is-active{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 /* Count-in icon (Sep 13 2026): a small stopwatch — case as a stroked circle
    (same technique as .metro-icon .metro-case), crown as a filled rect, and a
@@ -1650,10 +1713,34 @@ html:not(.is-desktop) #settingsBtn{display:none}
              the full menu-panel via #menuToggle, unchanged; this one only
              opens the small dropdown. Takes over the slot #manuscriptBtn used
              to sit in — manuscriptBtn shifted one slot right (left:75px) to
-             make room, see its own comment below. -->
-        <button id="focusSettingsBtn" type="button" class="dawBtn focusSettingsBtn" aria-label="Instrument controls" aria-expanded="false" aria-controls="focusSettingsMenu">
+             make room, see its own comment below.
+
+             Redesigned Sep 26 2026, PORTRAIT ONLY (real request) — desktop
+             keeps every bit of the above unchanged (gear icon, dropdown,
+             aria-expanded). On portrait this becomes a plain declutter
+             toggle instead of a dropdown launcher: press it once and Metro/
+             Count-in/Flip plus every instrument-name label disappear
+             together (Reset/Play/50/75/100 stay); press again to bring them
+             back. Both icons live in the markup at all times — the
+             .settings-icon gear (kept verbatim, not deleted, purely so
+             it's a one-line CSS change to bring back later if ever wanted —
+             "I like it and we will use it again later") and the new
+             .circles-icon 4-dot icon; .focusSettingsBtn's own CSS shows
+             exactly one of the two per platform (see that rule's comment).
+             aria-expanded is what desktop's dropdown state still reads;
+             aria-pressed is the new portrait toggle state — see the JS click
+             handler for which one each platform actually sets. -->
+        <button id="focusSettingsBtn" type="button" class="dawBtn focusSettingsBtn" aria-label="Instrument controls" aria-expanded="false" aria-pressed="false" aria-controls="focusSettingsMenu">
           <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
+          </svg>
+          <!-- 4 white circles, 2x2, evenly spaced (Sep 26 2026 — see the CSS
+               comment on .circles-icon for the exact spacing math). -->
+          <svg class="circles-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="7" cy="7" r="3"></circle>
+            <circle cx="17" cy="7" r="3"></circle>
+            <circle cx="7" cy="17" r="3"></circle>
+            <circle cx="17" cy="17" r="3"></circle>
           </svg>
         </button>
         <!-- The three controls that used to live on their own — metronome/
@@ -5257,6 +5344,19 @@ function applyPortraitControlLayout(){
   if(!metroBtn||!focusWrap)return;
   if(manuscriptBtn&&manuscriptBtn.parentElement===focusWrap)focusWrap.insertBefore(metroBtn,manuscriptBtn);
   else focusWrap.appendChild(metroBtn);
+  // Sep 26 2026 (real request — the settings/circles redesign): Count-in and
+  // Flip move out of #focusSettingsMenu too, same reasoning as Metro just
+  // above — portrait's #focusSettingsBtn no longer opens that dropdown at
+  // all (see its click handler further down), so both need to be real,
+  // independently-positioned siblings in focusWrap instead of flex children
+  // of a menu that never opens here. Their new fixed positions come from
+  // the html:not(.is-desktop) #flipBtn/#countInBtn CSS rules (see
+  // .focus-settings-menu>button's own comment). Desktop is untouched — its
+  // #focusSettingsMenu still holds all three exactly as before.
+  if(countInBtn&&manuscriptBtn&&manuscriptBtn.parentElement===focusWrap)focusWrap.insertBefore(countInBtn,manuscriptBtn);
+  else if(countInBtn)focusWrap.appendChild(countInBtn);
+  if(flipBtn&&manuscriptBtn&&manuscriptBtn.parentElement===focusWrap)focusWrap.insertBefore(flipBtn,manuscriptBtn);
+  else if(flipBtn)focusWrap.appendChild(flipBtn);
 }
 // Landscape transport's tempo presets (Sep 2026): #playBtnLandscape is
 // already in the markup (a real button, mirrored via syncLandscapePlayBtn()
@@ -6194,21 +6294,38 @@ playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('c
 // screen yet, just another way in until the menu panel grows its own
 // Settings/Notation Library/Latency/Help/About sections.
 if(settingsBtn)settingsBtn.addEventListener('click',()=>{const mt=document.getElementById('menuToggle');if(mt)mt.checked=true;});
-// Focus-square settings dropdown (Sep 25 2026, real request — see
-// #focusSettingsMenu's own markup/CSS comments near .focus-wrap for the full
-// story): a plain toggle on the [hidden] attribute, same pattern already
-// used throughout this file for show/hide state (#bufferingSpinner,
-// #notationStrip, etc.) rather than a class, plus aria-expanded on the
-// button itself for the accessible state. A separate, unrelated button/menu
-// from #settingsBtn's burger-menu panel just above — same "settings" word,
-// two different things, on purpose left as two different ids/functions
-// rather than trying to unify them.
+// Focus-square settings button (Sep 25 2026 originally, see
+// #focusSettingsMenu's own markup/CSS comments near .focus-wrap for that
+// full story: a plain toggle on the [hidden] attribute, same pattern
+// already used throughout this file for show/hide state — #bufferingSpinner,
+// #notationStrip, etc. — plus aria-expanded on the button itself for the
+// accessible state). A separate, unrelated button/menu from #settingsBtn's
+// burger-menu panel just above — same "settings" word, two different
+// things, on purpose left as two different ids/functions rather than trying
+// to unify them.
+//
+// Redesigned Sep 26 2026, real request — PORTRAIT ONLY, desktop keeps the
+// exact block above unchanged (dropdown open/close, aria-expanded). On
+// portrait #focusSettingsBtn no longer opens #focusSettingsMenu at all
+// (Count-in/Flip have already been moved OUT of it by
+// applyPortraitControlLayout() by this point — see that function's own
+// comment — so the menu is permanently empty/unused there); instead it's a
+// plain on/off declutter toggle, via the html.hide-focus-overlay class (see
+// its own CSS comment for exactly what that hides) and aria-pressed for the
+// accessible state instead of aria-expanded, since nothing is "expanding"
+// any more on portrait.
 if(focusSettingsBtn&&focusSettingsMenu){
   focusSettingsBtn.addEventListener('click',(e)=>{
     e.stopPropagation();
-    const willOpen=focusSettingsMenu.hidden;
-    focusSettingsMenu.hidden=!willOpen;
-    focusSettingsBtn.setAttribute('aria-expanded',willOpen?'true':'false');
+    if(IS_DESKTOP){
+      const willOpen=focusSettingsMenu.hidden;
+      focusSettingsMenu.hidden=!willOpen;
+      focusSettingsBtn.setAttribute('aria-expanded',willOpen?'true':'false');
+      return;
+    }
+    const hide=!document.documentElement.classList.contains('hide-focus-overlay');
+    document.documentElement.classList.toggle('hide-focus-overlay',hide);
+    focusSettingsBtn.setAttribute('aria-pressed',hide?'true':'false');
   });
   // Tap-anywhere-else-to-close: unlike the full-screen menu-panel above, this
   // dropdown is a small floating element with plenty of page around it, so
@@ -6216,8 +6333,13 @@ if(focusSettingsBtn&&focusSettingsMenu){
   // a backdrop. Skips any click that lands on the button (its own click
   // handler above already toggled it — this would immediately re-close it)
   // or inside the menu itself (a tap on Metro/Count-in/Flip should trigger
-  // that control, not also dismiss the menu first).
+  // that control, not also dismiss the menu first). Desktop-only now (Sep 26
+  // 2026) — portrait has no dropdown left to close, so this would already be
+  // a permanent no-op there anyway (focusSettingsMenu.hidden never becomes
+  // false on portrait any more), but the explicit guard says so directly
+  // rather than relying on that.
   document.addEventListener('click',(e)=>{
+    if(!IS_DESKTOP)return;
     if(focusSettingsMenu.hidden)return;
     if(e.target.closest('#focusSettingsBtn,#focusSettingsMenu'))return;
     focusSettingsMenu.hidden=true;
