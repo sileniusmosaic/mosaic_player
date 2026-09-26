@@ -417,16 +417,26 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    again). Portrait shows 4 small circles instead and the button becomes a
    plain declutter toggle rather than a dropdown launcher — see the JS click
    handler and the .hide-focus-overlay rules below for what pressing it now
-   does. Four circles, 2x2, in a 24x24 viewBox: r=3 (d=6), centers 10px
-   apart on each axis (7 and 17) — that puts the gap between edge and the
-   button's own edge, AND the gap between the two circles themselves, at an
-   identical 4px each ("equal space between each other and the outer", per
-   the request) by construction: 3*4 + 2*6 = 24. currentColor rather than a
-   literal white — every other icon in this button family already inherits
-   its color from the button (var(--text), a near-white cream), so this
-   reads as "little white circles" while staying consistent with the rest
-   of the set. */
-.focusSettingsBtn .circles-icon{width:33.6px;height:33.6px;fill:currentColor}
+   does. Four circles, 2x2, in a 24x24 viewBox, centers 10px apart on each
+   axis (7 and 17), unchanged from the first version.
+
+   Redesigned again same day (real follow-up request): each dot is now a
+   miniature replica of the real transport buttons' own chrome instead of a
+   single flat fill — "take the reset button... if that circular arrow was
+   actually just a white filled circle, the gap that goes between that and
+   the white circumference" — i.e. a thin stroked ring (.circles-icon-ring,
+   echoing a button's own border) with a small filled dot floating inside
+   it (.circles-icon-dot, echoing the reset button's glyph), a visible gap
+   between the two exactly like the real buttons' border-to-icon gap. Ring
+   r=3.6/dot r=1.3, same 4 centers as before — the "equal space between
+   each other and the outer edge" from the original request still holds,
+   just with slightly smaller gaps now that each dot's own footprint grew
+   to include its ring. currentColor throughout (both the ring's stroke and
+   the dot's fill) rather than a literal white, matching every other icon
+   in this button family which already inherits var(--text). */
+.focusSettingsBtn .circles-icon{width:33.6px;height:33.6px}
+.focusSettingsBtn .circles-icon .circles-icon-ring{fill:none;stroke:currentColor;stroke-width:1}
+.focusSettingsBtn .circles-icon .circles-icon-dot{fill:currentColor;stroke:none}
 .is-desktop .focusSettingsBtn .circles-icon{display:none}
 html:not(.is-desktop) .focusSettingsBtn .settings-icon{display:none}
 .focusSettingsBtn[aria-expanded="true"],.focusSettingsBtn[aria-pressed="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
@@ -485,14 +495,18 @@ html:not(.is-desktop) #countInBtn{position:absolute;top:75px;right:10px;left:aut
    focus square will disappear... not the reset button, the play button, the
    50/75/100, they will stay" — plus a same-message follow-up asking for
    every instrument name (the focus square's own label AND every small
-   tile's) to disappear too. html.hide-focus-overlay is toggled by
-   #focusSettingsBtn's click handler (see JS) — starts absent, so everything
-   below shows by default, matching "the user knows that they're there".
-   :not(.is-desktop) doubly guards what the JS already only ever does on
-   portrait, same defensive-CSS pattern used throughout this file. */
+   tile's) to disappear too, and (same-day follow-up) the focus square's
+   Mute/Solo buttons (#focusMuteBtn/#focusSoloBtn) added to the same list.
+   html.hide-focus-overlay is toggled by #focusSettingsBtn's click handler
+   (see JS) — starts absent, so everything below shows by default, matching
+   "the user knows that they're there". :not(.is-desktop) doubly guards what
+   the JS already only ever does on portrait, same defensive-CSS pattern
+   used throughout this file. */
 html.hide-focus-overlay:not(.is-desktop) #metroBtn,
 html.hide-focus-overlay:not(.is-desktop) #countInBtn,
 html.hide-focus-overlay:not(.is-desktop) #flipBtn,
+html.hide-focus-overlay:not(.is-desktop) #focusMuteBtn,
+html.hide-focus-overlay:not(.is-desktop) #focusSoloBtn,
 html.hide-focus-overlay:not(.is-desktop) .focus-label,
 html.hide-focus-overlay:not(.is-desktop) .tile-name{display:none}
 /* Manuscript toggle (Aug 2026): used to be top-left of the focus square,
@@ -1734,13 +1748,19 @@ html:not(.is-desktop) #settingsBtn{display:none}
           <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
           </svg>
-          <!-- 4 white circles, 2x2, evenly spaced (Sep 26 2026 — see the CSS
-               comment on .circles-icon for the exact spacing math). -->
+          <!-- 4 mini "buttons", 2x2, evenly spaced — each a thin ring +
+               small filled dot, echoing the real transport buttons' own
+               border-and-glyph chrome (Sep 26 2026 — see the CSS comment on
+               .circles-icon for the full reasoning and exact geometry). -->
           <svg class="circles-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="7" cy="7" r="3"></circle>
-            <circle cx="17" cy="7" r="3"></circle>
-            <circle cx="7" cy="17" r="3"></circle>
-            <circle cx="17" cy="17" r="3"></circle>
+            <circle class="circles-icon-ring" cx="7" cy="7" r="3.6"></circle>
+            <circle class="circles-icon-dot" cx="7" cy="7" r="1.3"></circle>
+            <circle class="circles-icon-ring" cx="17" cy="7" r="3.6"></circle>
+            <circle class="circles-icon-dot" cx="17" cy="7" r="1.3"></circle>
+            <circle class="circles-icon-ring" cx="7" cy="17" r="3.6"></circle>
+            <circle class="circles-icon-dot" cx="7" cy="17" r="1.3"></circle>
+            <circle class="circles-icon-ring" cx="17" cy="17" r="3.6"></circle>
+            <circle class="circles-icon-dot" cx="17" cy="17" r="1.3"></circle>
           </svg>
         </button>
         <!-- The three controls that used to live on their own — metronome/
