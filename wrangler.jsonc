@@ -11,6 +11,10 @@
     { "pattern": "groovemosaic.com", "custom_domain": true },
     { "pattern": "www.groovemosaic.com", "custom_domain": true }
   ],
+  // Explicit because declaring routes makes Wrangler default workers.dev and
+  // preview URLs to OFF — these keep mosaic-player.silenius.workers.dev live.
+  "workers_dev": true,
+  "preview_urls": true,
   "assets": {
     "directory": "./",
     "not_found_handling": "404-page",
@@ -88,6 +92,11 @@
   "env": {
     "staging": {
       "name": "mosaic-player-staging",
+      // Sep 26 2026: staging must NOT pick up production's custom domains,
+      // and must keep its own workers.dev URL.
+      "routes": [],
+      "workers_dev": true,
+      "preview_urls": true,
       "assets": {
         "directory": "./",
         "not_found_handling": "404-page",
