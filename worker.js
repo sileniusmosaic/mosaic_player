@@ -432,6 +432,16 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Root (Sep 26 2026): serve the player itself at "/" so the address bar
+    // stays clean (groovemosaic.com, not /mosaic_webcodecs.html). Replaces the
+    // old `_redirects` 301 — a `_redirects` 200 rewrite returned 404 on
+    // staging, so it's done here instead. No asset exists at "/", so the
+    // request always reaches this Worker. Old /mosaic_webcodecs.html links
+    // still work via the normal asset path below.
+    if (url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
+      return env.ASSETS.fetch(new Request(new URL('/mosaic_webcodecs', url), request));
+    }
+
     if (url.pathname === '/api/config' && request.method === 'GET') {
       const cfg = await readConfig(env);
       return corsJson(withNotationImageUrls(cfg));
