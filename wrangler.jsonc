@@ -5,7 +5,7 @@
   // Custom domain (Sep 26 2026): groovemosaic.com + www, attached to the
   // PRODUCTION Worker only. Declared here as well as in the dashboard because
   // `wrangler deploy` removes any route not listed in config. Top-level only —
-  // env.staging does not inherit routes, so staging stays on its workers.dev
+  // env.staging overrides routes to [] below, so staging stays on its workers.dev
   // URL. workers_dev stays on, so the old silenius.workers.dev link still works.
   "routes": [
     { "pattern": "groovemosaic.com", "custom_domain": true },
