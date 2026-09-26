@@ -23,18 +23,24 @@
      rule, not a bug here) and then reopened from that icon. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Groove Mosaic</title>
-<!-- Link previews (Sep 26 2026): WhatsApp/iMessage/Slack etc. read these
-     static tags only — they never run the JS that later sets the per-piece
-     tab title — so the shared-link card now says "Groove Mosaic" instead of
-     whichever piece happened to be hardcoded here. -->
-<meta name="description" content="Play along with a real band, one part at a time. Every instrument filmed and recorded separately — slow it down, loop it, mute or solo any part.">
+<title>Mosaic Player</title>
+<!-- Link previews (Sep 26 2026, kept; renamed + tagline removed Sep 26 2026,
+     real request — "remove that whole play with the real band thing, I
+     really don't like it... simply call it Mosaic Player" — the "Groove
+     Mosaic" branding and its description tagline in this block were NOT
+     something asked for in this conversation; they showed up on-device from
+     elsewhere while this session's connection was briefly down, and are
+     reverted here per explicit instruction rather than kept). WhatsApp/
+     iMessage/Slack etc. read these static tags only — they never run the JS
+     that later sets the per-piece tab title — so the shared-link card says
+     "Mosaic Player" regardless of whichever piece happened to be hardcoded
+     here. No description/og:description tagline any more, per the same
+     request — just the plain name. -->
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Groove Mosaic">
-<meta property="og:title" content="Groove Mosaic">
-<meta property="og:description" content="Play along with a real band, one part at a time. Every instrument filmed and recorded separately — slow it down, loop it, mute or solo any part.">
-<meta property="og:url" content="https://groovemosaic.com/">
-<meta property="og:image" content="https://groovemosaic.com/Mosaic/Flip_Swing/poster_flip_swing.jpg">
+<meta property="og:site_name" content="Mosaic Player">
+<meta property="og:title" content="Mosaic Player">
+<meta property="og:url" content="https://mosaic-player.silenius.workers.dev/">
+<meta property="og:image" content="https://mosaic-player.silenius.workers.dev/Mosaic/Flip_Swing/poster_flip_swing.jpg">
 <meta property="og:image:width" content="1920">
 <meta property="og:image:height" content="960">
 <meta name="twitter:card" content="summary_large_image">
@@ -5760,7 +5766,7 @@ async function switchMosaic(id){
     }
     if(ctx)ensureGains(true);
 
-    document.title='Groove Mosaic — '+cfg.label;
+    document.title='Mosaic Player — '+cfg.label;
     setPieceNameText(cfg.label);
     poster.src=cfg.poster;
     renderNotation();renderNotationStrip();preloadNotationStrips();
@@ -6463,7 +6469,7 @@ timeline.style.touchAction='none';timeline.addEventListener('pointerdown',beginS
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)pause()});window.addEventListener('pagehide',()=>{if(playing)pause()});
 poster.addEventListener('load',drawPoster);if(poster.complete)drawPoster();
 sizeFocusCanvas();
-document.title='Groove Mosaic — '+cfg.label;
+document.title='Mosaic Player — '+cfg.label;
 setPieceNameText(cfg.label);
 if(poster.getAttribute('src')!==cfg.poster)poster.src=cfg.poster;
 // Beat counter default on a genuinely FRESH page load (Sep 12 2026, real
