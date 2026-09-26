@@ -134,8 +134,13 @@ html:not(.is-desktop) .piece-strip-bar{display:none}
 .is-desktop .piece-mockups{display:none}
 .piece-mockups{display:flex;flex-direction:column;gap:20px;margin-top:14px}
 .piece-mockup{all:unset;display:block;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent;font:inherit;text-align:inherit}
-.piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:15.4px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:9.9px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
+/* Doubled Sep 26 2026 (real request — "double the size of the text for
+   Abakuá/Flip Swing/Congo Yambumba, and also the size of the tap-to-open
+   text"): 15.4px→30.8px for the piece name (the .piece-mockup-label
+   wrapper's own font-size, inherited by the plain name <span> inside it —
+   see buildPieceMockup()), 9.9px→19.8px for the "TAP TO OPEN" hint. */
+.piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:30.8px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:19.8px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
 /* Same chrome as the real .focus-wrap/.grid-stage, same CSS-sprite-crop
    technique buildPieceStrip()'s thumbnails already use (poster image sliced
    via background-size/background-position) — a still image, not a second
@@ -451,9 +456,25 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
 .focusSettingsBtn .circles-icon{width:33.6px;height:33.6px}
 .focusSettingsBtn .circles-icon .circles-icon-ring{fill:none;stroke:currentColor;stroke-width:1}
 .focusSettingsBtn .circles-icon .circles-icon-dot{fill:currentColor;stroke:none}
-.is-desktop .focusSettingsBtn .circles-icon{display:none}
-html:not(.is-desktop) .focusSettingsBtn .settings-icon{display:none}
-.focusSettingsBtn[aria-expanded="true"],.focusSettingsBtn[aria-pressed="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+/* Reverted back to the gear icon on portrait too (Sep 26 2026, real
+   follow-up request — "revert the circle button back to the settings
+   design"): the circles icon is now hidden on BOTH platforms rather than
+   just desktop, so the gear (never deleted, see the comment above) shows
+   everywhere again. The .circles-icon markup/CSS above is left in place
+   exactly like the gear was before it — CSS-hidden, not deleted, in case
+   it's ever wanted back. The button still behaves as the portrait declutter
+   toggle underneath (see the JS click handler and .hide-focus-overlay rules
+   below) — only the icon reverted, not the toggle behaviour. */
+.focusSettingsBtn .circles-icon{display:none}
+/* Highlight logic (Sep 26 2026, real follow-up request — "make it highlight
+   blue when all buttons are showing and off when they are not, the
+   opposite of the binary state it currently performs"): desktop's dropdown-
+   open state (aria-expanded) is unchanged, but portrait's toggle state
+   (aria-pressed) is now inverted from before — blue while aria-pressed is
+   still "false" (the default, everything visible), no highlight once
+   pressed to "true" (buttons hidden). */
+.focusSettingsBtn[aria-expanded="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+html:not(.is-desktop) .focusSettingsBtn[aria-pressed="false"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 /* The dropdown itself: originally "down and out to the right" of the
    settings button on every layout (left:25px) — narrowed to portrait-only
    the same day (see the html:not(.is-desktop) override right below): real
@@ -6323,6 +6344,22 @@ function tick(now=performance.now()){
 }
 
 playBtn.addEventListener('click',toggleFromGesture);resetBtn.addEventListener('click',reset);
+// Tap-the-focus-square-to-play/pause (Sep 26 2026, real request — "a single
+// tap of focus square acts the same as play or pause"). A plain 'click'
+// listener works for both a real mouse click and a touch tap (a tap that's
+// actually a drag/swipe — see the swipe-to-change-focus handler above on
+// this same element — doesn't fire a click at all, so this never fights
+// with that gesture). Gated to e.target===focusCanvas specifically, not
+// just focusWrap, since every overlay button (#focusSettingsBtn, metro,
+// flip, count-in, mute/solo) is a sibling positioned on top of the canvas —
+// checking the actual click target (rather than e.g. stopping propagation
+// on each button) means clicking any of them still does only its own thing,
+// never also toggling playback, while every part of the canvas NOT covered
+// by a button toggles play/pause exactly like the real Play button.
+focusCanvas.addEventListener('click',(e)=>{
+  if(e.target!==focusCanvas)return;
+  toggleFromGesture();
+});
 // Settings: a second, always-visible entry point into the same burger-menu
 // panel (matching the mockup's bottom-row "Settings" tile) — not a separate
 // screen yet, just another way in until the menu panel grows its own
