@@ -140,13 +140,29 @@ html:not(.is-desktop) .piece-strip-bar{display:none}
 .is-desktop .piece-mockups{display:none}
 .piece-mockups{display:flex;flex-direction:column;gap:20px;margin-top:14px}
 .piece-mockup{all:unset;display:block;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent;font:inherit;text-align:inherit}
-/* Doubled Sep 26 2026 (real request — "double the size of the text for
-   Abakuá/Flip Swing/Congo Yambumba, and also the size of the tap-to-open
-   text"): 15.4px→30.8px for the piece name (the .piece-mockup-label
-   wrapper's own font-size, inherited by the plain name <span> inside it —
-   see buildPieceMockup()), 9.9px→19.8px for the "TAP TO OPEN" hint. */
-.piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:30.8px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:19.8px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
+/* Doubled Sep 26 2026 (real request), then sized back down Sep 27 2026 —
+   this rule is now shared with the new portrait master-title bar above the
+   focus square (see .master-title's markup comment near .focus-column), so
+   its size is no longer a free choice: it has to be small enough that the
+   master title + focus square + tile grid + tempo row still fit one screen
+   with no scrolling, portrait only — same one-screen constraint the rest of
+   this layout has always followed (see .transport's/.panel's own history).
+   30.8px/19.8px (the Sep 26 doubling) left only ~11px of headroom on a
+   375x667 viewport (iPhone SE 3rd gen/mini-class, the realistic small end —
+   an actual 320-wide device wraps to 2 lines and overflows outright at any
+   size tested, so isn't a practical target). 17px/11px, verified via a
+   headless-Chromium measurement sweep across 320/375/390-wide viewports,
+   keeps a comfortable ~27px of headroom at 375x667 and ~180px at 390x844,
+   without wrapping to 2 lines, while staying close to the original
+   15.4px/9.9px this file used before the Sep 26 doubling — i.e. legible
+   without being anywhere near as large as "double" asked for, which the
+   fit constraint here overrides. 15.4px→17px for the piece name (the
+   .piece-mockup-label wrapper's own font-size, inherited by the plain name
+   <span> inside it — see buildPieceMockup()), 9.9px→11px for the "TAP TO
+   OPEN" hint (and, via the shared rule, the master title's own "MOSAIC
+   PLAYER" text). */
+.piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:17px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
 /* Same chrome as the real .focus-wrap/.grid-stage, same CSS-sprite-crop
    technique buildPieceStrip()'s thumbnails already use (poster image sliced
    via background-size/background-position) — a still image, not a second
@@ -1009,44 +1025,25 @@ html:not(.is-desktop) #settingsBtn{display:none}
    square above the grid) via the base column direction below. Desktop
    overrides to a row instead, so the grid sits to the focus square's right. */
 .focus-column{display:flex;flex-direction:column;gap:8px}
-/* Mini progress bar (Sep 13 2026, real request — "in the black space
-   between focus square and small squares... a new very narrow progress bar
-   in light blue, taking up about half of that space, with a vertical line
-   at each end... same blue as others"): sits as its own flex child of
-   .focus-column, landing exactly in the gap between the focus square
-   (.focus-stack) and the tile grid (#gridStageMobile) below it, purely via
-   DOM order — no absolute positioning needed, same technique used
-   throughout this file wherever something just needs to occupy a specific
-   flex slot. width:50% + margin:0 auto is the literal "about half of that
-   space, taking up... centered" reading. "Same blue as others" -> reuses
-   var(--accent-blue) throughout (it's already a light sky-blue, #6dc5ff —
-   not a new color) rather than inventing a separate "light blue": the two
-   end ticks and the fill are solid var(--accent-blue), the unfilled track
-   is the same blue at low opacity so the fill still reads as progress
-   against it. Ticks are taller than the track and vertically centered on
-   it (align-items:center on the flex row) — the "vertical line at each
-   end... central in the vertical axis" read literally. Mobile-only: hidden
-   entirely on desktop (below) since desktop's focus-column is a row, not a
-   column, so there's no equivalent horizontal gap to place this in; never
-   visible in landscape either, same as the rest of .app, since the whole
-   normal UI is swapped out for .landscape-notation there regardless of
-   this element's own display value. Purely a visual readout, kept in sync
-   every frame by updateUI() (see the JS comment there) — not an
-   interactive scrubber, unlike the real #timeline input it mirrors. */
-/* Height fix (Sep 2026): the tick/track row sits between two .focus-column
-   flex gaps (8px each), so adding this element between focus-stack and
-   #gridStageMobile widened the page by gap+height+gap regardless of how
-   tall the row itself is (measured +20px at 12px tick height). Negative
-   top/bottom margin here cancels exactly one of those two gaps back out
-   (-8px matches the 8px .focus-column gap), so the row's real footprint on
-   the page is just its own height again — restoring the original portrait
-   page height once the tick is also shortened below. Left/right stay auto
-   to keep centering. */
-.mini-progress{display:flex;align-items:center;width:50%;max-width:340px;margin:-8px auto}
-.is-desktop .mini-progress{display:none}
-.mini-progress-tick{width:2px;height:8px;flex:0 0 auto;background:var(--accent-blue);border-radius:1px}
-.mini-progress-track{position:relative;flex:1;height:2px;margin:0 4px;background:rgba(109,197,255,.32);border-radius:1px;overflow:hidden}
-.mini-progress-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:var(--accent-blue)}
+/* Mini progress bar (Sep 13 2026 — Sep 26 2026): removed entirely (real
+   request, "removing the progress bar completely" — see the master-title
+   markup comment near .focus-column for the full reasoning). Used to sit
+   right here as its own flex child of .focus-column, in the gap between the
+   focus square and the tile grid below it. Nothing replaces its old slot —
+   the master-title bar added the same day lives at the TOP of .focus-column
+   instead (above the focus square, not in this gap), sized (see
+   .piece-mockup-label below, shared with it) specifically to leave the
+   whole portrait layout fitting in one screen without it. */
+/* Master title (Sep 27 2026, real request, portrait-only): a plain flex
+   child of .focus-column — no absolute positioning, no extra width/margin
+   rules needed here beyond what it inherits (stretches full-width by the
+   column's default align-items:stretch, exactly like every other child).
+   margin-bottom:0 overrides .piece-mockup-label's own 6px (see that rule) —
+   .focus-column's existing 8px flex gap already spaces it from the focus
+   square below, so keeping the 6px too would double up the gap unevenly on
+   just this one instance. */
+.master-title{margin-bottom:0}
+.is-desktop .master-title{display:none}
 /* flex-basis tightened to exactly match its own content — 520px focus-wrap +
    16px gap + the tile grid's own current width (Sep 7 2026; was a loose
    900px, leaving slack to the right of the grid that made .viewer's
@@ -1735,6 +1732,33 @@ html:not(.is-desktop) #settingsBtn{display:none}
          or populated; see the CSS comment above .is-desktop .focus-column. -->
     <div class="grid-stage-side grid-stage-left"><canvas id="gridLeft" width="480" height="1920"></canvas><div id="gridControlsLeft" class="grid-controls-vert"></div></div>
     <div class="focus-column">
+      <!-- Master title (Sep 27 2026, real request — staging experiment: "the
+           title of the song in portrait above the player... in the same
+           blue font, write Mosaic Player"). Portrait-only (hidden on
+           desktop, which already names the piece elsewhere); sits as the
+           first child of .focus-column so it lands directly above the
+           focus square via plain flex flow, no absolute positioning. Reuses
+           .piece-mockup-label/.piece-mockup-hint verbatim rather than a
+           parallel set of rules, so this and the preview-mockup titles below
+           always share one font-size — exactly "match that in the preview
+           titles" — instead of two declarations that could drift apart
+           later. The name span is .piece-name, the same class
+           setPieceNameText() already fills on every load/switch (a
+           previously-unused hook — see that function's own comment) so no
+           new JS was needed to keep it live. The right-hand slot, where a
+           mockup card shows "TAP TO OPEN", instead reads the static
+           "MOSAIC PLAYER" wordmark, same blue monospace styling. Freed the
+           room for this by removing the mini progress bar entirely (see
+           where .mini-progress used to be, right after focus-stack) — real
+           request, "removing the progress bar completely" — and by sizing
+           .piece-mockup-label/.piece-mockup-hint (shared with this) to
+           whatever actually fits one screen top-to-bottom, portrait only;
+           see that rule's own comment for the exact number and how it was
+           chosen. -->
+      <div class="master-title piece-mockup-label">
+        <span class="piece-name"></span>
+        <span class="piece-mockup-hint">MOSAIC PLAYER</span>
+      </div>
       <!-- .focus-stack (Sep 7 2026, real report: "do not overlay the notation
            across the focus square but rather display it below the focus
            square... always have the top line of the notation stuck to the
@@ -1924,19 +1948,6 @@ html:not(.is-desktop) #settingsBtn{display:none}
            contact with the focus square", per the request. Hidden by
            default/on mobile; shown only via .is-desktop CSS. -->
       <img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden>
-      </div>
-      <!-- Mini progress bar (Sep 13 2026, real request — a narrow playback
-           progress indicator in the black gap between the focus square and
-           the small-tile grid below it, mobile portrait only; see
-           .mini-progress's own CSS comment for sizing/color and why it's
-           hidden on desktop. Purely a visual readout, not an interactive
-           scrubber — the real (hidden-on-mobile) #timeline input is still
-           what Reset/scrub logic reads/writes; this just mirrors its
-           position every frame via updateUI(), see the JS comment there. -->
-      <div id="miniProgress" class="mini-progress" aria-hidden="true">
-        <span class="mini-progress-tick"></span>
-        <span class="mini-progress-track"><span id="miniProgressFill" class="mini-progress-fill"></span></span>
-        <span class="mini-progress-tick"></span>
       </div>
       <!-- All tiles as one 4x2 grid — shown on both mobile and desktop now
            (reverted Sep 2026). On mobile it sits below the focus square in
@@ -6174,11 +6185,6 @@ function wrappedAudioPos(){
 function updateUI(){
   const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;
   if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}
-  // #miniProgressFill (Sep 13 2026) — the mobile-portrait mini progress bar
-  // between the focus square and the tile grid (see its own CSS comment
-  // near .focus-column); mirrors the same p/dur this function already
-  // computes for the real #timeline input, every frame, scrubbing included.
-  if(miniProgressFill)miniProgressFill.style.width=(dur?Math.min(100,Math.max(0,p/dur*100)):0)+'%';
   // Fixed-format time text (no fps suffix) — the fps readout used to live
   // here too, but its length changes as digits appear/disappear, which was
   // reflowing the Reset/timeline/time row (the range slider is flex:1, so
