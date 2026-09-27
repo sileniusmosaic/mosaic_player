@@ -147,12 +147,24 @@ html:not(.is-desktop) .app{padding-top:calc(6px + env(safe-area-inset-top))}
 /* Mobile-portrait piece mockups (Sep 20 2026, real request — "instead of the
    three buttons at the bottom... I would like to be able to scroll down the
    page and see a still image of the whole player repeated but with the
-   starting image of each piece"). Desktop keeps the old piece-strip-bar
-   unchanged — these two rules are the only place that decides which piece
-   switcher shows where; see buildPieceMockups() in the script for the rest. */
-html:not(.is-desktop) .piece-strip-bar{display:none}
-.is-desktop .piece-mockups{display:none}
+   starting image of each piece"). Desktop used to keep the old
+   piece-strip-bar instead — reversed Sep 27 2026 (real request, "make it
+   exactly like the mobile portrait... rather than the three options you've
+   got there, same as the mobile version, just to scroll down and see the
+   previews"): desktop now hides piece-strip-bar and shows piece-mockups too,
+   same as portrait. buildPieceMockups() already builds the same 2-of-3
+   cards (excludes whichever piece is currently playing) regardless of
+   platform — only the CSS visibility was ever platform-gated, so flipping
+   these two rules is the whole change. */
+.is-desktop .piece-strip-bar{display:none}
 .piece-mockups{display:flex;flex-direction:column;gap:20px;margin-top:14px}
+/* Width-matched to the desktop player row below it (see .is-desktop
+   .tempo-strip/.master-title for the same 867px = 55px tempo column + 16px
+   viewer gap + 796px focus-column, all kept in lockstep — see that rule's
+   own comment if any of those three numbers ever changes) rather than
+   stretching to .app's full 1120px, so the previews visually line up under
+   the player instead of sprawling wider than it. */
+.is-desktop .piece-mockups{max-width:867px;margin-left:auto;margin-right:auto}
 .piece-mockup{all:unset;display:block;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent;font:inherit;text-align:inherit}
 /* Doubled Sep 26 2026, sized down to 17px/11px later that day, then bumped
    again Sep 27 2026 (real request — "increasing text size for clarity"
@@ -334,8 +346,15 @@ html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
    — "go to landscape" is the only way to see notation on a phone), so
    nothing else occupies this space to collide with. Border/background were
    already part of the base rule above (kept here unchanged, just repositioned
-   — the "with a border" from the request is already satisfied by those). */
-html:not(.is-desktop) .focus-label{top:auto;bottom:4px;right:auto;left:50%;transform:translateX(-50%)}
+   — the "with a border" from the request is already satisfied by those).
+   Broadened to desktop too (Sep 27 2026, real request — "make it exactly
+   like the mobile portrait... instrument name, bottom center"): equally safe
+   there, since desktop's own notation image (#notationStripDesktop) is a
+   separate element living below the focus square in .focus-stack's column
+   flow, not the overlaid #notationStrip this comment is about — desktop
+   already hides that overlay entirely (.is-desktop .notation-strip{display:
+   none}), so nothing occupies this corner on desktop either. */
+.focus-label{top:auto;bottom:4px;right:auto;left:50%;transform:translateX(-50%)}
 .buffering-spinner{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(3,4,5,.45);z-index:6;pointer-events:none}
 .buffering-spinner:not([hidden]){display:flex}
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
@@ -531,8 +550,18 @@ html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{displa
    (aria-pressed) is now inverted from before — blue while aria-pressed is
    still "false" (the default, everything visible), no highlight once
    pressed to "true" (buttons hidden). */
+/* aria-expanded rule kept but now dead on both platforms (Sep 27 2026 —
+   desktop no longer opens a dropdown either, see the JS click handler and
+   applyPortraitControlLayout()'s own comment; nothing ever sets aria-
+   expanded="true" any more). Left in place rather than deleted, same
+   philosophy as the CSS-hidden circles icon elsewhere in this button's
+   history. */
 .focusSettingsBtn[aria-expanded="true"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
-html:not(.is-desktop) .focusSettingsBtn[aria-pressed="false"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
+/* Broadened from portrait-only to both platforms (Sep 27 2026, real request
+   — "make it exactly like the mobile portrait"): desktop's settings button
+   is now the same plain declutter toggle portrait already had, so it gets
+   the same highlight logic. */
+.focusSettingsBtn[aria-pressed="false"]{border-color:var(--accent-blue);box-shadow:0 0 0 2px var(--accent-blue)}
 /* The dropdown itself: originally "down and out to the right" of the
    settings button on every layout (left:25px) — narrowed to portrait-only
    the same day (see the html:not(.is-desktop) override right below): real
@@ -565,23 +594,23 @@ html:not(.is-desktop) .focusSettingsBtn[aria-pressed="false"]{border-color:var(-
    overlay each child positions itself within. */
 .focus-settings-menu>button{position:static;top:auto;right:auto;left:auto;bottom:auto;display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--text);color:var(--text)}
 .focus-settings-menu>button:disabled{opacity:.5}
-/* Portrait-only Flip/Count-in positions (Sep 26 2026, real request — the
-   settings/circles redesign): both buttons are moved out of
-   #focusSettingsMenu entirely on portrait (see applyPortraitControlLayout()
-   in the JS — #focusSettingsMenu itself is never opened there any more, see
-   the click handler), becoming fixed siblings in the focus square exactly
-   like #metroBtn/#manuscriptBtn already are. "Relocate the mirror button to
-   where the count-in button is... and put the count-in button below the
-   metronome, in the same plane" — Flip takes the top-left dropdown's old
-   slot (directly below Settings, same left edge), Count-in takes the
-   mirror-image slot on the right (directly below Metro, same right edge).
-   top:75px on both = the button above's own 55px height + a 10px gap, the
-   same paired-button offset already used throughout this file (see e.g.
-   .focus-settings-menu's own top:75px, which this replaces on portrait).
-   Desktop is completely untouched — these two stay inside the dropdown
-   there, unaffected by any of this. */
-html:not(.is-desktop) #flipBtn{position:absolute;top:75px;left:10px;right:auto;bottom:auto;z-index:4}
-html:not(.is-desktop) #countInBtn{position:absolute;top:75px;right:10px;left:auto;bottom:auto;z-index:4}
+/* Flip/Count-in positions (Sep 26 2026, real request — the settings/circles
+   redesign; broadened from portrait-only to both platforms Sep 27 2026,
+   "make it exactly like the mobile portrait"): both buttons are moved out of
+   #focusSettingsMenu entirely on every platform now (see
+   applyPortraitControlLayout() in the JS — #focusSettingsMenu itself is
+   never opened any more, see the click handler), becoming fixed siblings in
+   the focus square exactly like #metroBtn/#manuscriptBtn already are.
+   "Relocate the mirror button to where the count-in button is... and put
+   the count-in button below the metronome, in the same plane" — Flip takes
+   the top-left dropdown's old slot (directly below Settings, same left
+   edge), Count-in takes the mirror-image slot on the right (directly below
+   Metro, same right edge). top:75px on both = the button above's own 55px
+   height + a 10px gap, the same paired-button offset already used
+   throughout this file (see e.g. .focus-settings-menu's own top:75px, which
+   this replaces everywhere now). */
+#flipBtn{position:absolute;top:75px;left:10px;right:auto;bottom:auto;z-index:4}
+#countInBtn{position:absolute;top:75px;right:10px;left:auto;bottom:auto;z-index:4}
 /* Declutter toggle (Sep 26 2026, real request, portrait only): "the app will
    default to having all the buttons on so the user knows that they're
    there. But when you press this button... all the buttons that overlay the
@@ -598,30 +627,47 @@ html:not(.is-desktop) #countInBtn{position:absolute;top:75px;right:10px;left:aut
    "the user knows that they're there". :not(.is-desktop) doubly guards what
    the JS already only ever does on portrait, same defensive-CSS pattern
    used throughout this file. */
-html.hide-focus-overlay:not(.is-desktop) #metroBtn,
-html.hide-focus-overlay:not(.is-desktop) #countInBtn,
-html.hide-focus-overlay:not(.is-desktop) #flipBtn,
-html.hide-focus-overlay:not(.is-desktop) #focusMuteBtn,
-html.hide-focus-overlay:not(.is-desktop) #focusSoloBtn,
-html.hide-focus-overlay:not(.is-desktop) .focus-label,
-html.hide-focus-overlay:not(.is-desktop) .tile-name,
-html.hide-focus-overlay:not(.is-desktop) #miniProgress{display:none}
+html.hide-focus-overlay #metroBtn,
+html.hide-focus-overlay #countInBtn,
+html.hide-focus-overlay #flipBtn,
+html.hide-focus-overlay #focusMuteBtn,
+html.hide-focus-overlay #focusSoloBtn,
+html.hide-focus-overlay .focus-label,
+html.hide-focus-overlay .tile-name,
+html.hide-focus-overlay #miniProgress{display:none}
+/* Broadened from portrait-only to both platforms Sep 27 2026 (real request —
+   "make it exactly like the mobile portrait... the settings button also
+   turns off the instrument names on the many squares, although they are now
+   to the right hand side"): desktop's own settings button is now the same
+   plain declutter toggle as portrait's (see the JS click handler), so it
+   needs to hide the same set of things. #manuscriptBtn is deliberately NOT
+   in this list on either platform — "the notation will disappear or appear
+   if we use the notation button [not the settings button]" — it has its own
+   independent toggle (manuscriptOn/renderNotationStrip()), unaffected by
+   hide-focus-overlay. */
 /* Manuscript toggle (Aug 2026): used to be top-left of the focus square,
    mirroring the beat counter at top-right — moved one slot right Sep 25 2026
    (left:10px -> left:75px) to make room for #focusSettingsBtn, which took
-   over its old spot (see that button's own comment above). Desktop-only (see
-   the display:none rule below), so this never collides with the also-Sep-25
-   #focusSettingsMenu dropdown, which opens low enough (top:75px) to clear
-   this row entirely regardless. Turns the notation overlay (now anchored to
-   the bottom of the focus square — see .notation-strip) on and off. Icon
-   (Aug 31 2026 — reference-sheet option "M8"): two beamed eighth notes,
-   outline style. Recolored Sep 2026 alongside .metroBtn above to fix the
-   var(--tile-border)-was-actually-blue issue (var(--text) throughout);
-   recolored AGAIN Sep 2026, real report — purple border+icon like the mute
-   button, in both resting and is-active looks (unlike the metronome, which
-   deliberately keeps a cream/purple off/on distinction — this one was asked
-   to just match mute, no on/off difference). */
-.manuscriptBtn{top:10px;left:75px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
+   over its old spot (see that button's own comment above), then moved again
+   Sep 27 2026 (real request, "make it exactly like the mobile portrait...
+   the notation button can sit underneath the mirror button") to sit directly
+   below #flipBtn instead, continuing that same left-edge column one slot
+   further down: left:10px (Flip's own left edge) top:140px (Flip's own
+   top:75px + its 55px height + the usual 10px paired-button gap, same math
+   as every other stacked pair in this file). Desktop-only (see the
+   display:none rule below), so this never collides with anything else in
+   that column — the column now reads Settings(10) -> Flip(75) ->
+   Manuscript(140) top to bottom, all flush left:10px. Turns the notation
+   overlay (now anchored to the bottom of the focus square — see
+   .notation-strip) on and off. Icon (Aug 31 2026 — reference-sheet option
+   "M8"): two beamed eighth notes, outline style. Recolored Sep 2026
+   alongside .metroBtn above to fix the var(--tile-border)-was-actually-blue
+   issue (var(--text) throughout); recolored AGAIN Sep 2026, real report —
+   purple border+icon like the mute button, in both resting and is-active
+   looks (unlike the metronome, which deliberately keeps a cream/purple
+   off/on distinction — this one was asked to just match mute, no on/off
+   difference). */
+.manuscriptBtn{top:140px;left:10px;right:auto;bottom:auto;width:55px;height:55px;color:var(--text);border-color:var(--text);background:#0c0906}
 /* Mobile portrait no longer offers a notation toggle at all (Sep 2026, real
    request) — landscape's own notation band is unconditional/always-on (see
    the comment near .landscape-focus-dim/"Deliberately NOT gated on
@@ -632,12 +678,12 @@ html.hide-focus-overlay:not(.is-desktop) #miniProgress{display:none}
    not a deletion of the button/handler/manuscriptOn state — cheap to bring
    back for mobile if wanted later, just remove this rule. */
 html:not(.is-desktop) .manuscriptBtn{display:none}
-/* Focus-square mute/solo (Sep 2026, mobile portrait only — see the comment
-   above .muteBtn.is-muted for why the small per-tile buttons still exist in
-   the DOM but are hidden on mobile). Bottom corners so they don't collide
-   with manuscript/beat-counter at the top corners; same 55px size as those
-   two for an easy, confident tap target. Desktop keeps the classic per-tile
-   top-corner M/S buttons instead, so these are hidden there. */
+/* Focus-square mute/solo (Sep 2026, mobile portrait; extended to desktop Sep
+   27 2026 — see the comment above .muteBtn.is-muted for why the small
+   per-tile buttons still exist in the DOM alongside these on both
+   platforms). Bottom corners so they don't collide with manuscript/beat-
+   counter at the top corners; same 55px size as those two for an easy,
+   confident tap target. */
 /* font-size explicit here (Sep 2026, real report — read as too small): a 55px
    circle needs a lot more than .dawBtn's base 15.4px to look intentional —
    30px matches muteBtnLandscape's own already-established size at the same
@@ -653,7 +699,13 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    .metroBtn.is-active), just in yellow instead of blue so solo still reads
    as its own distinct color. */
 .focusSoloBtn.is-solo{background:#0c0906;color:var(--text);border-color:#ffd60a;box-shadow:0 0 0 2px #ffd60a}
-.is-desktop .focusMuteBtn,.is-desktop .focusSoloBtn{display:none}
+/* Desktop used to hide these entirely in favor of the classic per-tile M/S
+   buttons instead (see the comment above .focusMuteBtn) — reversed Sep 27
+   2026, real request ("make it exactly like the mobile portrait... solo and
+   mute button" on the focus square itself): desktop now shows these too, in
+   the same bottom corners, same as mobile. The per-tile M/S buttons on the
+   small squares are unrelated and untouched — both sets coexist, exactly as
+   mobile already does. */
 .manuscriptBtn .manuscript-icon{width:86.4%;height:86.4%;fill:none;stroke:none}
 .manuscriptBtn .manuscript-icon .staff-line{stroke:var(--text);stroke-width:.8;opacity:.6}
 .manuscriptBtn .manuscript-icon .note-head{fill:var(--text);stroke:none}
@@ -703,18 +755,34 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    Combined with the grid-template-columns override on #tempoButtons below,
    this puts Play flush against this box's left edge and 100% flush against
    its right edge — i.e. exactly the focus square's left edge and the tile
-   grid's right edge, not just approximately near them. */
-.is-desktop .tempo-strip{width:796px;margin-left:auto;margin-right:auto}
+   grid's right edge, not just approximately near them.
+
+   Superseded Sep 27 2026 (real request — "make it exactly like the mobile
+   portrait... gather the five, reset, play, 50, 75, 100... in a vertical
+   line on the left hand side of the focus square"): .tempo-strip is no
+   longer a full-width row centered below the whole player. It's now
+   relocated by applyDesktopControlLayout() (JS) to be a flex child of
+   .viewer itself, inserted before .focus-column — i.e. the new leftmost
+   column of the desktop row, focus square and tile grid to its right. Width
+   is no longer fixed (auto-sizes to its one column of 55px circles, see
+   .is-desktop .tempo-buttons below); margin:0 replaces the old centering
+   margin since .viewer's own gap:16px (see .is-desktop .viewer) now spaces
+   it from .focus-column instead. */
+.is-desktop .tempo-strip{width:auto;margin:0}
 .panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
 /* Portrait-only (Sep 25 2026, real request — "there will now just be one row
    of buttons below the small squares"): with #reset moved into
    #tempoButtons and #settingsBtn hidden (see both their own comments), this
    .transport row has nothing left in it on portrait (.transport-mid/the
    timeline was already display:none there) — hiding the whole section
-   avoids leaving an empty bordered box where the row used to be. Desktop is
-   untouched; its .transport row still holds Reset/Timeline/Settings as
-   before. */
-html:not(.is-desktop) .panel{display:none}
+   avoids leaving an empty bordered box where the row used to be. Broadened
+   to desktop too Sep 27 2026 (real request — "let's do away with the
+   current timeline"; "there only needs to be one settings button now",
+   removing the redundant #settingsBtn this row also held): #reset now joins
+   #tempoButtons on both platforms (see buildTempoButtons()), so this row is
+   empty everywhere now — same reasoning as the portrait rule just above,
+   just no longer platform-scoped. */
+.panel{display:none}
 /* Down to a 2-column grid (Sep 25 2026 — was 4, since Count-in and Flip both
    moved out into #focusSettingsMenu the same day, see their markup comment
    near .focus-wrap): just Reset and #settingsBtn (the burger-menu one) left
@@ -929,19 +997,19 @@ html:not(.is-desktop) #settingsBtn{display:none}
    and justify-items:center since this base rule no longer implies grid at
    all. */
 .tempo-buttons{display:flex;justify-content:space-between;align-items:center;gap:5px;margin-top:0}
-/* Desktop-only (Sep 7 2026, grid-template-columns; display/justify-items
-   made explicit here Sep 25 2026 once the base rule above switched to flex
-   for portrait — see its own comment) — see the real report quoted on
-   .is-desktop .tempo-strip above. Sizing the outer two columns to exactly
-   the button width (55px) means "centered in a 55px column" collapses to
-   "flush against the column's — and so the row's — edge": Play's left edge
-   lands exactly on .tempo-strip's left edge, and the 100% button's right
-   edge lands exactly on its right edge, with 50%/75% splitting whatever's
-   left in between via the two 1fr tracks. (This grid technique still works
-   fine for exactly 4 equal-width buttons — the unevenness that pushed
-   portrait to flex only shows up once a 5th button is added, per that rule's
-   own comment — so desktop keeps it unchanged rather than switching too.) */
-.is-desktop .tempo-buttons{display:grid;grid-template-columns:55px 1fr 1fr 55px;justify-items:center}
+/* Desktop-only (Sep 7 2026 originally, a 4-column grid matching the old
+   horizontal row below the player — see the real report quoted on
+   .is-desktop .tempo-strip above for why that row's gone now). Superseded
+   Sep 27 2026 (real request — "make it exactly like the mobile portrait...
+   gather the five, reset, play, 50, 75, 100... in a vertical line"): desktop
+   now gets a 5th button too (Reset, no longer platform-gated in
+   buildTempoButtons()) stacked in a single column, same flex-direction:
+   column approach portrait would use if it needed one — except portrait
+   stays a horizontal row (see the base rule above), so this diverges from
+   it on purpose now rather than matching it. gap:10px matches the standard
+   paired-button spacing used everywhere else in this file (see e.g.
+   #flipBtn/#countInBtn's own top:75px comment). */
+.is-desktop .tempo-buttons{display:flex;flex-direction:column;align-items:center;gap:10px}
 /* Circular, matched to the metro/manuscript overlays (Sep 2026, real report —
    "make the play/50/75/100 buttons circular... same size as the notation and
    metronome overlays and all the same white colour, no blue"; .metroBtn/
@@ -1096,7 +1164,29 @@ html:not(.is-desktop) #settingsBtn{display:none}
    which is what makes the height:0 above actually hold. top:1px on the
    track centers its 2px height within the 4px gap (1px clearance top/bottom). */
 .mini-progress{height:0;min-height:0;overflow:visible;position:relative;margin:-4px auto 0;width:50%;max-width:340px}
-.is-desktop .mini-progress{display:none}
+/* Desktop (Sep 27 2026, real request — "make it exactly like the mobile
+   portrait... a thin thin thin line just below the focus square"): shown
+   here now instead of hidden. Doesn't need portrait's zero-height trick at
+   all — .focus-stack has no gap property on desktop (see its own CSS
+   comment: focusWrap and #notationStripDesktop sit flush with zero gap by
+   design already), so a normal in-flow element between them just adds its
+   own real height, nothing extra to cancel out. margin:6px auto gives the
+   line a little breathing room top/bottom (12px total) while staying "thin
+   thin thin" — the 2px line itself is untouched (.mini-progress-track,
+   overridden below to sit in normal flow instead of position:absolute). */
+.is-desktop .mini-progress{display:block;height:auto;min-height:0;overflow:visible;margin:6px auto}
+/* display:block added here (Sep 27 2026 fix, caught by Playwright measurement
+   before shipping): .mini-progress-track is a <span> — inline by default —
+   and height only takes effect on a non-replaced inline element when it's
+   taken out of flow (position:absolute, as portrait still uses it). Once
+   desktop switches it to position:relative (still in normal flow), the
+   inline default silently ignores height:2px and the whole bar measured
+   0px tall end to end. display:block fixes it and, as a side effect, makes
+   the track fill .mini-progress's full width automatically (block width
+   defaults to 100% of its container) — exactly the "about half of that
+   space" proportion .mini-progress's own width:50% already sets up, so no
+   extra width rule is needed here. */
+.is-desktop .mini-progress-track{position:relative;display:block;top:auto;left:auto;right:auto}
 .mini-progress-track{position:absolute;top:1px;left:0;right:0;height:2px;background:rgba(109,197,255,.32);border-radius:1px;overflow:hidden}
 .mini-progress-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:var(--accent-blue)}
 /* Master title (Sep 27 2026, real request, portrait-only): a plain flex
@@ -1108,21 +1198,32 @@ html:not(.is-desktop) #settingsBtn{display:none}
    square below, so keeping the 6px too would double up the gap unevenly on
    just this one instance. */
 .master-title{margin-bottom:0}
-.is-desktop .master-title{display:none}
+/* Shown on desktop now too (Sep 27 2026, real request — "make it exactly
+   like the mobile portrait... place the title at the top"). No longer a
+   flex child of .focus-column on desktop — applyDesktopControlLayout() (JS)
+   relocates the actual element to be a direct child of <main class="app">,
+   inserted right before .viewer, so it reads as one full-width row above
+   the whole three-column player instead of squeezed into the row's own
+   flex flow (mobile leaves it exactly where it always was — this relocation
+   only runs `if(IS_DESKTOP)`). width:867px centers it to match the row
+   below (55px tempo column + 16px viewer gap + 796px focus-column — see
+   that sum's own comment just below); margin-bottom replaces the old
+   flex-gap-driven spacing now that it's a plain block sibling, not a flex
+   item riding .focus-column's gap. */
+.is-desktop .master-title{display:flex;width:867px;margin:0 auto 14px}
 /* flex-basis tightened to exactly match its own content — 520px focus-wrap +
    16px gap + the tile grid's own current width (Sep 7 2026; was a loose
    900px, leaving slack to the right of the grid that made .viewer's
    centering land the visible content off-true-center). Kept in lockstep
    with .is-desktop #gridStageMobile and .is-desktop .focus-wrap below: if
    either width ever changes, this sum must change with it, and so must the
-   matching width baked into .is-desktop .tempo-strip/.transport further
-   down — all four together are what make Play/Reset align with the focus
-   square's left edge and Settings/100% align with the grid's right edge
-   (see the real report on .is-desktop .tempo-strip: "line settings/100%
-   with the right-hand edge of the larger squares, same manner as play
-   relates to the focus square"). Currently 520+16+260=796px — the grid
-   width is 260px as of the .is-desktop #gridStageMobile bottom-alignment
-   fix below (Sep 7 2026, same day). */
+   matching widths baked into .is-desktop .master-title/.piece-mockups above
+   and .is-desktop .viewer's own 16px gap to the new .tempo-strip column
+   (Sep 27 2026 — see that rule's own comment) — 55+16+796=867px is the new
+   total row width every one of those has to agree on. Currently
+   520+16+260=796px for this rule's own piece of that sum — the grid width
+   is 260px as of the .is-desktop #gridStageMobile bottom-alignment fix below
+   (Sep 7 2026, same day). */
 .is-desktop .focus-column{flex:0 1 796px;flex-direction:row;align-items:flex-start;gap:16px}
 .is-desktop .focus-wrap{width:520px;flex:0 0 520px}
 /* Sep 2026: desktop's tile grid reads as 2 columns (top-to-bottom, left-to-
@@ -2003,17 +2104,6 @@ html:not(.is-desktop) #settingsBtn{display:none}
           <img id="notationStrip" class="notation-strip" alt="" hidden>
         </div>
       </div>
-      <!-- Desktop counterpart to #notationStrip above — see the .focus-stack
-           comment above focusWrap for why this needs to be a second element
-           rather than the same one moved. Plain block flow (no absolute
-           positioning, no overflow:hidden ancestor), so it just sits as tall
-           as its own image needs and stays flush against focusWrap's bottom
-           edge via .focus-stack's zero gap (see CSS) — "dynamically take up
-           different amounts of vertical space whilst always maintaining
-           contact with the focus square", per the request. Hidden by
-           default/on mobile; shown only via .is-desktop CSS. -->
-      <img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden>
-      </div>
       <!-- Mini progress bar (Sep 13 2026, removed Sep 27 2026, reinstated same
            day — real request, "reinstate the timeline under focus square
            without losing ANY vertical height"; see .mini-progress's own CSS
@@ -2025,9 +2115,33 @@ html:not(.is-desktop) #settingsBtn{display:none}
            updateUI(), see the JS comment there. Also part of the portrait
            declutter toggle now (see html.hide-focus-overlay rules) — "the
            timeline is also hidden with other buttons behind the press of the
-           settings button". -->
+           settings button". Moved to sit HERE, inside .focus-stack between
+           focusWrap and #notationStripDesktop, Sep 27 2026 (real request —
+           desktop wants this exact same thin line too, in this exact
+           position: "underneath the focus square, there is just the
+           timeline. Then the notation will appear under that, should it be
+           enabled"). Harmless on mobile — .focus-stack is display:contents
+           there (see its own CSS comment), so this still flattens into
+           .focus-column exactly where it was before, between focusWrap and
+           the tile grid (notationStripDesktop stays hidden on mobile either
+           way); on desktop, .focus-stack is a real column now, so this
+           lands in true document-flow order between the square and the
+           notation image, as a real (thin) element rather than the
+           zero-height trick mobile still uses — see .is-desktop
+           .mini-progress's own CSS comment. -->
       <div id="miniProgress" class="mini-progress" aria-hidden="true">
         <span class="mini-progress-track"><span id="miniProgressFill" class="mini-progress-fill"></span></span>
+      </div>
+      <!-- Desktop counterpart to #notationStrip above — see the .focus-stack
+           comment above focusWrap for why this needs to be a second element
+           rather than the same one moved. Plain block flow (no absolute
+           positioning, no overflow:hidden ancestor), so it just sits as tall
+           as its own image needs and stays flush against focusWrap's bottom
+           edge via .focus-stack's zero gap (see CSS) — "dynamically take up
+           different amounts of vertical space whilst always maintaining
+           contact with the focus square", per the request. Hidden by
+           default/on mobile; shown only via .is-desktop CSS. -->
+      <img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden>
       </div>
       <!-- All tiles as one 4x2 grid — shown on both mobile and desktop now
            (reverted Sep 2026). On mobile it sits below the focus square in
@@ -5469,42 +5583,44 @@ async function ensurePreparedImpl(tracker,myGen){
 }
 function buildTempoButtons(){
   tempoButtons.innerHTML='';
-  // Portrait-only (Sep 25 2026, real request): Reset joins this row as its
-  // new leftmost button, moved here (out of the old .transport row — see
-  // .panel's own CSS comment for why that row disappears on portrait) rather
-  // than duplicated, since it's the same real button with the same click
-  // handler either way. Must happen before playBtn is appended, and before
-  // .tempo-buttons' 5-column CSS expects it (see that rule's own comment).
-  // Desktop is untouched — IS_DESKTOP is read once at load same as every
-  // other layout decision in this file, so Reset simply stays put in
-  // .transport there, never reaching this branch.
-  if(!IS_DESKTOP)tempoButtons.appendChild(resetBtn);
+  // Reset joins this row as its new leftmost button (Sep 25 2026, real
+  // request, portrait-only originally; broadened to desktop too Sep 27 2026
+  // — "make it exactly like the mobile portrait... gather the five, reset,
+  // play, 50, 75, 100"), moved here (out of the old .transport row — see
+  // .panel's own CSS comment for why that row disappears everywhere now)
+  // rather than duplicated, since it's the same real button with the same
+  // click handler either way. Must happen before playBtn is appended.
+  tempoButtons.appendChild(resetBtn);
   tempoButtons.appendChild(playBtn); // Play + 50/75/100 share one row, in that order
   TEMPO_PRESETS.forEach(p=>{const b=document.createElement('button');b.type='button';b.textContent=p+'%';b.dataset.p=p;b.addEventListener('click',()=>changeTempo(p));tempoButtons.appendChild(b)});updateTempoUI();
 }
-// Portrait-only (Sep 25 2026, real request — "the metronome needs to be on
-// the screen... put the metronome back to where the instrument name is in
-// the top right"): moves #metroBtn out of #focusSettingsMenu back to its own
-// spot directly in the focus square, since its live beat-count number needs
-// to always be visible rather than hidden behind a dropdown click. Desktop
-// keeps the beat-counter inside the dropdown, unchanged — this whole
-// function is a no-op there. insertBefore over appendChild so it lands in
-// the same source-order slot #metroBtn originally held (right before
-// #manuscriptBtn), not tacked on at the end after #focusLabel/etc.
+// Originally portrait-only (Sep 25 2026, real request — "the metronome needs
+// to be on the screen... put the metronome back to where the instrument name
+// is in the top right"): moves #metroBtn out of #focusSettingsMenu back to
+// its own spot directly in the focus square, since its live beat-count
+// number needs to always be visible rather than hidden behind a dropdown
+// click. Broadened to desktop too Sep 27 2026 (real request — "make it
+// exactly like the mobile portrait"): desktop's #focusSettingsBtn no longer
+// opens a dropdown either (see its click handler further down), so
+// #focusSettingsMenu is now permanently empty/unused on every platform, and
+// this function runs unconditionally. Name kept as-is even though it's no
+// longer portrait-specific, to avoid touching its one call site's meaning
+// mid-file — the behavior is what matters, not the name. insertBefore over
+// appendChild so it lands in the same source-order slot #metroBtn originally
+// held (right before #manuscriptBtn), not tacked on at the end after
+// #focusLabel/etc.
 function applyPortraitControlLayout(){
-  if(IS_DESKTOP)return;
   if(!metroBtn||!focusWrap)return;
   if(manuscriptBtn&&manuscriptBtn.parentElement===focusWrap)focusWrap.insertBefore(metroBtn,manuscriptBtn);
   else focusWrap.appendChild(metroBtn);
   // Sep 26 2026 (real request — the settings/circles redesign): Count-in and
   // Flip move out of #focusSettingsMenu too, same reasoning as Metro just
-  // above — portrait's #focusSettingsBtn no longer opens that dropdown at
-  // all (see its click handler further down), so both need to be real,
+  // above — #focusSettingsBtn no longer opens that dropdown on any platform
+  // (see its click handler further down), so both need to be real,
   // independently-positioned siblings in focusWrap instead of flex children
-  // of a menu that never opens here. Their new fixed positions come from
-  // the html:not(.is-desktop) #flipBtn/#countInBtn CSS rules (see
-  // .focus-settings-menu>button's own comment). Desktop is untouched — its
-  // #focusSettingsMenu still holds all three exactly as before.
+  // of a menu that never opens any more. Their fixed positions come from
+  // the #flipBtn/#countInBtn CSS rules (see .focus-settings-menu>button's
+  // own comment) — no longer platform-scoped as of Sep 27 2026.
   if(countInBtn&&manuscriptBtn&&manuscriptBtn.parentElement===focusWrap)focusWrap.insertBefore(countInBtn,manuscriptBtn);
   else if(countInBtn)focusWrap.appendChild(countInBtn);
   if(flipBtn&&manuscriptBtn&&manuscriptBtn.parentElement===focusWrap)focusWrap.insertBefore(flipBtn,manuscriptBtn);
@@ -6473,42 +6589,34 @@ if(settingsBtn)settingsBtn.addEventListener('click',()=>{const mt=document.getEl
 // things, on purpose left as two different ids/functions rather than trying
 // to unify them.
 //
-// Redesigned Sep 26 2026, real request — PORTRAIT ONLY, desktop keeps the
-// exact block above unchanged (dropdown open/close, aria-expanded). On
-// portrait #focusSettingsBtn no longer opens #focusSettingsMenu at all
-// (Count-in/Flip have already been moved OUT of it by
-// applyPortraitControlLayout() by this point — see that function's own
-// comment — so the menu is permanently empty/unused there); instead it's a
-// plain on/off declutter toggle, via the html.hide-focus-overlay class (see
-// its own CSS comment for exactly what that hides) and aria-pressed for the
-// accessible state instead of aria-expanded, since nothing is "expanding"
-// any more on portrait.
+// Redesigned Sep 26 2026, real request — originally PORTRAIT ONLY, desktop
+// kept the dropdown open/close (aria-expanded) block unchanged. Broadened to
+// EVERY platform Sep 27 2026 (real request — "make it exactly like the
+// mobile portrait"): #focusSettingsBtn no longer opens #focusSettingsMenu
+// anywhere (Count-in/Flip/Metro have already been moved OUT of it by
+// applyPortraitControlLayout() by this point, on every platform now — see
+// that function's own comment — so the menu is permanently empty/unused
+// everywhere); it's now unconditionally a plain on/off declutter toggle, via
+// the html.hide-focus-overlay class (see its own CSS comment for exactly
+// what that hides — also broadened to every platform the same day) and
+// aria-pressed for the accessible state instead of aria-expanded, since
+// nothing is "expanding" any more anywhere.
 if(focusSettingsBtn&&focusSettingsMenu){
   focusSettingsBtn.addEventListener('click',(e)=>{
     e.stopPropagation();
-    if(IS_DESKTOP){
-      const willOpen=focusSettingsMenu.hidden;
-      focusSettingsMenu.hidden=!willOpen;
-      focusSettingsBtn.setAttribute('aria-expanded',willOpen?'true':'false');
-      return;
-    }
     const hide=!document.documentElement.classList.contains('hide-focus-overlay');
     document.documentElement.classList.toggle('hide-focus-overlay',hide);
     focusSettingsBtn.setAttribute('aria-pressed',hide?'true':'false');
   });
-  // Tap-anywhere-else-to-close: unlike the full-screen menu-panel above, this
-  // dropdown is a small floating element with plenty of page around it, so
-  // it needs its own outside-click listener rather than relying on itself as
-  // a backdrop. Skips any click that lands on the button (its own click
-  // handler above already toggled it — this would immediately re-close it)
-  // or inside the menu itself (a tap on Metro/Count-in/Flip should trigger
-  // that control, not also dismiss the menu first). Desktop-only now (Sep 26
-  // 2026) — portrait has no dropdown left to close, so this would already be
-  // a permanent no-op there anyway (focusSettingsMenu.hidden never becomes
-  // false on portrait any more), but the explicit guard says so directly
-  // rather than relying on that.
+  // Tap-anywhere-else-to-close: was the dropdown's outside-click listener,
+  // desktop-only, back when desktop still opened #focusSettingsMenu. As of
+  // Sep 27 2026 NO platform opens that dropdown any more (see the click
+  // handler above), so this whole listener is a permanent no-op everywhere
+  // now (focusSettingsMenu.hidden never becomes false anywhere). Left in
+  // place rather than deleted — cheap to bring back if a real dropdown is
+  // ever wanted here again, same philosophy as other CSS-hidden-not-deleted
+  // bits elsewhere in this file (e.g. the circles icon).
   document.addEventListener('click',(e)=>{
-    if(!IS_DESKTOP)return;
     if(focusSettingsMenu.hidden)return;
     if(e.target.closest('#focusSettingsBtn,#focusSettingsMenu'))return;
     focusSettingsMenu.hidden=true;
@@ -6583,7 +6691,48 @@ metroBtn.disabled=!metroReady();
 setMetroActive(countInOn&&metroReady());
 // Manuscript notation now starts OFF too (per its own default above).
 manuscriptBtn.classList.toggle('is-active',manuscriptOn);
-buildControls();applyPortraitControlLayout();buildTempoButtons();buildLandscapeTransport();applyLandscapeSlotLayout();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
+// Desktop-only DOM relocation (Sep 27 2026, real request — "make it exactly
+// like the mobile portrait... place the title at the top... gather the
+// five, reset, play, 50, 75, 100... in a vertical line on the left hand side
+// of the focus square"). Two elements move; everything else about the
+// desktop redesign is CSS-only (see .is-desktop rules on .master-title,
+// .mini-progress, .focusMuteBtn/.focusSoloBtn, .focus-label, #flipBtn/
+// #countInBtn, .manuscriptBtn, .piece-strip-bar/.piece-mockups, .panel,
+// .tempo-strip/.tempo-buttons — all updated the same day):
+//
+// 1. .master-title moves from being .focus-column's first flex child (fine
+//    on portrait, where .focus-column is itself a column so this already
+//    reads as "above the focus square") to being a direct child of <main
+//    class="app">, inserted right before .viewer — so on desktop, where
+//    .focus-column is a ROW (focus square beside the tile grid), the title
+//    still reads as one full-width banner above the whole three-column
+//    player instead of getting squeezed into that row as its leftmost item.
+// 2. .tempo-strip (Reset/Play/50/75/100 — see buildTempoButtons(), no longer
+//    platform-gated) moves from being a block sibling of .viewer entirely
+//    (visually below everything, before this change) to being a flex child
+//    of .viewer itself, inserted right before .focus-column — i.e. the new
+//    leftmost column of the desktop row. .is-desktop .tempo-buttons switches
+//    it to a vertical stack (see that rule's own comment) and .viewer's
+//    existing gap:16px spaces it from the focus square, same as the gap
+//    between the focus square and the tile grid.
+//
+// Mobile is completely untouched — both moves are gated on IS_DESKTOP, and
+// mobile's DOM order already puts these exactly where portrait wants them.
+function applyDesktopControlLayout(){
+  if(!IS_DESKTOP)return;
+  const app=document.querySelector('.app');
+  const viewer=document.querySelector('.viewer');
+  const masterTitle=document.querySelector('.master-title');
+  const tempoStrip=document.querySelector('.tempo-strip');
+  const focusColumn=document.querySelector('.focus-column');
+  if(app&&viewer&&masterTitle&&masterTitle.parentElement!==app){
+    app.insertBefore(masterTitle,viewer);
+  }
+  if(viewer&&tempoStrip&&focusColumn&&tempoStrip.parentElement!==viewer){
+    viewer.insertBefore(tempoStrip,focusColumn);
+  }
+}
+buildControls();applyPortraitControlLayout();applyDesktopControlLayout();buildTempoButtons();buildLandscapeTransport();applyLandscapeSlotLayout();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
 
 // Usage analytics (Sep 10 2026, revised Sep 11 2026) — anonymous, minimal,
