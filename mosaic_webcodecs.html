@@ -209,6 +209,21 @@ html:not(.is-desktop) .app{padding-top:calc(6px + env(safe-area-inset-top))}
    overhead... instead they are a still image"). */
 .piece-mockup-square{position:relative;aspect-ratio:1/1;background:#030405 no-repeat;border:3px solid var(--window-border);border-radius:10px;overflow:hidden}
 .piece-mockup-grid{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
+/* .piece-mockup-row (Sep 27 2026, real request — "redo the previews so they
+   are a focus square with the eight small squares to the right... that way
+   the width of the previews will be the same width as the real player in
+   action"): display:contents on mobile/by default, exactly like
+   .focus-main-row/.focus-stack elsewhere in this file, so mobile's existing
+   stacked (square above grid) look is completely untouched. On desktop,
+   becomes a real row, and .piece-mockup-square/.piece-mockup-grid below get
+   the exact same fixed widths as the real .is-desktop .focus-wrap/
+   #gridStageMobile (520px+16px gap+260px=796px total) so a preview card
+   really is "the same width as the real player in action", not a separately
+   proportioned copy that happens to look similar. */
+.piece-mockup-row{display:contents}
+.is-desktop .piece-mockup-row{display:flex;flex-direction:row;align-items:flex-start;gap:16px}
+.is-desktop .piece-mockup-square{width:520px;flex:0 0 520px}
+.is-desktop .piece-mockup-grid{width:260px;flex:0 0 260px;aspect-ratio:1/2;margin-top:0}
 .piece-mockup-tile{position:relative;background-repeat:no-repeat;outline:1px solid #050607;transform:translateZ(0);backface-visibility:hidden}
 /* transform:translateZ(0)/backface-visibility:hidden above (Sep 25 2026, real
    report — "tile number eight on Flip Swing sometimes doesn't load on the
@@ -634,7 +649,23 @@ html.hide-focus-overlay #focusMuteBtn,
 html.hide-focus-overlay #focusSoloBtn,
 html.hide-focus-overlay .focus-label,
 html.hide-focus-overlay .tile-name,
-html.hide-focus-overlay #miniProgress{display:none}
+html.hide-focus-overlay #miniProgress,
+html.hide-focus-overlay #manuscriptBtn,
+html.hide-focus-overlay .tile .muteBtn,
+html.hide-focus-overlay .tile .soloBtn{display:none}
+/* #manuscriptBtn and the per-tile .muteBtn/.soloBtn added Sep 27 2026 — real
+   follow-up request, reversing the earlier "notation has its own independent
+   toggle" decision from the same day: "when I hit the settings button the
+   notation button needs to disappear also. And I would also like all of the
+   mini square solo and mute buttons to disappear." Only the BUTTONS hide —
+   the underlying manuscriptOn state and any actual mute/solo audio state are
+   unaffected, same as every other control on this list (Reset/Play/tempo
+   presets keep working, per the original declutter request: "not the reset
+   button, the play button, the 50/75/100, they will stay"). Both were
+   already hidden on mobile for unrelated reasons (manuscriptBtn is
+   desktop-only; per-tile M/S buttons are desktop-only, mobile uses the big
+   focus-square Mute/Solo instead) — this list is harmless-but-redundant on
+   mobile and does the real work on desktop. */
 /* Broadened from portrait-only to both platforms Sep 27 2026 (real request —
    "make it exactly like the mobile portrait... the settings button also
    turns off the instrument names on the many squares, although they are now
@@ -767,8 +798,22 @@ html:not(.is-desktop) .manuscriptBtn{display:none}
    is no longer fixed (auto-sizes to its one column of 55px circles, see
    .is-desktop .tempo-buttons below); margin:0 replaces the old centering
    margin since .viewer's own gap:16px (see .is-desktop .viewer) now spaces
-   it from .focus-column instead. */
-.is-desktop .tempo-strip{width:auto;margin:0}
+   it from .focus-column instead.
+
+   Top-aligned Sep 27 2026, real follow-up request — was vertically centered
+   (.viewer's own align-items:center) alongside the focus square, moved up
+   after feedback: "I'd like the reset button to be on the left of the
+   settings button. So move those five up to the top." align-self:flex-start
+   overrides just this one flex item's cross-axis alignment back to the
+   row's start, matching .focus-column's own align-items:flex-start so both
+   columns begin at the same y. padding-top:13px then nudges Reset (the
+   column's own first button) down those last few pixels to land exactly
+   level with #focusSettingsBtn: the settings button sits at top:10px INSIDE
+   focusWrap, whose own 3px border (.focus-wrap) pushes its content down
+   further — 10+3=13, matched here so Reset's top edge and Settings' top
+   edge are pixel-identical, verified via Playwright measurement (both at
+   the same page y once this padding is applied). */
+.is-desktop .tempo-strip{width:auto;margin:0;align-self:flex-start;padding-top:13px}
 .panel{margin-top:6px;padding:9px 10px;border:2px solid var(--window-border);border-radius:10px;background:var(--panel)}
 /* Portrait-only (Sep 25 2026, real request — "there will now just be one row
    of buttons below the small squares"): with #reset moved into
@@ -1224,7 +1269,28 @@ html:not(.is-desktop) #settingsBtn{display:none}
    520+16+260=796px for this rule's own piece of that sum — the grid width
    is 260px as of the .is-desktop #gridStageMobile bottom-alignment fix below
    (Sep 7 2026, same day). */
-.is-desktop .focus-column{flex:0 1 796px;flex-direction:row;align-items:flex-start;gap:16px}
+/* flex-direction changed from row to column (Sep 27 2026, same follow-up
+   request as .focus-main-row below) — the row job (focus square beside the
+   tile grid) moved to the new .focus-main-row wrapper so that
+   #notationStripDesktop, now a plain sibling of .focus-main-row instead of
+   nested inside .focus-stack, can stack BELOW the whole row and span its
+   full width, rather than being squeezed into the row itself as a third
+   flex item. gap dropped from 16px (the row's own horizontal gap, now owned
+   by .focus-main-row instead) to 0 — the notation crop wrapper's own
+   margin-top (see .notation-strip-desktop-crop) supplies whatever spacing
+   is wanted between the row and the notation image beneath it, exactly the
+   same "flush by design, spacing comes from the child not the parent"
+   pattern .focus-stack already used for focusWrap/notationStripDesktop. */
+.is-desktop .focus-column{flex:0 1 796px;flex-direction:column;align-items:flex-start;gap:0}
+/* .focus-main-row (Sep 27 2026, real follow-up request — see the markup
+   comment above .focus-stack): display:contents on mobile so this wrapper
+   is completely invisible to mobile's layout, exactly like .focus-stack.
+   On desktop, takes over the row-arrangement job .focus-column used to do
+   itself (focus square beside the tile grid) — same flex:row/gap:16px
+   values .focus-column had before this existed, just moved one level
+   down. */
+.focus-main-row{display:contents}
+.is-desktop .focus-main-row{display:flex;flex-direction:row;align-items:flex-start;gap:16px;width:100%}
 .is-desktop .focus-wrap{width:520px;flex:0 0 520px}
 /* Sep 2026: desktop's tile grid reads as 2 columns (top-to-bottom, left-to-
    right) instead of mobile's 4-across arrangement — narrower and taller
@@ -1311,28 +1377,60 @@ html:not(.is-desktop) #settingsBtn{display:none}
 .notation-strip.is-off{visibility:hidden}
 /* .focus-stack (Sep 7 2026) — see the markup comment above focusWrap for the
    full reasoning. display:contents on mobile/by default means this wrapper
-   takes no part in layout at all: its two children (focusWrap and the
-   hidden #notationStripDesktop) act as if they were direct children of
-   .focus-column, exactly as focusWrap alone was before this wrapper
-   existed. */
+   takes no part in layout at all: its two children (focusWrap and
+   #miniProgress) act as if they were direct children of .focus-main-row,
+   exactly as focusWrap alone was before this wrapper existed.
+   #notationStripDesktop moved OUT of this wrapper Sep 27 2026 (see the
+   markup comment above it) — it no longer lives inside .focus-stack at
+   all, so this wrapper's only job now is focusWrap+miniProgress. */
 .focus-stack{display:contents}
 /* Desktop-only: becomes a real column flex container instead, stacking
-   focusWrap above #notationStripDesktop with NO gap, so the notation's own
-   top edge sits flush against the square's bottom edge (the literal ask:
-   "always have the top line of the notation stuck to the bottom line of
-   the focus square"). flex:0 0 520px matches focusWrap's own fixed width
-   (see .is-desktop .focus-wrap) — needed because focus-stack, not focusWrap
-   directly, is now .focus-column's flex child on desktop. */
+   focusWrap above #miniProgress with NO gap. flex:0 0 520px matches
+   focusWrap's own fixed width (see .is-desktop .focus-wrap) — needed
+   because focus-stack, not focusWrap directly, is now .focus-main-row's
+   flex child on desktop. */
 .is-desktop .focus-stack{display:flex;flex-direction:column;flex:0 0 520px}
 /* Desktop notation image — plain block flow, not an overlay: no
-   position:absolute, no clipping ancestor, so it renders at whatever height
-   its own aspect ratio needs ("dynamically take up different amounts of
-   vertical space") directly below the square rather than being clipped to
-   it. Same white-card look as the portrait #notationStrip it mirrors.
-   Hidden by default (mobile/no manuscriptOn/no notation configured — see
-   renderNotationStrip()); shown only on desktop via the rule below. */
+   position:absolute, no clipping ancestor. Same white-card look as the
+   portrait #notationStrip it mirrors. Hidden by default (mobile/no
+   manuscriptOn/no notation configured — see renderNotationStrip()); shown
+   only on desktop via the rule below. width/height/margin-top are all
+   overwritten inline by applyDesktopNotationCrop() (JS) once the image
+   actually loads, to apply the fixed 10%-top/bottom crop (Sep 27 2026, real
+   request — see that function's own comment) — the width:100%/height:auto
+   here are just the pre-load fallback so nothing looks broken for the one
+   frame before that runs. */
 .notation-strip-desktop{display:none;width:100%;height:auto;border:0;border-top:2px solid var(--window-border);background:#fff;margin:0}
 .is-desktop .notation-strip-desktop:not([hidden]){display:block}
+/* Crop wrapper (Sep 27 2026, real request — "make the notation the width of
+   both of the whole column, the column being the space taken up by focus
+   square and eight small squares... make it the whole width" plus "lose
+   10% off the top and bottom"). Now a direct child of .focus-column
+   (a column on desktop — see that rule), sitting below .focus-main-row, so
+   width:100% here means the full 796px focus-square-plus-grid row width,
+   not just the square's old 520px. overflow:hidden is what makes
+   applyDesktopNotationCrop()'s negative image margin-top actually crop the
+   top 10% instead of just shifting the image upward on the page; the
+   wrapper's own JS-set height (exactly the remaining 80%) does the same job
+   for the bottom 10%, and — being real layout height, not just a visual
+   clip — also removes the reserved white space instead of merely hiding
+   it. margin-top gives it a little breathing room below the row now that
+   .focus-column's own gap dropped to 0 (see that rule's comment).
+
+   display:none by default/on mobile (Playwright-caught before shipping,
+   same discipline as the mini-progress "without losing ANY vertical height"
+   fix earlier the same day): unlike the old markup, where
+   #notationStripDesktop's own display:none was enough on its own because it
+   sat inside .focus-stack's display:contents on mobile, this wrapper is now
+   a plain sibling of .focus-main-row directly inside .focus-column — which
+   is display:flex on BOTH platforms (see that rule) — so an always-block
+   wrapper here would count as a real, visible-but-empty flex item on
+   mobile too: one extra flex gap plus this rule's own margin-top, adding
+   ~12px of dead space below the tile grid for nothing. display:none removes
+   it from flex layout entirely on mobile, exactly like the hidden image
+   used to on its own. */
+.notation-strip-desktop-crop{display:none}
+.is-desktop .notation-strip-desktop-crop{display:block;overflow:hidden;width:100%;margin-top:8px}
 /* The portrait overlay version is desktop's redundant twin now that this
    exists — hidden on desktop so the two don't both try to show at once
    (mobile is untouched: #notationStrip still renders there exactly as
@@ -1944,6 +2042,17 @@ html:not(.is-desktop) #settingsBtn{display:none}
            in the script (same src, same on/off state — just a second
            element, not a moved one, since mobile still needs the original
            overlaid one). -->
+      <!-- .focus-main-row (Sep 27 2026, real follow-up request — "make the
+           notation the width of both of the whole column, the column being
+           the space taken up by focus square and eight small squares"):
+           wraps .focus-stack + #gridStageMobile so the notation image below
+           can become a plain sibling of this row instead of living inside
+           .focus-column's old row layout — see .is-desktop .focus-column
+           (now a column) and .is-desktop .focus-main-row (now the row) just
+           above/below that rule. display:contents on mobile, exactly like
+           .focus-stack itself, so mobile's flex flow is completely
+           unaffected by this wrapper's existence. -->
+      <div class="focus-main-row">
       <div class="focus-stack">
       <div id="focusWrap" class="focus-wrap">
         <canvas id="mosaicFocus" class="focus-video"></canvas>
@@ -2132,23 +2241,33 @@ html:not(.is-desktop) #settingsBtn{display:none}
       <div id="miniProgress" class="mini-progress" aria-hidden="true">
         <span class="mini-progress-track"><span id="miniProgressFill" class="mini-progress-fill"></span></span>
       </div>
-      <!-- Desktop counterpart to #notationStrip above — see the .focus-stack
-           comment above focusWrap for why this needs to be a second element
-           rather than the same one moved. Plain block flow (no absolute
-           positioning, no overflow:hidden ancestor), so it just sits as tall
-           as its own image needs and stays flush against focusWrap's bottom
-           edge via .focus-stack's zero gap (see CSS) — "dynamically take up
-           different amounts of vertical space whilst always maintaining
-           contact with the focus square", per the request. Hidden by
-           default/on mobile; shown only via .is-desktop CSS. -->
-      <img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden>
       </div>
       <!-- All tiles as one 4x2 grid — shown on both mobile and desktop now
            (reverted Sep 2026). On mobile it sits below the focus square in
-           .focus-column's normal column layout; on desktop, .focus-column
-           switches to a row so this sits to the focus square's right instead
-           — see the CSS comment above .is-desktop .focus-column. -->
+           .focus-column's normal column layout; on desktop, .focus-main-row
+           (see its own comment above .focus-stack) puts this beside the
+           focus square instead — see the CSS comment above .is-desktop
+           .focus-main-row. -->
       <div id="gridStageMobile" class="grid-stage"><canvas id="grid" width="960" height="480"></canvas><div id="gridControls" class="grid-controls"></div></div>
+      </div>
+      <!-- Desktop counterpart to #notationStrip above. Moved OUT of
+           .focus-stack Sep 27 2026 (real follow-up request — "make the
+           notation the width of both of the whole column, the column being
+           the space taken up by focus square and eight small squares... the
+           whole width"): previously nested inside .focus-stack, so it was
+           capped at focusWrap's own 520px width; now a direct child of
+           .focus-column itself (796px wide, spanning the full focus-square-
+           plus-grid row above it via .is-desktop .notation-strip-desktop's
+           width:100%), sitting below BOTH the focus square and the tile
+           grid rather than just the square. Harmless on mobile — it stays
+           permanently hidden there regardless of DOM position (see the CSS
+           comment on .notation-strip-desktop), so moving it doesn't touch
+           mobile's rendered output at all, just where an invisible element
+           sits in the tree. Still Plain block flow, no absolute positioning,
+           no overflow:hidden ancestor other than its own crop wrapper's (see
+           that CSS) so it sits as tall as its own (cropped) image needs.
+           Hidden by default/on mobile; shown only via .is-desktop CSS. -->
+      <div class="notation-strip-desktop-crop"><img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden></div>
     </div>
     <div class="grid-stage-side grid-stage-right"><canvas id="gridRight" width="480" height="1920"></canvas><div id="gridControlsRight" class="grid-controls-vert"></div></div>
   </div>
@@ -4561,13 +4680,24 @@ function buildPieceMockup(id){
   square.appendChild(play);
 
   const gridEl=document.createElement('div');gridEl.className='piece-mockup-grid';
-  gridEl.style.gridTemplateColumns='repeat('+m.cols+',1fr)';
-  gridEl.style.gridTemplateRows='repeat('+m.rows+',1fr)';
+  // Desktop reshapes to the SAME 2-column/row-major "like a book" arrangement
+  // the real interactive grid uses (Sep 27 2026, real request — "redo the
+  // previews so they are a focus square with the eight small squares to the
+  // right... that way the width of the previews will be the same width as
+  // the real player in action") — mirrors gridDestShape()'s own cols/rows
+  // math exactly, just applied to this mockup's own grid instead of the
+  // real #gridStageMobile. DOM append order below is untouched either way
+  // (same tileOrderFor() sequence); only the visual reshape changes, exactly
+  // like gridDestShape()'s own comment describes for the real grid.
+  const destCols=IS_DESKTOP?GRID_DEST_COLS_DESKTOP:m.cols, destRows=IS_DESKTOP?Math.ceil(m.tileCount/GRID_DEST_COLS_DESKTOP):m.rows;
+  gridEl.style.gridTemplateColumns='repeat('+destCols+',1fr)';
+  gridEl.style.gridTemplateRows='repeat('+destRows+',1fr)';
   // order[slot] is the logical tile shown at grid position `slot` — same
   // semantics as currentTileOrder()[slot]/buildControls()'s own order.forEach
   // (the admin-console "reorder the squares" feature). The crop position
   // (px/py) is always keyed by the LOGICAL index — exactly like tileSource()
   // — only which grid CELL it lands in (DOM append order, via `slot`) moves.
+  // NOT the destCols/destRows reshape above, which is purely visual.
   const order=tileOrderFor(id);
   for(let slot=0;slot<m.tileCount;slot++){
     const i=order[slot];
@@ -4579,7 +4709,17 @@ function buildPieceMockup(id){
     gridEl.appendChild(t);
     pieceMockupTileObserver.observe(t); // see its own comment — forces a repaint the moment this tile scrolls into view
   }
-  card.appendChild(label);card.appendChild(square);card.appendChild(gridEl);
+  // Row wrapper (Sep 27 2026, same request as above): display:contents on
+  // mobile, exactly like .focus-main-row/.focus-stack elsewhere in this
+  // file, so mobile's existing stacked (square above grid) layout is
+  // completely unaffected. On desktop, becomes the same square-beside-grid
+  // row .focus-main-row itself uses, at the exact same 796px combined width
+  // (520px square + 16px gap + 260px grid) as the real player — see
+  // .is-desktop .piece-mockup-square/.piece-mockup-grid for the matching
+  // fixed widths.
+  const row=document.createElement('div');row.className='piece-mockup-row';
+  row.appendChild(square);row.appendChild(gridEl);
+  card.appendChild(label);card.appendChild(row);
   card.addEventListener('click',()=>{if(id!==mosaicId)switchMosaic(id);});
   return card;
 }
@@ -4937,6 +5077,37 @@ function notationSrcFallback(imgEl,failedSrc){
   if(failedSrc===GLOBAL_NOTATION_FALLBACK)return;
   imgEl.src=GLOBAL_NOTATION_FALLBACK;
 }
+// Desktop notation crop (Sep 27 2026, real follow-up request — "the notation
+// is never to the edge... let's just lose 10% off the top and bottom so
+// there's less white showing on all of them"). Every notation image already
+// carries a white margin baked into the file itself; percentage CSS margins
+// can't crop a fixed fraction of an element's OWN height (margin percentages
+// always resolve against the containing block's WIDTH, never height — a real
+// CSS gotcha, not a bug), so this computes real pixel numbers instead: reads
+// the image's natural aspect ratio, works out what its full rendered height
+// would be at the crop wrapper's actual width, then shrinks the image's own
+// box by 10% top and bottom (negative margin-top pulls the top 10% up
+// underneath the crop wrapper's overflow:hidden; the wrapper's own height is
+// set to exactly the remaining 80%, which clips the bottom 10% the same way
+// and — since that's the wrapper's real layout height, not just a visual
+// clip — also removes the reserved white space, not just the paint). Runs on
+// every 'load' (a new src, the normal case) and is also called directly
+// right after each src assignment below for the rare case a browser doesn't
+// refire 'load' for an already-cached image.
+function applyDesktopNotationCrop(){
+  if(!IS_DESKTOP)return;
+  const img=notationStripDesktop,wrap=img.parentElement;
+  if(!img||!wrap||!img.naturalWidth||!img.naturalHeight)return;
+  const w=wrap.clientWidth||img.clientWidth;
+  if(!w)return;
+  const fullH=w*img.naturalHeight/img.naturalWidth;
+  const crop=fullH*0.1;
+  img.style.width='100%';
+  img.style.height=fullH+'px';
+  img.style.marginTop=(-crop)+'px';
+  wrap.style.height=(fullH-crop*2)+'px';
+}
+notationStripDesktop.addEventListener('load',applyDesktopNotationCrop);
 function renderNotationStrip(){
   const src=resolveNotationStripSrc(selected);
   debugLog('renderNotationStrip() called, src='+src);
@@ -4967,6 +5138,7 @@ function renderNotationStrip(){
     // attribute (space collapses entirely) is simpler and is exactly what
     // "dynamically take up different amounts of vertical space" calls for.
     notationStripDesktop.src=src;notationStripDesktop.alt=cfg.label+' notation';notationStripDesktop.hidden=!manuscriptOn;
+    if(notationStripDesktop.complete)applyDesktopNotationCrop(); // cached-image fallback — see that function's own comment for why 'load' alone isn't always enough
     // Deliberately NOT gated on manuscriptOn — the landscape view is meant
     // to show regardless of whether notation is toggled on in portrait.
     // See getNotationImage()'s comment above for why this loads through a
