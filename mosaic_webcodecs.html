@@ -85,6 +85,20 @@ html{font-size:17.6px}
 html,body{overflow-anchor:none}
 body{min-height:100vh;background-image:radial-gradient(ellipse at top left, rgba(207,159,95,0.06), transparent 55%),radial-gradient(ellipse at bottom right, rgba(163,64,42,0.07), transparent 50%)}
 .app{max-width:480px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))}
+/* Portrait-only top padding trim (Sep 27 2026, real request — reclaim the
+   real, pixel-measured room needed to keep the whole player (master title +
+   focus square + tile grid + tempo row) comfortably clear of the browser's
+   own address bar, WITHOUT dynamic viewport units — a fixed-size, "feels
+   like real hardware" layout was explicitly preferred over anything that
+   resizes itself. Measured directly from a real device screenshot (Chrome,
+   iOS) at its actual device-pixel-ratio (confirmed 3x by cross-checking a
+   known-55px-CSS button's measured 165px diameter in the photo): the gap
+   above the title text was 13px, made of this rule's 10px + the italic
+   serif font's own half-leading — trimmed to 6px here, portrait only,
+   desktop keeps its original 10px via cascade order (this comes after the
+   base rule and is more specific). See .focus-column/.grid-stage just below
+   for the other two gaps trimmed the same measured way. */
+html:not(.is-desktop) .app{padding-top:calc(6px + env(safe-area-inset-top))}
 /* Piece strip (Aug 2026 redesign): replaces the old separate mobile focus-topbar
    overlay and desktop page-header — one unified bar, identical on mobile and
    desktop, with the hamburger plus a horizontally-scrollable row of pieces.
@@ -140,29 +154,29 @@ html:not(.is-desktop) .piece-strip-bar{display:none}
 .is-desktop .piece-mockups{display:none}
 .piece-mockups{display:flex;flex-direction:column;gap:20px;margin-top:14px}
 .piece-mockup{all:unset;display:block;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent;font:inherit;text-align:inherit}
-/* Doubled Sep 26 2026 (real request), then sized back down Sep 27 2026 —
-   this rule is now shared with the new portrait master-title bar above the
-   focus square (see .master-title's markup comment near .focus-column), so
-   its size is no longer a free choice: it has to be small enough that the
-   master title + focus square + tile grid + tempo row still fit one screen
-   with no scrolling, portrait only — same one-screen constraint the rest of
-   this layout has always followed (see .transport's/.panel's own history).
-   30.8px/19.8px (the Sep 26 doubling) left only ~11px of headroom on a
-   375x667 viewport (iPhone SE 3rd gen/mini-class, the realistic small end —
-   an actual 320-wide device wraps to 2 lines and overflows outright at any
-   size tested, so isn't a practical target). 17px/11px, verified via a
-   headless-Chromium measurement sweep across 320/375/390-wide viewports,
-   keeps a comfortable ~27px of headroom at 375x667 and ~180px at 390x844,
-   without wrapping to 2 lines, while staying close to the original
-   15.4px/9.9px this file used before the Sep 26 doubling — i.e. legible
-   without being anywhere near as large as "double" asked for, which the
-   fit constraint here overrides. 15.4px→17px for the piece name (the
-   .piece-mockup-label wrapper's own font-size, inherited by the plain name
-   <span> inside it — see buildPieceMockup()), 9.9px→11px for the "TAP TO
-   OPEN" hint (and, via the shared rule, the master title's own "MOSAIC
-   PLAYER" text). */
-.piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:17px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
+/* Doubled Sep 26 2026, sized down to 17px/11px later that day, then bumped
+   again Sep 27 2026 (real request — "increasing text size for clarity"
+   alongside trimming the whitespace around it). This rule is shared with
+   the portrait master-title bar above the focus square (see .master-title's
+   markup comment near .focus-column) as well as every piece-mockup card
+   below, so it's never a free choice on its own — the whole player (master
+   title + focus square + tile grid + tempo row) still has to fit one screen
+   with no scrolling, portrait only, same constraint as always. This round
+   traded a fixed-viewport-units approach (explicitly declined — "I prefer
+   the feeling... that the player is like a real hardware unit rather than
+   something malleable") for reclaiming real, measured space elsewhere
+   instead: see .app's padding-top, .focus-column's gap, and .grid-stage's
+   margin-top, all trimmed the same day using pixel measurements taken
+   directly off a real device screenshot (Chrome, iOS — device-pixel-ratio
+   confirmed 3x by cross-checking a known-55px-CSS button's measured 165px
+   diameter in the photo). With ~14px reclaimed from those three gaps, there
+   was room to size the text up a little rather than just trim whitespace
+   around it: 17px→19px for the piece name (the .piece-mockup-label
+   wrapper's own font-size, inherited by the plain name <span> inside it —
+   see buildPieceMockup()), 11px→13px for the "TAP TO OPEN" hint (and, via
+   the shared rule, the master title's own "MOSAIC PLAYER" text). */
+.piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:19px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
 /* Same chrome as the real .focus-wrap/.grid-stage, same CSS-sprite-crop
    technique buildPieceStrip()'s thumbnails already use (poster image sliced
    via background-size/background-position) — a still image, not a second
@@ -314,7 +328,16 @@ html:not(.is-desktop) .focus-label{top:auto;bottom:4px;right:auto;left:50%;trans
 .buffering-spinner .spinner{width:32px;height:32px;border:3px solid rgba(241,230,208,.22);border-top-color:var(--tile-border);border-radius:50%;animation:mosaic-spin .8s linear infinite}
 .buffering-spinner span{font-family:'IBM Plex Mono',monospace;font-size:12.1px;letter-spacing:1px;color:var(--text);text-shadow:0 1px 4px rgba(0,0,0,.85)}
 @keyframes mosaic-spin{to{transform:rotate(360deg)}}
-.grid-stage{position:relative;aspect-ratio:2/1;margin-top:6px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
+/* margin-top 6px→2px (Sep 27 2026, real request, "decrease the space
+   between focus square and small squares" — see .app's padding-top comment
+   for the measurement method): safe for desktop without extra scoping,
+   since .is-desktop #gridStageMobile already sets its own margin-top:0
+   (an ID rule, higher specificity than this class rule regardless of value)
+   — this only ever reaches portrait in practice. Combined with
+   .focus-column's gap 8px→4px just above, the real measured gap here (focus
+   square's own 3px bottom border + this margin + this element's own 2px top
+   border) drops from 19px to 11px. */
+.grid-stage{position:relative;aspect-ratio:2/1;margin-top:2px;background:#030405;border:2px solid var(--window-border);border-radius:10px;overflow:hidden;contain:paint}
 .grid-stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .grid-controls{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
 /* Desktop override: same buttons, same DOM order (tile 0..N-1 — see
@@ -1024,7 +1047,17 @@ html:not(.is-desktop) #settingsBtn{display:none}
    this is just a plain block wrapper there, stacked top-to-bottom (focus
    square above the grid) via the base column direction below. Desktop
    overrides to a row instead, so the grid sits to the focus square's right. */
-.focus-column{display:flex;flex-direction:column;gap:8px}
+/* 8px→4px (Sep 27 2026, real request — see the .app padding-top comment
+   above for the full reasoning/measurement method): safe for desktop
+   without any extra scoping, since .is-desktop .focus-column already sets
+   its own explicit gap:16px (below) that overrides this base value outright
+   — this only ever reaches portrait in practice. Trims two gaps at once
+   (master-title-to-focus-square and focus-square-to-tile-grid), each by
+   4px, 8px total — half of the measured "space above/below the title text"
+   and half of the measured "space between focus square and small squares"
+   respectively; see .grid-stage's own margin-top just below for where the
+   rest of that second gap comes from. */
+.focus-column{display:flex;flex-direction:column;gap:4px}
 /* Mini progress bar (Sep 13 2026 — Sep 26 2026): removed entirely (real
    request, "removing the progress bar completely" — see the master-title
    markup comment near .focus-column for the full reasoning). Used to sit
