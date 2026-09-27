@@ -176,6 +176,19 @@ html:not(.is-desktop) .piece-strip-bar{display:none}
    see buildPieceMockup()), 11px→13px for the "TAP TO OPEN" hint (and, via
    the shared rule, the master title's own "MOSAIC PLAYER" text). */
 .piece-mockup-label{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:19px;color:var(--text);margin-bottom:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+/* The name span is a flex item with no width of its own, so by default a
+   flex item's automatic minimum width is its content's min-content size —
+   meaning a long name (e.g. Flip Swing's "- Brice Wassy" credit, added Sep
+   27 2026) could refuse to shrink and instead wrap to a second line or push
+   the TAP TO PLAY/MOSAIC PLAYER hint out, costing vertical height this
+   layout can't spare (portrait's whole one-screen fit depends on this bar
+   staying single-line — see the font-size comment above). min-width:0 lets
+   it actually shrink to fit; overflow/text-overflow then truncate with an
+   ellipsis instead of wrapping if it still doesn't fit. Targets the first
+   child generically (works for both the master-title's classed .piece-name
+   span and the plain unclassed name span buildPieceMockup() creates for
+   each mockup card, without needing a shared class on both). */
+.piece-mockup-label>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
 /* Same chrome as the real .focus-wrap/.grid-stage, same CSS-sprite-crop
    technique buildPieceStrip()'s thumbnails already use (poster image sliced
@@ -576,7 +589,10 @@ html:not(.is-desktop) #countInBtn{position:absolute;top:75px;right:10px;left:aut
    50/75/100, they will stay" — plus a same-message follow-up asking for
    every instrument name (the focus square's own label AND every small
    tile's) to disappear too, and (same-day follow-up) the focus square's
-   Mute/Solo buttons (#focusMuteBtn/#focusSoloBtn) added to the same list.
+   Mute/Solo buttons (#focusMuteBtn/#focusSoloBtn) added to the same list,
+   and (Sep 27 2026, same-day follow-up after the mini progress bar's
+   reinstatement) #miniProgress added too — "the timeline is also hidden
+   with other buttons behind the press of the settings button".
    html.hide-focus-overlay is toggled by #focusSettingsBtn's click handler
    (see JS) — starts absent, so everything below shows by default, matching
    "the user knows that they're there". :not(.is-desktop) doubly guards what
@@ -588,7 +604,8 @@ html.hide-focus-overlay:not(.is-desktop) #flipBtn,
 html.hide-focus-overlay:not(.is-desktop) #focusMuteBtn,
 html.hide-focus-overlay:not(.is-desktop) #focusSoloBtn,
 html.hide-focus-overlay:not(.is-desktop) .focus-label,
-html.hide-focus-overlay:not(.is-desktop) .tile-name{display:none}
+html.hide-focus-overlay:not(.is-desktop) .tile-name,
+html.hide-focus-overlay:not(.is-desktop) #miniProgress{display:none}
 /* Manuscript toggle (Aug 2026): used to be top-left of the focus square,
    mirroring the beat counter at top-right — moved one slot right Sep 25 2026
    (left:10px -> left:75px) to make room for #focusSettingsBtn, which took
@@ -1058,15 +1075,30 @@ html:not(.is-desktop) #settingsBtn{display:none}
    respectively; see .grid-stage's own margin-top just below for where the
    rest of that second gap comes from. */
 .focus-column{display:flex;flex-direction:column;gap:4px}
-/* Mini progress bar (Sep 13 2026 — Sep 26 2026): removed entirely (real
-   request, "removing the progress bar completely" — see the master-title
-   markup comment near .focus-column for the full reasoning). Used to sit
-   right here as its own flex child of .focus-column, in the gap between the
-   focus square and the tile grid below it. Nothing replaces its old slot —
-   the master-title bar added the same day lives at the TOP of .focus-column
-   instead (above the focus square, not in this gap), sized (see
-   .piece-mockup-label below, shared with it) specifically to leave the
-   whole portrait layout fitting in one screen without it. */
+/* Mini progress bar (Sep 13 2026, removed Sep 27 2026, reinstated same day —
+   real request: "reinstate the timeline under focus square without losing
+   ANY vertical height... if the bar just needs to be a bar with no brackets
+   at each end then so be it"). Simplified from the original version: no end
+   ticks/brackets, just the track+fill. The zero-height-cost part is the
+   real trick here, since .focus-column's gap dropped from 8px to 4px in the
+   pixel-measurement pass earlier the same day, so the old -8px cancellation
+   would no longer be correct. Technique: height:0 + min-height:0 (the
+   explicit min-height stops flex's own automatic min-content sizing from
+   overriding height:0, which would otherwise happen given overflow:visible)
+   makes this flex child contribute NOTHING to .focus-column's layout height
+   by itself — its only remaining footprint is the ONE EXTRA 4px gap that
+   inserting any third flex child here necessarily adds (gap+gap instead of
+   one gap). margin:-4px auto 0 cancels exactly that extra gap back out, so
+   the net page height is provably identical to before this element existed.
+   The visible track is a position:absolute child (see .mini-progress-track)
+   so it renders inside the gap without itself counting as in-flow content —
+   position:absolute content is excluded from a flex item's min-content size,
+   which is what makes the height:0 above actually hold. top:1px on the
+   track centers its 2px height within the 4px gap (1px clearance top/bottom). */
+.mini-progress{height:0;min-height:0;overflow:visible;position:relative;margin:-4px auto 0;width:50%;max-width:340px}
+.is-desktop .mini-progress{display:none}
+.mini-progress-track{position:absolute;top:1px;left:0;right:0;height:2px;background:rgba(109,197,255,.32);border-radius:1px;overflow:hidden}
+.mini-progress-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:var(--accent-blue)}
 /* Master title (Sep 27 2026, real request, portrait-only): a plain flex
    child of .focus-column — no absolute positioning, no extra width/margin
    rules needed here beyond what it inherits (stretches full-width by the
@@ -1982,6 +2014,21 @@ html:not(.is-desktop) #settingsBtn{display:none}
            default/on mobile; shown only via .is-desktop CSS. -->
       <img id="notationStripDesktop" class="notation-strip-desktop" alt="" hidden>
       </div>
+      <!-- Mini progress bar (Sep 13 2026, removed Sep 27 2026, reinstated same
+           day — real request, "reinstate the timeline under focus square
+           without losing ANY vertical height"; see .mini-progress's own CSS
+           comment near .focus-column for the zero-height-cost technique and
+           why the end ticks/brackets were dropped this time ("so be it").
+           Purely a visual readout, not an interactive scrubber — the real
+           (hidden-on-mobile) #timeline input is still what Reset/scrub logic
+           reads/writes; this just mirrors its position every frame via
+           updateUI(), see the JS comment there. Also part of the portrait
+           declutter toggle now (see html.hide-focus-overlay rules) — "the
+           timeline is also hidden with other buttons behind the press of the
+           settings button". -->
+      <div id="miniProgress" class="mini-progress" aria-hidden="true">
+        <span class="mini-progress-track"><span id="miniProgressFill" class="mini-progress-fill"></span></span>
+      </div>
       <!-- All tiles as one 4x2 grid — shown on both mobile and desktop now
            (reverted Sep 2026). On mobile it sits below the focus square in
            .focus-column's normal column layout; on desktop, .focus-column
@@ -2289,7 +2336,7 @@ const MOSAICS={
     stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_clave_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_cata_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_erikundi_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_quinto_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_conga_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_tumba_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_coro1_congoyambumba.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_coro2_congoyambumba.aac']
   },
   flipswing:{
-    id:'flipswing', label:'Flip Swing', poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg',
+    id:'flipswing', label:'Flip Swing - Brice Wassy', poster:'Mosaic/Flip_Swing/poster_flip_swing.jpg',
     metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
     cols:4, rows:2, tileCount:8, loopEnd:15.567, // 8th tile (Agogo) added Sep 2026 — was 7 real + 1 blank cell
     // Beat counter: 12 bars x 3 beats/bar = 36 beats per loop, counting
@@ -4388,7 +4435,7 @@ function buildPieceMockup(id){
 
   const label=document.createElement('div');label.className='piece-mockup-label';
   const name=document.createElement('span');name.textContent=m.label;
-  const hint=document.createElement('span');hint.className='piece-mockup-hint';hint.textContent='TAP TO OPEN';
+  const hint=document.createElement('span');hint.className='piece-mockup-hint';hint.textContent='TAP TO PLAY';/* was TAP TO OPEN — real request, Sep 27 2026 */
   label.appendChild(name);label.appendChild(hint);
 
   const square=document.createElement('div');square.className='piece-mockup-square';
@@ -6218,6 +6265,12 @@ function wrappedAudioPos(){
 function updateUI(){
   const p=scrubbing?scrubPos:currentPos();const dur=videoCycle||LOOP_END;
   if(!scrubbing){timeline.max=String(dur);timeline.value=String(p);}
+  // #miniProgressFill (Sep 13 2026, reinstated Sep 27 2026) — the
+  // mobile-portrait mini progress bar between the focus square and the tile
+  // grid (see its own CSS comment near .focus-column); mirrors the same
+  // p/dur this function already computes for the real #timeline input,
+  // every frame, scrubbing included.
+  if(miniProgressFill)miniProgressFill.style.width=(dur?Math.min(100,Math.max(0,p/dur*100)):0)+'%';
   // Fixed-format time text (no fps suffix) — the fps readout used to live
   // here too, but its length changes as digits appear/disappear, which was
   // reflowing the Reset/timeline/time row (the range slider is flex:1, so
