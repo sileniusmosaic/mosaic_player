@@ -2664,9 +2664,33 @@ const MOSAICS={
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/flip_swing_4x2_1920x960_',
     // Same reason as Congo above — these need the full R2 URL, not a bare name.
     stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_agogo_flipswing.aac']
+  },
+  shaker:{
+    // Sep 28 2026: first solo/single-tile piece — just one square, no grid of
+    // other instruments around it. The engine and every grid-layout helper
+    // (buildPieceMockup, gridDestCols reshape, etc.) already generalize to an
+    // arbitrary tileCount, so cols:1/rows:1/tileCount:1 is all that's needed
+    // here rather than a special case anywhere else.
+    id:'shaker', label:'Shaker', poster:'Mosaic/Shaker/poster_shaker.jpg',
+    metroOffsetMs:0,
+    cols:1, rows:1, tileCount:1,
+    // Source recording (shaker.wav / "shaker square.mov") measures exactly
+    // 9.600000s (verified via ffprobe on both raw masters) — no bar-count
+    // given, so beatsPerBar/bars/bpm are deliberately left unset and the
+    // metronome/beat-counter UI just stays off for this piece (see
+    // metroReady() — it requires both, absent here on purpose).
+    loopEnd:9.600,
+    progressiveVideo:true,
+    names:['Shaker'],
+    // Bundled straight into the git repo/Worker static assets like Abakuá's
+    // stems, not R2 — at one tile instead of eight the video composites are
+    // only ~1-2MB each, comfortably inside Workers' 25MiB per-asset cap, so
+    // there's no need for the R2 step Congo/Flip Swing use.
+    videoBase:'Mosaic/Shaker/shaker_1x1_480x480_',
+    stemFiles:['Mosaic/Shaker/01_shaker_shaker.aac']
   }
 };
-let MOSAIC_ORDER=['flipswing','abakua','congo']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
+let MOSAIC_ORDER=['flipswing','abakua','congo','shaker']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
 const TEMPO_PRESETS=[50,75,100]; // 25% dropped for now to reduce scope — can add back later
 function videoSourcesFor(c){return {100:c.videoBase+'100.mp4',75:c.videoBase+'75.mp4',50:c.videoBase+'50.mp4'}}
 
