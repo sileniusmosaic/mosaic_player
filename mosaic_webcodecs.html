@@ -448,30 +448,27 @@ html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
    desktop's per-tile Solo button and the mobile focus-square one always
    agree on what "soloed" looks like. */
 .soloBtn.is-solo{background:#0c0906;color:var(--text);border-color:#ffd60a;box-shadow:0 0 0 2px #ffd60a}
-/* Mobile mute/solo moved to the focus square (Sep 2026, per direct request):
-   the small per-tile M/S buttons above are now desktop-only. Still CREATED
-   for every tile on every platform in buildControls() — muteBtnLandscape and
-   the new focusMuteBtn/focusSoloBtn below both work by forwarding a click to
-   the real per-tile button (muteBtns[selected]/soloBtns[selected]).click()),
-   same single-source-of-truth pattern already used for landscape's mute —
-   so the underlying element has to exist even where it's never shown.
-   .click() fires normally on a display:none element, so hiding here is
-   purely visual and doesn't break that forwarding. */
-html:not(.is-desktop) .tile .muteBtn,html:not(.is-desktop) .tile .soloBtn{display:none}
-/* Desktop's per-tile Solo/Mute buttons, real report Sep 12 2026: still the
-   real always-visible buttons (never hidden on desktop, see the rule just
-   above), but relocated from .dawBtn's default top corners down to the
-   bottom corners — solo bottom-left, mute bottom-right — because the top
-   corners collided with .tile-name once that moved to top-left (v2.29/2.30
-   above), the button literally sitting on top of the instrument name. No
-   separate M/S badge needed here on top of this (see the suppression right
-   below): the button itself already shows its own on/off ring
-   (.soloBtn.is-solo/.muteBtn.is-muted), so a second icon in the same corner
-   would just be redundant clutter — different from mobile, where the real
-   buttons are hidden and the badge is the ONLY visual indicator. */
-.is-desktop .tile .soloBtn{top:auto;bottom:4px;left:4px}
-.is-desktop .tile .muteBtn{top:auto;bottom:4px;right:4px}
-.is-desktop .tile.is-muted::after,.is-desktop .tile.is-solo::before{content:none}
+/* Per-tile M/S buttons hidden on BOTH platforms now (Sep 28 2026, real
+   request — "copy the functionality that is on mobile portrait... the S and
+   the M are no longer visible on the small squares until you press solo or
+   mute on the focus square... we are now losing on desktop the S and M
+   buttons as functioning buttons. They're now just symbols"). Desktop used
+   to keep these as real, individually-clickable buttons (see the removed
+   .is-desktop positioning rules this replaced) — that's gone now, exactly
+   matching mobile: the only way to mute/solo is #focusMuteBtn/#focusSoloBtn
+   on the focus square (forwarding to whichever tile is currently selected),
+   and every tile's own M/S badge (.tile.is-muted::after/.tile.is-solo::before
+   just below) is a pure read-only indicator of that state, never a control
+   of its own. Still CREATED for every tile on every platform in
+   buildControls() — muteBtnLandscape and focusMuteBtn/focusSoloBtn all work
+   by forwarding a click to the real per-tile button
+   (muteBtns[selected]/soloBtns[selected]).click()), same
+   single-source-of-truth pattern used throughout this file — so the
+   underlying element still has to exist even though it's never shown or
+   clicked directly on any platform any more. .click() fires normally on a
+   display:none element, so hiding here is purely visual and doesn't break
+   that forwarding. */
+.tile .muteBtn,.tile .soloBtn{display:none}
 /* Beat counter: top-right of the focus square (Aug 2026 — moved up from
    bottom-right so the notation overlay, now anchored to the bottom of the
    square, has that space free). Sized/colored differently from the
@@ -678,22 +675,26 @@ html.hide-focus-overlay #focusMuteBtn,
 html.hide-focus-overlay #focusSoloBtn,
 html.hide-focus-overlay .focus-label,
 html.hide-focus-overlay .tile-name,
-html.hide-focus-overlay #manuscriptBtn,
-html.hide-focus-overlay .tile .muteBtn,
-html.hide-focus-overlay .tile .soloBtn{display:none}
-/* #manuscriptBtn and the per-tile .muteBtn/.soloBtn added Sep 27 2026 — real
-   follow-up request, reversing the earlier "notation has its own independent
-   toggle" decision from the same day: "when I hit the settings button the
-   notation button needs to disappear also. And I would also like all of the
-   mini square solo and mute buttons to disappear." Only the BUTTONS hide —
-   the underlying manuscriptOn state and any actual mute/solo audio state are
-   unaffected, same as every other control on this list (Reset/Play/tempo
-   presets keep working, per the original declutter request: "not the reset
-   button, the play button, the 50/75/100, they will stay"). Both were
-   already hidden on mobile for unrelated reasons (manuscriptBtn is
-   desktop-only; per-tile M/S buttons are desktop-only, mobile uses the big
-   focus-square Mute/Solo instead) — this list is harmless-but-redundant on
-   mobile and does the real work on desktop. */
+html.hide-focus-overlay #manuscriptBtn{display:none}
+/* #manuscriptBtn added Sep 27 2026 — real follow-up request, reversing the
+   earlier "notation has its own independent toggle" decision from the same
+   day: "when I hit the settings button the notation button needs to
+   disappear also." Only the BUTTON hides — the underlying manuscriptOn
+   state is unaffected, same as every other control on this list
+   (Reset/Play/tempo presets keep working, per the original declutter
+   request: "not the reset button, the play button, the 50/75/100, they
+   will stay"). Already hidden on mobile for an unrelated reason
+   (manuscriptBtn is desktop-only) — harmless-but-redundant there, does the
+   real work on desktop.
+
+   The per-tile .muteBtn/.soloBtn USED to be on this list too (added the
+   same Sep 27 2026 round — "I would also like all of the mini square solo
+   and mute buttons to disappear") but were removed from it Sep 28 2026: they
+   no longer need a declutter-specific rule at all, because they're now
+   `.tile .muteBtn,.tile .soloBtn{display:none}` — hidden UNCONDITIONALLY on
+   both platforms, all the time, declutter or not (see that rule's own
+   comment, near .dawBtn) — matching mobile exactly, where the small squares
+   only ever show a read-only M/S badge, never a clickable button. */
 /* Broadened from portrait-only to both platforms Sep 27 2026 (real request —
    "make it exactly like the mobile portrait... the settings button also
    turns off the instrument names on the many squares, although they are now
