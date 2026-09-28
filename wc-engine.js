@@ -26,7 +26,7 @@ class WebCodecsVideoEngine {
   // half the tiles (desktop's "tiles flank the focus square" layout) — pass
   // whichever pair matches the layout actually in the DOM; the other stays
   // null and _draw() simply skips it.
-  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8, gridColumnMajor = false, gridDestCols = cols, hiddenIndices = [], hideSelectedInGrid = false }) {
+  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8, gridColumnMajor = false, gridDestCols = cols, hiddenIndices = [], hideSelectedInGrid = false, gridLayout = null }) {
     this.gridCtx = gridCanvas ? gridCanvas.getContext('2d', { alpha: false }) : null;
     this.gridLeftCtx = gridCanvasLeft ? gridCanvasLeft.getContext('2d', { alpha: false }) : null;
     this.gridRightCtx = gridCanvasRight ? gridCanvasRight.getContext('2d', { alpha: false }) : null;
@@ -100,6 +100,12 @@ class WebCodecsVideoEngine {
     // so it stays correct if the user ever taps to swap which tile is
     // focused. False (default) is a pure no-op for every other piece.
     this.hideSelectedInGrid = hideSelectedInGrid;
+    // Explicit destination-grid override (Shaker 2nd tile, Sep 28 2026 —
+    // see drawGridFromSource()'s own cellSpans comment): {cols,rows,cells}
+    // where cells is {tileIndex:{col,row,w,h}} in standard-unit-square cell
+    // units. null (every other piece) is a complete no-op — _gridDestShape()
+    // falls through to its normal cols/rows-based shape exactly as before.
+    this.gridLayout = gridLayout;
     // Desktop grid reflow (Sep 7 2026 fix — real report: on desktop Chrome,
     // the grid looked perfectly correct before Play (the poster/placeholder,
     // drawn by mosaic_webcodecs.html's drawPoster()/gridDestShape(), already
@@ -156,6 +162,12 @@ class WebCodecsVideoEngine {
   // drawGridFromSource()) so setLayout() changing this.cols/rows mid-session
   // (a piece switch) is automatically reflected without any extra plumbing.
   _gridDestShape() {
+    // gridLayout override (see its own constructor comment) always wins,
+    // same shape on both desktop and mobile — the whole point is a fixed
+    // standard-unit-square cell grid a tile can be explicitly spanned
+    // across, independent of the piece's own source cols/rows or the
+    // desktop gridColumnMajor/gridDestCols reflow below.
+    if (this.gridLayout) return { cols: this.gridLayout.cols, rows: this.gridLayout.rows, columnMajor: false };
     if (!this.gridColumnMajor) return { cols: this.cols, rows: this.rows, columnMajor: false };
     // columnMajor forced false here (Sep 10 2026, was true): the desktop
     // reshape into gridDestCols columns is still in effect (that's what
@@ -476,7 +488,7 @@ class WebCodecsVideoEngine {
       // constructor comment) rather than picking one or the other — a piece
       // could in principle want both a fixed hidden cell AND this behavior.
       const effectiveHidden = this.hideSelectedInGrid ? [...this.hiddenIndices, this.selected] : this.hiddenIndices;
-      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder, this._gridDestShape(), this.shouldFlipSelectedTile, effectiveHidden);
+      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder, this._gridDestShape(), this.shouldFlipSelectedTile, effectiveHidden, this.gridLayout && this.gridLayout.cells);
     }
     if (this.gridLeftCtx || this.gridRightCtx) {
       // Split layout: first half of the flat tile index list (reading order —
@@ -511,7 +523,7 @@ function tileRect(i, w, h, cols = 4, rows = 2) {
 // top-to-bottom down one column then the next; changed to read "like a
 // book" instead, left-to-right then top-to-bottom, same as mobile).
 // columnMajor stays a live option below in case a future layout wants it.
-function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape, shouldFlipTile, hiddenIndices) {
+function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape, shouldFlipTile, hiddenIndices, cellSpans) {
   const { cols: destCols, rows: destRows, columnMajor } = destShape || { cols, rows, columnMajor: false };
   const S = ctx.canvas.width / destCols, Sh = ctx.canvas.height / destRows;
   // tileOrder[slot] = logical tile index drawn at grid position `slot` (see
@@ -525,8 +537,23 @@ function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows =
     // genuinely blank rather than drawing a redundant copy of the focus tile.
     if (hiddenIndices && hiddenIndices.includes(i)) continue;
     const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
-    const dx = columnMajor ? Math.floor(slot / destRows) * S : (slot % destCols) * S;
-    const dy = columnMajor ? (slot % destRows) * Sh : Math.floor(slot / destCols) * Sh;
+    // cellSpans (Shaker 2nd tile, Sep 28 2026, real request: "four squares in
+    // 2 rows of 2" not "two vertical oblongs" — a single dest cell stretched
+    // across a whole 2-col destShape reads as a tall narrow rectangle, not a
+    // square block): an explicit override so ONE tile can occupy a w x h
+    // block of cells (in STANDARD destShape cell units, e.g. the same 4x2
+    // unit-square grid every other piece already uses) instead of exactly
+    // one uniform slot — e.g. {col:0,row:0,w:2,h:2} draws a real 2x2 square
+    // block. destShape itself is still cols:4/rows:2 here (see cfg.gridLayout
+    // in the main file), so S/Sh above are already the SAME unit-square size
+    // as any other piece's individual tile — a 2x2 span is simply twice that
+    // size on each axis, not a differently-shaped cell. Absent (every other
+    // piece) this is a complete no-op — falls through to the normal per-slot
+    // dx/dy math exactly as before.
+    const span = cellSpans && cellSpans[i];
+    const dx = span ? span.col * S : (columnMajor ? Math.floor(slot / destRows) * S : (slot % destCols) * S);
+    const dy = span ? span.row * Sh : (columnMajor ? (slot % destRows) * Sh : Math.floor(slot / destCols) * Sh);
+    const S_i = span ? span.w * S : S, Sh_i = span ? span.h * Sh : Sh;
     // Small-grid flip counterpart (Sep 2026; no longer gated on selection
     // as of Sep 12 2026 — see shouldFlipSelectedTile's own constructor
     // comment): each qualifying tile's own cell is mirrored in place —
@@ -539,20 +566,20 @@ function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows =
     // scale.
     if (shouldFlipTile && shouldFlipTile(i)) {
       ctx.save();
-      ctx.translate(dx + S, dy);
+      ctx.translate(dx + S_i, dy);
       ctx.scale(-1, 1);
-      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, S, Sh);
+      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, S_i, Sh_i);
       ctx.restore();
     } else {
-      ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S, Sh);
+      ctx.drawImage(source, sx, sy, sw, sh, dx, dy, S_i, Sh_i);
     }
     // Explicit mute always wins the visual (black); a tile silenced only
     // because something ELSE is soloed gets the lighter grey "dimmed" wash.
-    if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S, Sh); }
-    else if (soloDim && soloDim[i]) { ctx.fillStyle = 'rgba(130,130,130,.55)'; ctx.fillRect(dx, dy, S, Sh); }
+    if (muted[i]) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(dx, dy, S_i, Sh_i); }
+    else if (soloDim && soloDim[i]) { ctx.fillStyle = 'rgba(130,130,130,.55)'; ctx.fillRect(dx, dy, S_i, Sh_i); }
     ctx.strokeStyle = i === selected ? '#cbe0e6' : 'rgba(203,224,230,0.35)';
     ctx.lineWidth = i === selected ? 4 : 2;
-    ctx.strokeRect(dx + 1, dy + 1, S - 2, Sh - 2);
+    ctx.strokeRect(dx + 1, dy + 1, S_i - 2, Sh_i - 2);
   }
 }
 

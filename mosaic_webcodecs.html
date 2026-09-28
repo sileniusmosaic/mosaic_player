@@ -2703,15 +2703,29 @@ const MOSAICS={
     // focused video square the size of 4 squres... leave the other four
     // small squares area blank for now"): whichever tile is the current
     // FOCUS is always skipped from the small grid (see engine's own comment
-    // on this flag) — with only tile 1 ever drawn there by default, it
-    // naturally renders at cols:2/rows:1 cell size, i.e. ~4x a standard
-    // cols:4/rows:2 cell's area ("the size of 4 squares"), with the other
-    // half of the grid area (where tile 0 would be) left genuinely blank —
-    // a simpler one-cell-wide blank region rather than 4 separate small
-    // blank squares in an 8-cell layout. Flag Pat if he specifically wants
-    // the more literal 8-cell/2×2-span version instead — meaningfully more
-    // engineering than this.
+    // on this flag) — only tile 1 is ever drawn there by default.
     hideSelectedInGrid:true,
+    // gridLayout (Sep 28 2026, real follow-up correction: the first version
+    // above rendered tile 1 as one cell of a cols:2/rows:1 destination grid —
+    // "the size of 4 squares" by AREA, but a tall vertical oblong by SHAPE,
+    // not "four squares in 2 rows of 2" like Pat actually wanted). This
+    // overrides the destination grid to a fixed 4x2 unit-square shape — the
+    // exact same individual square size every other (8-tile) piece already
+    // uses — and explicitly spans tile 1 across a real 2x2 block of it
+    // (col0/row0, 2 cells wide, 2 cells tall), which reads as a genuine
+    // square block at 4x a standard tile's area instead of an oddly-shaped
+    // single wide/tall cell. Tile 0 stays hidden (hideSelectedInGrid above),
+    // and the remaining 2x2 block (cols 2-3) is simply never drawn into —
+    // real blank space, not a 4-separate-squares blank area (that would need
+    // spanning support for a BLANK placeholder too, not just the one real
+    // tile — can add if Pat specifically wants the blank area visibly
+    // subdivided). See drawGridFromSource()'s cellSpans param (wc-engine.js),
+    // gridDestShape()/drawPoster() (this file), and buildControls()'s
+    // explicit grid-column/grid-row placement for the DOM hit-area/label —
+    // all four read this same object. Every other piece leaves gridLayout
+    // unset and is completely unaffected (falls through to the normal
+    // uniform per-slot placement exactly as before).
+    gridLayout:{cols:4,rows:2,cells:{1:{col:0,row:0,w:2,h:2}}},
     // hideMuteSolo (Sep 28 2026, real request: "remove the S and M buttons
     // on both landscape and prtrait for this mosaic only") — hides
     // #focusMuteBtn/#focusSoloBtn/#muteBtnLandscape/#soloBtnLandscape via
@@ -2951,6 +2965,12 @@ const focusCanvas=$('#mosaicFocus'), fallbackAudio=$('#fallbackAudio'), poster=$
 // the real TILE_COLS/TILE_ROWS since that's physically baked into the video.
 const GRID_DEST_COLS_DESKTOP=2;
 function gridDestShape(){
+  // gridLayout override (Shaker 2nd tile, Sep 28 2026 — see wc-engine.js's
+  // matching _gridDestShape() comment): same fixed standard-unit-square cell
+  // grid on BOTH desktop and mobile, independent of TILE_COLS/TILE_ROWS or
+  // the desktop 2-column reflow below — the whole point is a tile can span
+  // multiple cells of a grid whose cell size matches every other piece's.
+  if(cfg.gridLayout)return {cols:cfg.gridLayout.cols,rows:cfg.gridLayout.rows,columnMajor:false};
   if(!IS_DESKTOP)return {cols:TILE_COLS,rows:TILE_ROWS,columnMajor:false};
   // columnMajor forced false here (Sep 10 2026, was true) — mirrors the
   // same change in wc-engine.js's _gridDestShape(). Desktop still reshapes
@@ -2961,6 +2981,24 @@ function gridDestShape(){
   // and .is-desktop .grid-controls (grid-auto-flow:row, not column) mirrors
   // it for the tap/mute/solo overlay.
   return {cols:GRID_DEST_COLS_DESKTOP,rows:Math.ceil((TILE_COLS*TILE_ROWS)/GRID_DEST_COLS_DESKTOP),columnMajor:false};
+}
+// #gridStageMobile's own CONTAINER shape (Sep 28 2026, fixing the "vertical
+// oblong" bug found testing Shaker's 2nd tile): its CSS gives it a fixed
+// aspect-ratio (.grid-stage{aspect-ratio:2/1} mobile, .is-desktop
+// #gridStageMobile{aspect-ratio:1/2} desktop) tuned for the only shapes that
+// existed before Shaker — every piece reflows to a 4x2 grid on mobile and
+// 2x4 on desktop, both genuinely square cells at those exact ratios. A piece
+// whose gridDestShape() differs (Shaker: 4x2 on BOTH platforms, via
+// cfg.gridLayout) needs the CONTAINER's ratio to match its OWN grid shape or
+// cells stop being square — this sets it inline from gridDestShape() itself,
+// a no-op for every existing piece (2/4 and 4/2 already match their current
+// CSS exactly) and the real fix for Shaker. Called from buildControls() and
+// from both applyGridCanvasSize() call sites (must run BEFORE those, so
+// desktop's canvas-resolution measurement reads the already-correct box
+// size, not a stale one from the previous piece/default CSS).
+function applyGridStageAspect(){
+  const {cols,rows}=gridDestShape();
+  gridStageMobile.style.aspectRatio=cols+'/'+rows;
 }
 // Tile display order (Sep 7 2026, admin-console "reorder the squares"
 // feature): a per-piece permutation of tile indices — currentTileOrder()[slot]
@@ -3007,6 +3045,13 @@ const GRID_CELL_PX=grid.width/TILE_COLS; // 240 — same on both axes since sour
 // excessive backing size for no visible benefit. Mobile is untouched — it
 // never calls into this function at all (see the IS_DESKTOP guard below).
 function applyGridCanvasSize(){
+  // Must run before the bounding-rect measurement below (desktop) picks up
+  // the container's on-screen size — see applyGridStageAspect()'s own
+  // comment. Called unconditionally (not just under the IS_DESKTOP guard
+  // just below) so mobile also always has the correct aspect set as soon as
+  // a piece switch changes gridDestShape(), even though mobile's canvas
+  // resolution itself stays fixed either way.
+  applyGridStageAspect();
   if(!IS_DESKTOP)return;
   const {cols:destCols,rows:destRows}=gridDestShape();
   const cssW=gridStageMobile.getBoundingClientRect().width||destCols*GRID_CELL_PX;
@@ -3805,6 +3850,7 @@ const engine=new WebCodecsVideoEngine({
   gridColumnMajor:IS_DESKTOP, gridDestCols:GRID_DEST_COLS_DESKTOP,
   hiddenIndices:cfg.gridHiddenTiles||[],
   hideSelectedInGrid:!!cfg.hideSelectedInGrid,
+  gridLayout:cfg.gridLayout||null,
   onStatus:(msg,cls)=>setStatus(msg,cls),
   onError:(err)=>{
     const now=performance.now();
@@ -4159,9 +4205,14 @@ function drawPoster(){
     // hiddenIndices skip so the poster placeholder and the real decoded video
     // never disagree about which cells show something.
     if(hiddenTiles&&hiddenTiles.includes(i))continue;
-    const dx=columnMajor?Math.floor(slot/destRows)*S:(slot%destCols)*S;
-    const dy=columnMajor?(slot%destRows)*Sh:Math.floor(slot/destCols)*Sh;
-    drawOneTile(gctx,i,w,h,dx,dy,S,Sh,anySolo);
+    // cellSpans override (see wc-engine.js drawGridFromSource()'s matching
+    // comment) — poster/placeholder counterpart, kept in sync so the poster
+    // and the real decoded video never disagree about a tile's size/position.
+    const span=cfg.gridLayout&&cfg.gridLayout.cells&&cfg.gridLayout.cells[i];
+    const dx=span?span.col*S:(columnMajor?Math.floor(slot/destRows)*S:(slot%destCols)*S);
+    const dy=span?span.row*Sh:(columnMajor?(slot%destRows)*Sh:Math.floor(slot/destCols)*Sh);
+    const Si=span?span.w*S:S, Shi=span?span.h*Sh:Sh;
+    drawOneTile(gctx,i,w,h,dx,dy,Si,Shi,anySolo);
   }
 }
 // Single source of truth for "pick this tile as the focus square" — used by
@@ -4727,6 +4778,7 @@ function buildControls(){
     controls.style.gridTemplateColumns='repeat('+destCols+',1fr)';
     controls.style.gridTemplateRows='repeat('+destRows+',1fr)';
   }
+  applyGridStageAspect(); // see its own comment — keeps cells square for any piece's grid shape
   // Solo/single-tile pieces (Shaker, Sep 28 2026): the "grid" is just the one
   // tile that's already the focus square — drawing/showing it a second time
   // here reads as an unwanted mirror of the focus square, not a real grid.
@@ -4791,6 +4843,20 @@ function buildControls(){
     // .click() still fires on a visibility:hidden button, just not from a
     // real tap, which is exactly "blank and inert" as requested.
     if(hiddenSet.has(i))t.classList.add('tile-is-hidden');
+    // gridLayout override (Shaker 2nd tile, Sep 28 2026 — see gridDestShape()/
+    // drawPoster()'s matching comments): explicit grid-column/grid-row
+    // placement instead of relying on CSS grid auto-placement, which would
+    // otherwise scatter a multi-cell "span" item unpredictably around
+    // whatever the auto-placement cursor already claimed (e.g. this piece's
+    // own hidden tile 0, built first, auto-claiming the very cell tile 1
+    // needs). A tile with no entry in cfg.gridLayout.cells (tile 0 here,
+    // always hidden anyway) just gets a harmless default 1x1 placement —
+    // it's invisible (.tile-is-hidden) so overlapping tile 1's span is fine.
+    if(cfg.gridLayout){
+      const span=(cfg.gridLayout.cells&&cfg.gridLayout.cells[i])||{col:0,row:0,w:1,h:1};
+      t.style.gridColumn=(span.col+1)+' / span '+span.w;
+      t.style.gridRow=(span.row+1)+' / span '+span.h;
+    }
     // Reverted (Sep 2026): every tile goes into the single #gridControls
     // grid now, on both mobile and desktop — see the CSS/markup comments
     // near .focus-column for why controlsLeft/controlsRight are unused.
@@ -6320,6 +6386,7 @@ async function switchMosaic(id){
     soloed=Array(TILE_COUNT).fill(false);engine.soloDim=soloed.map(()=>false);
     engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT,cfg.gridHiddenTiles||[]);
     engine.hideSelectedInGrid=!!cfg.hideSelectedInGrid;
+    engine.gridLayout=cfg.gridLayout||null;
     document.documentElement.classList.toggle('hide-mute-solo',!!cfg.hideMuteSolo);
     engine.tileOrder=currentTileOrder(); // new piece's own order (or identity) — see currentTileOrder()'s comment
     applyGridCanvasSize(); // no-op on mobile; keeps desktop's canvas resolution matching TILE_COLS/TILE_ROWS if a future piece's source shape ever differs
