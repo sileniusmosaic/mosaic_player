@@ -426,6 +426,12 @@ html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
    aligned with what's actually drawn underneath them. */
 .is-desktop .grid-controls{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr)}
 .tile{position:relative;background:transparent;color:#fff;min-width:0;min-height:0}
+/* Shaker 2nd-tile addition (Sep 28 2026) — see buildControls()' matching
+   comment: a tile the canvas draw skips (gridHiddenTiles/hideSelectedInGrid)
+   gets this class so its label/tap-area don't float visibly over the blank
+   cell either. visibility:hidden (not display:none) so muteBtns[i]/
+   soloBtns[i] stay valid .click() forwarding targets. */
+.tile.tile-is-hidden{visibility:hidden}
 .focusTap{position:absolute;inset:0;border:0;background:transparent;padding:0;cursor:pointer;z-index:1;touch-action:manipulation}
 /* Sep 2026, real report: the -apple-system font stack here never actually
    applied — the global `*{font-family:...!important}` rule (near the very
@@ -668,6 +674,23 @@ html.flip-view-on:not(.flip-exempt-current) .focus-video{transform:scaleX(-1)}
    "the user knows that they're there". :not(.is-desktop) doubly guards what
    the JS already only ever does on portrait, same defensive-CSS pattern
    used throughout this file. */
+/* Per-piece Mute/Solo removal (Shaker, Sep 28 2026, real request: "remove the
+   S and M buttons on both landscape and portrait for this mosaic only"). The
+   per-tile .muteBtn/.soloBtn DOM elements built in buildControls() are
+   already unconditionally invisible everywhere (`.tile .muteBtn,.tile
+   .soloBtn{display:none}` below) — they only ever exist so focusMuteBtn/
+   focusSoloBtn/muteBtnLandscape/soloBtnLandscape have a real button to
+   forward their click to (see buildControls()' own comment on this). So
+   hiding just these four actually-visible controls is sufficient to remove
+   Mute/Solo everywhere for a piece, on both platforms, in one place —
+   html.hide-mute-solo is toggled from cfg.hideMuteSolo in switchMosaic()
+   (and on first load), same pattern as html.hide-focus-overlay just below.
+   The forwarding click handlers stay wired but simply have no visible
+   button to be clicked from while this class is set — harmless. */
+html.hide-mute-solo #focusMuteBtn,
+html.hide-mute-solo #focusSoloBtn,
+html.hide-mute-solo #muteBtnLandscape,
+html.hide-mute-solo #soloBtnLandscape{display:none}
 html.hide-focus-overlay #metroBtn,
 html.hide-focus-overlay #countInBtn,
 html.hide-focus-overlay #flipBtn,
@@ -2666,28 +2689,61 @@ const MOSAICS={
     stemFiles:['https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/01_bass_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/02_coro1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/03_coro2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/04_repenique_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/05_guitar1_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/06_guitar2_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/07_kit_flipswing.aac','https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/08_agogo_flipswing.aac']
   },
   shaker:{
-    // Sep 28 2026: first solo/single-tile piece — just one square, no grid of
-    // other instruments around it. The engine and every grid-layout helper
-    // (buildPieceMockup, gridDestCols reshape, etc.) already generalize to an
-    // arbitrary tileCount, so cols:1/rows:1/tileCount:1 is all that's needed
-    // here rather than a special case anywhere else.
+    // Sep 28 2026: second camera angle ("shaker2") added as a real second
+    // tile — cols:2/rows:1/tileCount:2, one shared composite video (see
+    // videoBase below), matching wc-engine's one-decoded-stream architecture
+    // (every tile is a crop of the SAME composite frame, never a separate
+    // video file per tile — see the engine constructor's own top comment).
+    // Tile 0 ("Shaker") is the default focus tile; tile 1 ("Shaker 2") is
+    // the non-focused one shown small.
     id:'shaker', label:'Shaker', poster:'Mosaic/Shaker/poster_shaker.jpg',
     metroOffsetMs:0,
-    cols:1, rows:1, tileCount:1,
+    cols:2, rows:1, tileCount:2,
+    // hideSelectedInGrid (Sep 28 2026, real request: "the small tile, non
+    // focused video square the size of 4 squres... leave the other four
+    // small squares area blank for now"): whichever tile is the current
+    // FOCUS is always skipped from the small grid (see engine's own comment
+    // on this flag) — with only tile 1 ever drawn there by default, it
+    // naturally renders at cols:2/rows:1 cell size, i.e. ~4x a standard
+    // cols:4/rows:2 cell's area ("the size of 4 squares"), with the other
+    // half of the grid area (where tile 0 would be) left genuinely blank —
+    // a simpler one-cell-wide blank region rather than 4 separate small
+    // blank squares in an 8-cell layout. Flag Pat if he specifically wants
+    // the more literal 8-cell/2×2-span version instead — meaningfully more
+    // engineering than this.
+    hideSelectedInGrid:true,
+    // hideMuteSolo (Sep 28 2026, real request: "remove the S and M buttons
+    // on both landscape and prtrait for this mosaic only") — hides
+    // #focusMuteBtn/#focusSoloBtn/#muteBtnLandscape/#soloBtnLandscape via
+    // html.hide-mute-solo (see that CSS block's own comment). Piece-scoped;
+    // every other mosaic is unaffected.
+    hideMuteSolo:true,
     // Source recording (shaker.wav / "shaker square.mov") measures exactly
     // 9.600000s (verified via ffprobe on both raw masters) — no bar-count
-    // given, so beatsPerBar/bars/bpm are deliberately left unset and the
-    // metronome/beat-counter UI just stays off for this piece (see
-    // metroReady() — it requires both, absent here on purpose).
+    // given yet, so beatsPerBar/bars/bpm are deliberately left unset and the
+    // metronome/beat-counter UI stays off for now (see metroReady() — it
+    // requires both, absent here on purpose). Pat asked to "reinstate the
+    // metronome and count in" for this piece (Sep 28 2026) — waiting on the
+    // actual beats-per-bar/bar-count for the 9.6s loop before adding real
+    // values here (bars mode needs no separate BPM figure — see updateMetro()
+    // — just beatsPerBar and how many bars fit the loop).
     loopEnd:9.600,
     progressiveVideo:true,
-    names:['Shaker'],
+    names:['Shaker','Shaker 2'],
+    // levels:{1:0} (established sparse per-tile gain-multiplier pattern —
+    // see Flip Swing's own comment above) silences tile 1's audio channel:
+    // there's only ever ONE real audio file for this piece (Pat: "for this
+    // shaker project there is only ever one audio file so no need to make
+    // another"), listed twice below purely so stemFiles' length matches
+    // TILE_COUNT (an existing app convention) — levels:{1:0} stops that
+    // duplicate copy from actually playing/doubling the real one at index 0.
+    levels:{1:0},
     // Bundled straight into the git repo/Worker static assets like Abakuá's
-    // stems, not R2 — at one tile instead of eight the video composites are
-    // only ~1-2MB each, comfortably inside Workers' 25MiB per-asset cap, so
-    // there's no need for the R2 step Congo/Flip Swing use.
-    videoBase:'Mosaic/Shaker/shaker_1x1_480x480_',
-    stemFiles:['Mosaic/Shaker/01_shaker_shaker.aac']
+    // stems, not R2 — even as a 960x480 2-tile composite the video is only a
+    // few MB, comfortably inside Workers' 25MiB per-asset cap, so there's no
+    // need for the R2 step Congo/Flip Swing use.
+    videoBase:'Mosaic/Shaker/shaker_2x1_960x480_',
+    stemFiles:['Mosaic/Shaker/01_shaker_shaker.aac','Mosaic/Shaker/01_shaker_shaker.aac']
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo','shaker']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
@@ -3747,6 +3803,8 @@ const engine=new WebCodecsVideoEngine({
   // above and the matching CSS on .is-desktop .grid-controls. false on
   // mobile reproduces the engine's original row-major behavior exactly.
   gridColumnMajor:IS_DESKTOP, gridDestCols:GRID_DEST_COLS_DESKTOP,
+  hiddenIndices:cfg.gridHiddenTiles||[],
+  hideSelectedInGrid:!!cfg.hideSelectedInGrid,
   onStatus:(msg,cls)=>setStatus(msg,cls),
   onError:(err)=>{
     const now=performance.now();
@@ -4087,8 +4145,20 @@ function drawPoster(){
   // Identity order (the default) makes slot===i, so this is a no-op change
   // for every piece that hasn't been reordered.
   const order=currentTileOrder();
+  // Static list plus the dynamic "always skip whichever tile is currently
+  // selected" behavior (see engine's hideSelectedInGrid comment — this is
+  // the poster/placeholder-draw counterpart of the same rule, kept in sync
+  // so the poster and the real decoded video never disagree about which
+  // cells show something).
+  const hiddenTiles=cfg.hideSelectedInGrid?[...(cfg.gridHiddenTiles||[]),selected]:cfg.gridHiddenTiles;
   for(let slot=0;slot<TILE_COUNT;slot++){
     const i=order[slot];
+    // Shaker-style opt-in (see buildControls()' matching comment) — skip this
+    // tile's poster crop entirely so it reads as genuinely blank rather than
+    // a redundant copy of the focus tile. Mirrors drawGridFromSource()'s own
+    // hiddenIndices skip so the poster placeholder and the real decoded video
+    // never disagree about which cells show something.
+    if(hiddenTiles&&hiddenTiles.includes(i))continue;
     const dx=columnMajor?Math.floor(slot/destRows)*S:(slot%destCols)*S;
     const dy=columnMajor?(slot%destRows)*Sh:Math.floor(slot/destCols)*Sh;
     drawOneTile(gctx,i,w,h,dx,dy,S,Sh,anySolo);
@@ -4122,6 +4192,19 @@ function selectTile(i){
   // feature, not yet reachable by any user since reordering didn't exist
   // before now).
   tileEls.forEach((el,j)=>{if(el)el.classList.toggle('is-selected',j===selected);});
+  // hideSelectedInGrid pieces (Shaker, Sep 28 2026): buildControls() only
+  // ever bakes .tile-is-hidden in at BUILD time, using whatever `selected`
+  // was then — if focus ever swaps to a different tile afterward (tapping
+  // the one currently-visible small tile), the hidden/visible tiles must
+  // swap right along with it, or the just-hidden tile stays permanently
+  // un-tappable and the newly-hidden one stays visible. Recomputed here
+  // rather than a full buildControls() rebuild (cheaper, and avoids
+  // rebinding every tile's click listeners for a selection change).
+  if(cfg.hideSelectedInGrid){
+    const hiddenSet=new Set(cfg.gridHiddenTiles||[]);
+    hiddenSet.add(selected);
+    tileEls.forEach((el,j)=>{if(el)el.classList.toggle('tile-is-hidden',hiddenSet.has(j));});
+  }
   updateFocusUI();
 }
 // Flip-view exemption (Sep 2026, real request; extended Sep 12 2026 to also
@@ -4625,6 +4708,25 @@ function positionLandscapeMetroCluster(){
 // to below.
 function buildControls(){
   controls.innerHTML='';controlsLeft.innerHTML='';controlsRight.innerHTML=''; // clear any tiles from a previously-loaded mosaic (controlsLeft/Right are never populated any more — see below — but still cleared in case old content lingers)
+  // Bug found + fixed alongside Shaker's 2nd tile (Sep 28 2026): #gridControls'
+  // own CSS (.grid-controls / .is-desktop .grid-controls) hardcodes a 4x2 (or
+  // desktop 2x4) grid-template — harmless for every piece so far since they
+  // all happen to be exactly 8 tiles, but WRONG for any other tileCount: the
+  // invisible tap/mute/solo hit-areas would land 4-up (mobile) regardless of
+  // how many tiles actually exist, disagreeing with the real canvas draw
+  // (which already sizes itself correctly per gridDestShape() — see
+  // applyGridCanvasSize()/drawPoster()). Setting it here inline, every
+  // buildControls() call, matches .piece-mockup-grid's own established
+  // pattern (see buildPieceMockups()) of computing this dynamically rather
+  // than relying on a fixed CSS grid-template — and an inline style always
+  // wins over the stylesheet rule regardless of selector specificity, so the
+  // old hardcoded CSS stays as a harmless (now-dead) fallback rather than
+  // needing to be deleted.
+  {
+    const {cols:destCols,rows:destRows}=gridDestShape();
+    controls.style.gridTemplateColumns='repeat('+destCols+',1fr)';
+    controls.style.gridTemplateRows='repeat('+destRows+',1fr)';
+  }
   // Solo/single-tile pieces (Shaker, Sep 28 2026): the "grid" is just the one
   // tile that's already the focus square — drawing/showing it a second time
   // here reads as an unwanted mirror of the focus square, not a real grid.
@@ -4639,7 +4741,20 @@ function buildControls(){
   // `if(muteBtns[selected])muteBtns[selected].click()` calls elsewhere) —
   // without a real button there, Mute/Solo on the focus square would
   // silently do nothing for a solo piece.
-  gridStageMobile.hidden=TILE_COUNT<=1;
+  // Generalized Sep 28 2026 (Shaker's 2nd tile added): rather than a flat
+  // TILE_COUNT<=1 check, hide the box whenever NO tile would actually be
+  // visible in it once hideSelectedInGrid/gridHiddenTiles are accounted for
+  // — a solo 1-tile piece (the original Shaker) and a 2-tile piece with
+  // hideSelectedInGrid:true (the current Shaker, tile 0 always hidden since
+  // it's always either the sole tile or the default focus) both land here
+  // naturally, with zero effect on any piece that sets neither flag (the
+  // TILE_COUNT<=1 half of the OR is kept as a safety net for any future
+  // solo piece that doesn't bother setting hideSelectedInGrid).
+  const hiddenSet=new Set(cfg.gridHiddenTiles||[]);
+  if(cfg.hideSelectedInGrid)hiddenSet.add(selected);
+  let visibleTileCount=0;
+  for(let vi=0;vi<TILE_COUNT;vi++)if(!hiddenSet.has(vi))visibleTileCount++;
+  gridStageMobile.hidden=TILE_COUNT<=1||visibleTileCount<=0;
   // tileEls/muteBtns/soloBtns stay indexed by LOGICAL tile index (matching
   // muted[i]/soloed[i]/NAMES[i] everywhere else), even though — Sep 7 2026 —
   // the elements are now appended to #gridControls in DISPLAY (slot) order so
@@ -4665,6 +4780,17 @@ function buildControls(){
     const mute=document.createElement('button');mute.type='button';mute.className='dawBtn muteBtn';mute.textContent='M';mute.setAttribute('aria-label','Mute '+name);
     const label=document.createElement('span');label.className='tile-name';label.textContent=name;
     t.appendChild(label);t.appendChild(tap);if(solo)t.appendChild(solo);t.appendChild(mute);
+    // Shaker 2nd-tile fix (Sep 28 2026): a tile skipped from the canvas draw
+    // (hiddenSet above — gridHiddenTiles/hideSelectedInGrid) must ALSO stop
+    // its own DOM tile (.tile-name label, tap hit-area) from rendering, or
+    // the label text floats visibly over what's supposed to read as a
+    // genuinely blank cell. visibility:hidden (see .tile.tile-is-hidden CSS)
+    // rather than display:none: this tile's element still needs to exist and
+    // stay a real target for muteBtns[i]/soloBtns[i]'s programmatic .click()
+    // forwarding (see the comment above on focusMuteBtn/focusSoloBtn) —
+    // .click() still fires on a visibility:hidden button, just not from a
+    // real tap, which is exactly "blank and inert" as requested.
+    if(hiddenSet.has(i))t.classList.add('tile-is-hidden');
     // Reverted (Sep 2026): every tile goes into the single #gridControls
     // grid now, on both mobile and desktop — see the CSS/markup comments
     // near .focus-column for why controlsLeft/controlsRight are unused.
@@ -6192,7 +6318,9 @@ async function switchMosaic(id){
     lastNotationBar=null; // force a fresh per-bar notation check on the new piece (see maybeUpdateNotationForBar())
     muted=Array(TILE_COUNT).fill(false);engine.muted=muted;
     soloed=Array(TILE_COUNT).fill(false);engine.soloDim=soloed.map(()=>false);
-    engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT);
+    engine.setLayout(TILE_COLS,TILE_ROWS,TILE_COUNT,cfg.gridHiddenTiles||[]);
+    engine.hideSelectedInGrid=!!cfg.hideSelectedInGrid;
+    document.documentElement.classList.toggle('hide-mute-solo',!!cfg.hideMuteSolo);
     engine.tileOrder=currentTileOrder(); // new piece's own order (or identity) — see currentTileOrder()'s comment
     applyGridCanvasSize(); // no-op on mobile; keeps desktop's canvas resolution matching TILE_COLS/TILE_ROWS if a future piece's source shape ever differs
     prepared=false;fallbackMode=false;buffers=[];prefetchScheduled=false;
@@ -6984,6 +7112,7 @@ function applyDesktopControlLayout(){
     viewer.insertBefore(tempoStrip,focusColumn);
   }
 }
+document.documentElement.classList.toggle('hide-mute-solo',!!cfg.hideMuteSolo); // first-load counterpart of switchMosaic()'s own toggle — covers resuming straight into a hideMuteSolo piece via the MRU (see loadPieceMRU())
 buildControls();applyPortraitControlLayout();applyDesktopControlLayout();buildTempoButtons();buildLandscapeTransport();applyLandscapeSlotLayout();buildMosaicRail();buildPieceStrip();buildPieceMockups();renderNotation();renderNotationStrip();preloadNotationStrips();updateFocusUI();updateUI();
 fetchAdminConfig(); // non-blocking — patches order/metroOffsetMs on top of the defaults already rendered above, see its own comment
 

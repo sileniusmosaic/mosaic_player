@@ -26,7 +26,7 @@ class WebCodecsVideoEngine {
   // half the tiles (desktop's "tiles flank the focus square" layout) — pass
   // whichever pair matches the layout actually in the DOM; the other stays
   // null and _draw() simply skips it.
-  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8, gridColumnMajor = false, gridDestCols = cols }) {
+  constructor({ gridCanvas, gridCanvasLeft, gridCanvasRight, focusCanvas, onStatus, onError, cols = 4, rows = 2, tileCount = 8, gridColumnMajor = false, gridDestCols = cols, hiddenIndices = [], hideSelectedInGrid = false }) {
     this.gridCtx = gridCanvas ? gridCanvas.getContext('2d', { alpha: false }) : null;
     this.gridLeftCtx = gridCanvasLeft ? gridCanvasLeft.getContext('2d', { alpha: false }) : null;
     this.gridRightCtx = gridCanvasRight ? gridCanvasRight.getContext('2d', { alpha: false }) : null;
@@ -82,6 +82,24 @@ class WebCodecsVideoEngine {
     // logic, same idea).
     this.tileOrder = null;
     this.cols = cols; this.rows = rows; this.tileCount = tileCount;
+    // Small-grid tiles this piece never wants shown at all (Shaker, Sep 28
+    // 2026: tile 0 is also the default focus tile, and re-showing it small
+    // alongside tile 1 read as a redundant duplicate — see the matching
+    // cfg.gridHiddenTiles/buildControls()/drawPoster() comments in the main
+    // file). Empty for every other piece — pure opt-in, zero behavior change
+    // otherwise. Just index bookkeeping: the corresponding source cell still
+    // decodes/exists, it's simply skipped in drawGridFromSource() below.
+    this.hiddenIndices = hiddenIndices;
+    // Dynamic counterpart to hiddenIndices above (Shaker 2-tile update, Sep 28
+    // 2026): whichever tile is CURRENTLY selected/focused is also always
+    // skipped from the small grid, on top of any static hiddenIndices — the
+    // focus square already shows it large, so re-drawing the same content
+    // small again is the exact "unwanted mirror" bug reported for the
+    // original single-tile Shaker, just re-appearing at 2 tiles. Recomputed
+    // every _draw() from this.selected rather than baked into a static list,
+    // so it stays correct if the user ever taps to swap which tile is
+    // focused. False (default) is a pure no-op for every other piece.
+    this.hideSelectedInGrid = hideSelectedInGrid;
     // Desktop grid reflow (Sep 7 2026 fix — real report: on desktop Chrome,
     // the grid looked perfectly correct before Play (the poster/placeholder,
     // drawn by mosaic_webcodecs.html's drawPoster()/gridDestShape(), already
@@ -153,8 +171,9 @@ class WebCodecsVideoEngine {
   // `muted` — the caller (app) owns that array and reassigns it to match the
   // new tileCount right alongside calling this, same pattern as `engine.muted`
   // already being shared by reference.
-  setLayout(cols, rows, tileCount) {
+  setLayout(cols, rows, tileCount, hiddenIndices = []) {
     this.cols = cols; this.rows = rows; this.tileCount = tileCount;
+    this.hiddenIndices = hiddenIndices;
     if (this.selected >= tileCount) this.selected = 0;
   }
 
@@ -452,7 +471,12 @@ class WebCodecsVideoEngine {
       // 12 2026 change) — every tile now answers the flip question for its
       // OWN index independently, since flip no longer depends on which tile
       // is selected. See shouldFlipSelectedTile's own constructor comment.
-      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder, this._gridDestShape(), this.shouldFlipSelectedTile);
+      // Combine the static hiddenIndices list with the dynamic "always hide
+      // whichever tile is currently selected" behavior (see hideSelectedInGrid's
+      // constructor comment) rather than picking one or the other — a piece
+      // could in principle want both a fixed hidden cell AND this behavior.
+      const effectiveHidden = this.hideSelectedInGrid ? [...this.hiddenIndices, this.selected] : this.hiddenIndices;
+      drawGridFromSource(this.gridCtx, this._offscreen, w, h, this.muted, this.selected, this.cols, this.rows, this.tileCount, this.soloDim, this.tileOrder, this._gridDestShape(), this.shouldFlipSelectedTile, effectiveHidden);
     }
     if (this.gridLeftCtx || this.gridRightCtx) {
       // Split layout: first half of the flat tile index list (reading order —
@@ -487,7 +511,7 @@ function tileRect(i, w, h, cols = 4, rows = 2) {
 // top-to-bottom down one column then the next; changed to read "like a
 // book" instead, left-to-right then top-to-bottom, same as mobile).
 // columnMajor stays a live option below in case a future layout wants it.
-function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape, shouldFlipTile) {
+function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows = 2, tileCount = cols * rows, soloDim, tileOrder, destShape, shouldFlipTile, hiddenIndices) {
   const { cols: destCols, rows: destRows, columnMajor } = destShape || { cols, rows, columnMajor: false };
   const S = ctx.canvas.width / destCols, Sh = ctx.canvas.height / destRows;
   // tileOrder[slot] = logical tile index drawn at grid position `slot` (see
@@ -496,6 +520,10 @@ function drawGridFromSource(ctx, source, w, h, muted, selected, cols = 4, rows =
   const hasOrder = Array.isArray(tileOrder) && tileOrder.length === tileCount;
   for (let slot = 0; slot < tileCount; slot++) {
     const i = hasOrder ? tileOrder[slot] : slot;
+    // Shaker-style opt-in (see the constructor's hiddenIndices comment): skip
+    // this tile's cell entirely — no crop, no wash, no border — leaving it
+    // genuinely blank rather than drawing a redundant copy of the focus tile.
+    if (hiddenIndices && hiddenIndices.includes(i)) continue;
     const [sx, sy, sw, sh] = tileRect(i, w, h, cols, rows);
     const dx = columnMajor ? Math.floor(slot / destRows) * S : (slot % destCols) * S;
     const dy = columnMajor ? (slot % destRows) * Sh : Math.floor(slot / destCols) * Sh;
