@@ -4625,6 +4625,21 @@ function positionLandscapeMetroCluster(){
 // to below.
 function buildControls(){
   controls.innerHTML='';controlsLeft.innerHTML='';controlsRight.innerHTML=''; // clear any tiles from a previously-loaded mosaic (controlsLeft/Right are never populated any more — see below — but still cleared in case old content lingers)
+  // Solo/single-tile pieces (Shaker, Sep 28 2026): the "grid" is just the one
+  // tile that's already the focus square — drawing/showing it a second time
+  // here reads as an unwanted mirror of the focus square, not a real grid.
+  // Hide the whole box (canvas + hit-areas together) rather than leaving an
+  // empty one, on both platforms — #gridStageMobile is the one shared element
+  // both desktop and mobile lay out (see .focus-main-row), so this one toggle
+  // covers both without a platform-pair split. wc-engine still draws into the
+  // (now-hidden) canvas exactly as before, harmless, just invisible. The tile
+  // element itself is still built below and appended (just inside a hidden
+  // box) — deliberately NOT skipped, since focusMuteBtn/focusSoloBtn forward
+  // their clicks to muteBtns[selected]/soloBtns[selected] (see the guarded
+  // `if(muteBtns[selected])muteBtns[selected].click()` calls elsewhere) —
+  // without a real button there, Mute/Solo on the focus square would
+  // silently do nothing for a solo piece.
+  gridStageMobile.hidden=TILE_COUNT<=1;
   // tileEls/muteBtns/soloBtns stay indexed by LOGICAL tile index (matching
   // muted[i]/soloed[i]/NAMES[i] everywhere else), even though — Sep 7 2026 —
   // the elements are now appended to #gridControls in DISPLAY (slot) order so
