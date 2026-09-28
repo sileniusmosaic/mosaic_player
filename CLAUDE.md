@@ -85,6 +85,23 @@ he enters it correctly.
   run in his own Terminal instead (staging or GitHub push: give the raw
   command directly; live: give `./deploy-live.sh`, per the section above).
 
+## Pat's browser — READ BEFORE ANY BROWSER/COMPATIBILITY DISCUSSION
+
+**Pat uses Chrome, exclusively, on every platform — desktop and mobile/phone
+alike. Never Safari, never assume Safari, never reference "iOS Safari" or a
+Safari-style UI when discussing what he sees.** This has been corrected
+more than once in session (most recently Sep 28 2026, after a session
+twice referred to "Safari"/"iOS Safari" and assumed a Safari-only
+certificate-detail panel that doesn't exist in his browser) — treat any
+future browser-specific troubleshooting as Chrome-on-desktop or
+Chrome-on-mobile, never Safari on either. Note for context only (not a
+reason to second-guess what he reports): Apple requires third-party iOS
+browser apps, including Chrome for iOS, to use Apple's WebKit engine
+internally, so Chrome on an iPhone can occasionally show WebKit-flavored
+quirks (e.g. around certificate warnings) even though it's genuinely
+Chrome, not Safari — explain the discrepancy this way if it comes up, don't
+use it to imply he's "really" using Safari.
+
 ## Platform-pair rule (desktop vs. mobile) — READ BEFORE ANY CSS/layout CHANGE
 
 **A change scoped to one platform (desktop or mobile/portrait) must never be
