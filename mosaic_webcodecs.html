@@ -2719,14 +2719,14 @@ const MOSAICS={
     // every other mosaic is unaffected.
     hideMuteSolo:true,
     // Source recording (shaker.wav / "shaker square.mov") measures exactly
-    // 9.600000s (verified via ffprobe on both raw masters) — no bar-count
-    // given yet, so beatsPerBar/bars/bpm are deliberately left unset and the
-    // metronome/beat-counter UI stays off for now (see metroReady() — it
-    // requires both, absent here on purpose). Pat asked to "reinstate the
-    // metronome and count in" for this piece (Sep 28 2026) — waiting on the
-    // actual beats-per-bar/bar-count for the 9.6s loop before adding real
-    // values here (bars mode needs no separate BPM figure — see updateMetro()
-    // — just beatsPerBar and how many bars fit the loop).
+    // 9.600000s (verified via ffprobe on both raw masters). Pat confirmed
+    // (Sep 28 2026, reinstating the metronome/count-in for this piece):
+    // 4/4, 4 bars over the loop — bars mode (see updateMetro()) derives the
+    // click spacing straight from loopEnd/(beatsPerBar*bars), no separate
+    // BPM figure needed: 9.6s/4 bars = 2.4s/bar, /4 beats = 0.6s/beat
+    // (=100bpm at 100% tempo, scaling with tempoPercent same as every other
+    // piece).
+    beatsPerBar:4, bars:4,
     loopEnd:9.600,
     progressiveVideo:true,
     names:['Shaker','Shaker 2'],
