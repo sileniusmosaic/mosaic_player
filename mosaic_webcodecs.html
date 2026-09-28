@@ -112,6 +112,22 @@ html:not(.is-desktop) .app{padding-top:calc(6px + env(safe-area-inset-top))}
    bar originally; margin-top added since it's no longer flush against the
    page's own top padding. */
 .piece-strip-bar{display:flex;align-items:center;gap:8px;margin-top:6px;padding-bottom:8px}
+/* Mobile/portrait hide rule (RESTORED Sep 28 2026 — real report: "the three
+   small mosaic links have appeared live on mobile portrait", seen right
+   after the live deploy). This rule is exactly what the markup comment
+   above #pieceMockups has always described ("Hidden outright on desktop
+   (CSS), and .piece-strip-bar is hidden outright on mobile — exactly one of
+   the two ever shows") — but somewhere in the Sep 27 2026 "flip" (desktop
+   stopped keeping its own piece-strip-bar and switched to the same
+   #pieceMockups scroll cards mobile already used — see the .is-desktop
+   .piece-strip-bar rule below and #pieceMockups' own comment) this half of
+   the pair got dropped while only the new .is-desktop half was added,
+   leaving portrait with NO rule hiding .piece-strip-bar at all — it just
+   happened to still look right until the moment it actually shipped live.
+   Root-cause fix, not just a patch: see CLAUDE.md's "platform-pair" rule,
+   added the same day this was found, for the process change meant to catch
+   this class of bug before it ships next time. */
+html:not(.is-desktop) .piece-strip-bar{display:none}
 .piece-strip-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1;min-width:0}
 .piece-strip-scroll::-webkit-scrollbar{display:none}
 /* Dimming for an unplayed piece now lives on the thumbnail picture alone

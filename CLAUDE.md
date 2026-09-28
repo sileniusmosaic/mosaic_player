@@ -85,6 +85,46 @@ he enters it correctly.
   run in his own Terminal instead (staging or GitHub push: give the raw
   command directly; live: give `./deploy-live.sh`, per the section above).
 
+## Platform-pair rule (desktop vs. mobile) — READ BEFORE ANY CSS/layout CHANGE
+
+**A change scoped to one platform (desktop or mobile/portrait) must never be
+able to visually affect the other.** This is a hard rule, not a guideline —
+violating it has shipped a real regression to the live site before (Sep 28
+2026: the mobile-portrait "piece-strip-bar" thumbnails, which should be
+permanently hidden in favor of the scrollable piece-mockup cards, reappeared
+live on mobile because the CSS rule hiding it on mobile had been silently
+dropped during an unrelated desktop-focused edit — nobody noticed until it
+was already live, because desktop was tested but mobile wasn't re-checked).
+
+What this means in practice:
+
+- Any CSS toggle that shows exactly one of two elements/behaviors depending
+  on platform (`.is-desktop X{display:none}` paired with a mobile-side
+  show, or vice versa) is a MATCHED PAIR. Never edit one half without
+  re-reading and confirming the other half still exists and still says what
+  you think it says. Grep for the element's selector across the whole file
+  before touching either half, not just the one you're changing.
+- Before calling ANY layout/CSS change done — even one that only *mentions*
+  one platform ("make desktop match mobile", "just for portrait") — run the
+  Playwright verification pass on BOTH a desktop viewport (~1400px wide,
+  hasTouch:false) and a mobile-portrait viewport (390x844, isMobile:true).
+  A change that should be platform-scoped but isn't caught by CSS
+  specificity/cascade will otherwise only show up on whichever platform
+  nobody happened to check.
+- When restructuring markup shared by both platforms (moving an element,
+  adding a wrapper), explicitly verify the OTHER platform's DOM
+  order/parent-child relationships and rendered rects are byte-for-byte
+  unchanged, not just that the platform you're working on now looks right.
+- Prefer `display:contents` wrapper elements (the established pattern
+  throughout this file — see `.focus-stack`/`.focus-main-row`/
+  `.piece-mockup-row`) over duplicating markup per platform, since a
+  wrapper's mobile-safety is a single rule to audit rather than two
+  divergent DOM trees to keep in sync by hand.
+- If a platform-scoped rule is ever DELETED (not just edited), grep first
+  for whether it was one half of a pair — deleting "the desktop half" of a
+  pair without noticing there was ALSO a "the mobile half" is exactly the
+  Sep 28 2026 bug above.
+
 ## Admin console / config backend
 
 - `worker.js` also serves a small JSON-over-KV settings API (`/api/config`,
@@ -96,20 +136,13 @@ he enters it correctly.
   secret (set via `wrangler secret put ADMIN_PASSPHRASE`, never committed to
   the repo). On STAGING, there is no admin passphrase at all (see above) —
   do not confuse the two, or assume one implies anything about the other.
-- **Notation admin UI** (Sep 20 2026 rewrite, wide-layout redesign Sep 21
-  2026): the notation-images page is one instrument at a time — outer
-  arrows (now fixed-position, aligned to the preview tile's own left/right
-  edges) cycle the 8 squares. The old inner "cycle through images one at a
-  time" arrows are gone; instead the right-hand side of the page lists
-  every uploaded image for the current instrument at once, sorted
-  lowest-bar-first, each with its own readable thumbnail, bar list, and
-  "Edit" button that changes just that image's bar list in place
-  (`/api/admin/notation-bars-update`, no re-upload). The preview tile
-  itself sits in a fixed-width sticky left column so it stays in place
-  while scrolling the list. Both the login screen and every page show an
-  unmissable STAGING/LIVE banner (`admin.html`'s `IS_STAGING`, from
-  `location.hostname` — same signal the staging passphrase-bypass already
-  used).
+- **Notation admin UI** (Sep 20 2026 rewrite): the notation-images page is
+  now one instrument at a time — outer arrows cycle the 8 squares, inner
+  arrows cycle that square's uploaded images, "Edit" changes just an
+  existing image's bar list in place (`/api/admin/notation-bars-update`, no
+  re-upload). Both the login screen and every page show an unmissable
+  STAGING/LIVE banner (`admin.html`'s `IS_STAGING`, from `location.hostname`
+  — same signal the staging passphrase-bypass already used).
 - **Send to live**: on staging only, a variant's action row gets a "Send to
   live" button that copies that exact tested image (bytes + bar list)
   straight into production's own KV, server-side
@@ -127,20 +160,3 @@ he enters it correctly.
   `npx wrangler secret put LIVE_ADMIN_PASSPHRASE --env staging`, typing the
   same passphrase as production's `ADMIN_PASSPHRASE` when prompted. Until
   that's set, "Send to live" will 401 every time.
-- **Live → staging notation mirror** (Sep 21 2026): the reverse direction —
-  for when a notation edit happens straight on the live admin console
-  instead of staging. Automatic, no button: any notation upload / bars-only
-  edit / delete made on production is best-effort replayed into staging's
-  own store right after it saves, via a new `STAGING_ADMIN_CONFIG` binding
-  on the top-level (production) Worker in `wrangler.jsonc`, pointing at
-  staging's own `ADMIN_CONFIG` namespace id — the mirror image of staging's
-  `LIVE_ADMIN_CONFIG` binding above. See
-  `mirrorNotationUpsertToStaging()`/`mirrorNotationDeleteToStaging()` in
-  `worker.js`. No passphrase gate of its own (unlike "Send to live") —
-  it only ever runs from inside a write already gated by production's own
-  `ADMIN_PASSPHRASE` check, and it's write-only, never read for anything
-  security-sensitive. Fails silently (logs, doesn't throw) if the binding
-  isn't deployed yet or the mirror write has a problem — never blocks or
-  fails the real edit on production. Needs a real `wrangler deploy` (no
-  `--env`, i.e. to production) before it does anything, since it's a new
-  binding in `wrangler.jsonc`.
