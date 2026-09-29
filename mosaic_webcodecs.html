@@ -2699,33 +2699,31 @@ const MOSAICS={
     id:'shaker', label:'Shaker', poster:'Mosaic/Shaker/poster_shaker.jpg',
     metroOffsetMs:0,
     cols:2, rows:1, tileCount:2,
-    // hideSelectedInGrid (Sep 28 2026, real request: "the small tile, non
-    // focused video square the size of 4 squres... leave the other four
-    // small squares area blank for now"): whichever tile is the current
-    // FOCUS is always skipped from the small grid (see engine's own comment
-    // on this flag) — only tile 1 is ever drawn there by default.
-    hideSelectedInGrid:true,
-    // gridLayout (Sep 28 2026, real follow-up correction: the first version
-    // above rendered tile 1 as one cell of a cols:2/rows:1 destination grid —
-    // "the size of 4 squares" by AREA, but a tall vertical oblong by SHAPE,
-    // not "four squares in 2 rows of 2" like Pat actually wanted). This
-    // overrides the destination grid to a fixed 4x2 unit-square shape — the
-    // exact same individual square size every other (8-tile) piece already
-    // uses — and explicitly spans tile 1 across a real 2x2 block of it
-    // (col0/row0, 2 cells wide, 2 cells tall), which reads as a genuine
-    // square block at 4x a standard tile's area instead of an oddly-shaped
-    // single wide/tall cell. Tile 0 stays hidden (hideSelectedInGrid above),
-    // and the remaining 2x2 block (cols 2-3) is simply never drawn into —
-    // real blank space, not a 4-separate-squares blank area (that would need
-    // spanning support for a BLANK placeholder too, not just the one real
-    // tile — can add if Pat specifically wants the blank area visibly
-    // subdivided). See drawGridFromSource()'s cellSpans param (wc-engine.js),
-    // gridDestShape()/drawPoster() (this file), and buildControls()'s
-    // explicit grid-column/grid-row placement for the DOM hit-area/label —
-    // all four read this same object. Every other piece leaves gridLayout
-    // unset and is completely unaffected (falls through to the normal
-    // uniform per-slot placement exactly as before).
-    gridLayout:{cols:4,rows:2,cells:{1:{col:0,row:0,w:2,h:2}}},
+    // hideSelectedInGrid: tried Sep 28 2026 (hiding tile 0, showing only the
+    // non-focused tile enlarged with the rest of the box left blank) — Pat
+    // saw the real result on staging and it read as a broken half-black box,
+    // not a deliberate reserved space. Turned back off (Sep 29 2026): Pat
+    // asked instead to show BOTH tiles, each as its own big square, filling
+    // the box between them — see gridLayout below. Left here, off, rather
+    // than deleted, since the mechanism (and its wc-engine.js counterpart)
+    // stays generically useful for some future piece that DOES want a tile
+    // hidden from the small grid.
+    hideSelectedInGrid:false,
+    // gridLayout (Sep 28-29 2026, two real follow-up corrections in a row —
+    // see git log for the full history): overrides the destination grid to a
+    // fixed 4x2 unit-square shape, the exact same individual square size
+    // every other (8-tile) piece already uses, and explicitly spans EACH
+    // tile across a real 2x2 block of it — tile 0 ("Shaker") at cols 0-1,
+    // tile 1 ("Shaker 2") at cols 2-3, both full height — so the two tiles
+    // sit side by side, each reading as a genuine square block at 4x a
+    // standard tile's area, filling the whole box with no blank space. See
+    // drawGridFromSource()'s cellSpans param (wc-engine.js), gridDestShape()/
+    // drawPoster() (this file), and buildControls()'s explicit grid-column/
+    // grid-row placement for the DOM hit-area/label — all four read this
+    // same object. Every other piece leaves gridLayout unset and is
+    // completely unaffected (falls through to the normal uniform per-slot
+    // placement exactly as before).
+    gridLayout:{cols:4,rows:2,cells:{0:{col:0,row:0,w:2,h:2},1:{col:2,row:0,w:2,h:2}}},
     // hideMuteSolo (Sep 28 2026, real request: "remove the S and M buttons
     // on both landscape and prtrait for this mosaic only") — hides
     // #focusMuteBtn/#focusSoloBtn/#muteBtnLandscape/#soloBtnLandscape via
