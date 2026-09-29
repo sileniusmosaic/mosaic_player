@@ -13,21 +13,36 @@ forums) rates Logic's own elastic-audio algorithm above Pro Tools' Elastic Audio
 for this kind of work, so there's no reason to reach for Pro Tools here even
 though it's installed.
 
-- Use Flex Time / the Time and Pitch Machine, algorithm **Complex Pro** (Logic's
-  highest-quality mode — plain "Complex" is a step down, "Speed"/"Monophonic" are
-  for different material entirely). Complex Pro is specifically the one tuned to
-  handle a mix of transient (drum-hit-like) and tonal content well.
-- Bounce **offline**, not real-time Flex preview — offline rendering gets Logic's
-  best-quality pass, real-time playback doesn't always use the same quality tier.
-- If a percussive part still sounds smeared on individual hits even through
-  Complex Pro, the fallback is a command-line re-stretch with Rubber Band's **R3
-  engine** (`rubberband-r3` / `--fine`) and the **`--detector-perc`** flag
-  (percussive transient detector) — this is the documented best setting for
-  single-instrument percussive material, and notably NOT what earlier Shaker
-  attempts in this project used (they ran plain rubberband with no engine/detector
-  specified, i.e. defaults) — worth trying properly once, deliberately, if it's
-  ever needed, but Logic's own Complex Pro should be tried first since it's the
-  process Pat already trusts and controls end to end.
+- **Verified directly on Pat's own Logic Pro (screenshot, Sep 29 2026)** — this
+  version's actual Flex Time algorithm list is: Automatic (Polyphonic), Monophonic,
+  Slicing, Rhythmic, Polyphonic, Speed (FX), Tempophone (FX). There is no
+  "Complex"/"Complex Pro" in this version — that was unverified web research
+  (older/different Logic version terminology) and has been replaced with the real
+  options below. Don't reintroduce "Complex Pro" into instructions for this rig.
+- For a continuous, non-pitched percussive texture like a shaker (as opposed to a
+  clean single hit), use **Flex Time – Rhythmic**: Apple's own description of this
+  algorithm ("material with a mix of rhythmic and sustained sound, not strongly
+  transient-per-hit like a drum loop") matches a shaker's continuous rustle plus
+  periodic accents better than Slicing (built for hard-transient drum loops with
+  silence between hits — risks chopping/gapping a continuous shake) or
+  Monophonic/Polyphonic (pitch-tracking algorithms, wrong for non-pitched
+  percussion). **Automatic (Polyphonic)** is Logic's general-purpose default and
+  is worth A/B-ing against Rhythmic by ear — Flex lets you switch the algorithm
+  and re-audition instantly, so compare both on the actual take before picking.
+  Never use **Speed (FX)** or **Tempophone (FX)** — both are labelled FX for a
+  reason (varispeed pitch-drop and robotic/granular artifacting respectively),
+  not general-purpose quality algorithms.
+- Bounce **offline** (File > Export > Selection as Audio File, not real-time Flex
+  playback captured live) — offline rendering gets Logic's best-quality pass,
+  real-time playback doesn't always use the same quality tier.
+- If it still sounds smeared even through Rhythmic, the fallback is a command-line
+  re-stretch with Rubber Band's **R3 engine** (`rubberband-r3` / `--fine`) and the
+  **`--detector-perc`** flag (percussive transient detector) — this is the
+  documented best setting for single-instrument percussive material, and notably
+  NOT what earlier Shaker attempts in this project used (they ran plain rubberband
+  with no engine/detector specified, i.e. defaults) — worth trying properly once,
+  deliberately, if it's ever needed, but Logic's own Flex Time should be tried
+  first since it's the process Pat already trusts and controls end to end.
 
 ## 2. Loop cleanliness — no fade needed if the export is sample-accurate
 
