@@ -2774,34 +2774,44 @@ const MOSAICS={
     // default; the existing flip-view/mirror button (flipViewOn) still
     // flips whichever tile(s) are showing on top of this, unaffected.
     videoBase:'Mosaic/Shaker/shaker_2x1_960x480_',
-    // Audio loop-seam glitch on the 75%/50% stems (Sep 29 2026, real report:
-    // "loops perfectly [at 100%]... glitch at the end" persisted even after
-    // an earlier crossfade-based attempt at a fix). Root cause turned out to
-    // be the earlier fix's own design, not AAC's frame-padding alone: that
-    // crossfade blended the tail with a same-length copy of the HEAD, which
-    // does not actually force last-sample≈first-sample continuity (it makes
-    // the tail resemble content ~W samples into the head, not sample 0
-    // itself) — so a residual jump remained, worse at 50% than 75%. Also
-    // confirmed (importantly) that this loop is a genuine 4-bar rhythmic
-    // phrase with real shaker hits within ~150ms of the loop point at these
-    // slower tempos — NOT a quiet tail — so a naive "fade everything near
-    // the end to silence" would have audibly ducked a real hit.
-    // Fix actually shipped: rebuilt each stem from raw/shaker.wav via the
-    // same calibrated rubberband tempo (0.744026 / 0.496017), trimmed to the
-    // EXACT target sample count (614400 / 921600 @ 48kHz — both already
-    // exact multiples of AAC's 1024-sample frame, confirmed via decode
-    // round-trip), then a plain 4096-sample (85.3ms, = 4 AAC frames) raised-
-    // cosine fade-to-true-zero on just the tail before AAC encoding — long
-    // enough to drive the boundary jump down near zero (verified via
-    // decode round-trip: ~1%/0.7% of local peak, at/under the already-
-    // accepted 100% file's own natural ~1.7%) but short enough that it only
-    // meaningfully touches audio already well past the last hit's decay
-    // (checked the actual amplitude envelope before picking the window —
-    // the loud hit sits 80-160ms before the loop point depending on tempo,
-    // safely outside this window's real attenuation). 100% is untouched
-    // (already fixed pre-Sep28 as a pure passthrough, Pat confirmed it
-    // loops perfectly).
-    stemFiles:['Mosaic/Shaker/01_shaker_shaker.aac','Mosaic/Shaker/01_shaker_shaker.aac']
+    // Audio loop-seam glitch on 75%/50% — real saga, Sep 28-29 2026, two
+    // earlier fixes each verified clean by direct decode analysis and
+    // STILL reported broken by Pat, reproducing in Chrome incognito AND
+    // Safari (ruling out both browser HTTP cache and this app's own
+    // in-page bankCache, since a fresh incognito profile has neither).
+    // ROOT CAUSE (found by stepping back from the file's own waveform,
+    // which kept checking out clean, to the DECODE PATH itself): these
+    // stems were shipped as bare AAC (.aac). AAC is a block-coded format —
+    // an encoder MUST pad to a whole 1024-sample frame, so a decoded AAC
+    // stream is always a little longer than its authored content, by an
+    // amount that depends on the specific ENCODER (ffmpeg's here) and can
+    // differ from what a DIFFERENT decoder (Safari's own AAC-LC decoder is
+    // not the same code as Chrome's, let alone as ffmpeg, which is what
+    // every earlier round of this fix was actually verified against) or a
+    // different AudioContext sample rate reports back — loadBank()'s
+    // targetFrames truncation was tuned against one specific decode
+    // environment and had no guarantee of matching Pat's real one. Two
+    // rounds of trying to out-guess exactly where that decoder-specific
+    // padding lands (a head/tail crossfade, then a frame-aligned declick
+    // fade) were really just narrowing a moving target.
+    // FIX: stopped fighting AAC's padding and removed it as a variable —
+    // these three stems now ship as plain .wav (PCM), which has NO block
+    // padding and decodes to the exact authored sample count on every
+    // browser/decoder, confirmed directly (decoding these exact files in
+    // headless Chromium under a 44.1kHz context — deliberately a DIFFERENT
+    // rate than the 48kHz they were authored at, to stress the resampling
+    // path — landed within 1 sample of the mathematically exact loop
+    // length; AAC's equivalent overshoot was a reproducible ~1024 samples,
+    // 1000x worse). tempoUrls() (search this file) was generalized from a
+    // hardcoded '.aac' to insert the _<percent> suffix before whatever
+    // extension a piece's stems use, so every other (still-.aac) piece is
+    // completely unaffected. The 75%/50% files still carry the frame-
+    // aligned tail declick from the previous fix (still good practice —
+    // see git history — it addresses a small rubberband edge effect, a
+    // separate and much smaller issue than the AAC padding was); 100% is
+    // its raw source re-wrapped as exact-length WAV, unchanged content
+    // (Pat confirmed it already looped perfectly).
+    stemFiles:['Mosaic/Shaker/01_shaker_shaker.wav','Mosaic/Shaker/01_shaker_shaker.wav']
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo','shaker']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
@@ -5576,7 +5586,13 @@ async function unlockContext(){
 }
 function tempoUrls(percent){
   if(percent===100)return STEM_URLS;
-  return STEM_URLS.map(u=>u.replace('.aac','_'+percent+'.aac'));
+  // Extension-agnostic (Sep 29 2026 — was hardcoded '.aac'): Shaker's stems
+  // moved to .wav (see MOSAICS.shaker's stemFiles comment for why) so this
+  // needs to insert the _<percent> suffix before WHATEVER extension a
+  // piece's stems use, not just '.aac'. Every other piece is still .aac and
+  // behaves identically — this only generalizes the pattern, it doesn't
+  // change it for anyone already relying on the old behavior.
+  return STEM_URLS.map(u=>u.replace(/(\.[a-zA-Z0-9]+)$/,'_'+percent+'$1'));
 }
 // onChunk(receivedBytes, totalBytesOrNull), when passed, is called as each
 // network chunk arrives — used to drive real download progress on the Play
