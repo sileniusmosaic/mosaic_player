@@ -2694,9 +2694,19 @@ const MOSAICS={
     // videoBase below), matching wc-engine's one-decoded-stream architecture
     // (every tile is a crop of the SAME composite frame, never a separate
     // video file per tile — see the engine constructor's own top comment).
-    // Tile 0 ("Shaker") is the default focus tile; tile 1 ("Shaker 2") is
-    // the non-focused one shown small.
-    id:'shaker', label:'Shaker', poster:'Mosaic/Shaker/poster_shaker.jpg',
+    // Tile 0 ("Egg Shaker") is the default focus tile; tile 1 ("Egg Shaker
+    // 2") is the non-focused one shown small.
+    // Sep 29 2026, real request: renamed "Shaker"/"Shaker 2" -> "Egg
+    // Shaker"/"Egg Shaker 2" (label/names below), and tile 0's video baked
+    // with a permanent horizontal flip (see the hflip note by videoBase)
+    // so both tiles' arms read the same way on screen — Pat: "I want both
+    // arms pointing to the right as I see it... then they will both look
+    // the same and can be both flipped using mirror button" — i.e. this is
+    // a one-time fix to the SOURCE video's default orientation, independent
+    // of the existing flip-view/mirror toggle (flipViewOn — see that CSS/JS
+    // section), which still works exactly as before on top of this: with
+    // both tiles now baked to match, toggling mirror flips both consistently.
+    id:'shaker', label:'Egg Shaker', poster:'Mosaic/Shaker/poster_shaker.jpg',
     metroOffsetMs:0,
     cols:2, rows:1, tileCount:2,
     // hideSelectedInGrid: tried Sep 28 2026 (hiding tile 0, showing only the
@@ -2713,8 +2723,8 @@ const MOSAICS={
     // see git log for the full history): overrides the destination grid to a
     // fixed 4x2 unit-square shape, the exact same individual square size
     // every other (8-tile) piece already uses, and explicitly spans EACH
-    // tile across a real 2x2 block of it — tile 0 ("Shaker") at cols 0-1,
-    // tile 1 ("Shaker 2") at cols 2-3, both full height — so the two tiles
+    // tile across a real 2x2 block of it — tile 0 ("Egg Shaker") at cols
+    // 0-1, tile 1 ("Egg Shaker 2") at cols 2-3, both full height — so the two tiles
     // sit side by side, each reading as a genuine square block at 4x a
     // standard tile's area, filling the whole box with no blank space. See
     // drawGridFromSource()'s cellSpans param (wc-engine.js), gridDestShape()/
@@ -2741,7 +2751,7 @@ const MOSAICS={
     beatsPerBar:4, bars:4,
     loopEnd:9.600,
     progressiveVideo:true,
-    names:['Shaker','Shaker 2'],
+    names:['Egg Shaker','Egg Shaker 2'],
     // levels:{1:0} (established sparse per-tile gain-multiplier pattern —
     // see Flip Swing's own comment above) silences tile 1's audio channel:
     // there's only ever ONE real audio file for this piece (Pat: "for this
@@ -2754,7 +2764,43 @@ const MOSAICS={
     // stems, not R2 — even as a 960x480 2-tile composite the video is only a
     // few MB, comfortably inside Workers' 25MiB per-asset cap, so there's no
     // need for the R2 step Congo/Flip Swing use.
+    // hflip on tile 0 only (Sep 29 2026, real request): the composite is
+    // rebuilt each time from the two individual-tile masters in
+    // raw/video_output_individual_tiles/ via ffmpeg hstack (see git history
+    // for the exact command) — tile 0's source clip now gets an extra
+    // `hflip` in its filter chain before the hstack, tile 1's is untouched.
+    // This bakes a permanent left-right mirror into tile 0's video/poster
+    // only, so its arm reads the same direction as tile 2's on screen by
+    // default; the existing flip-view/mirror button (flipViewOn) still
+    // flips whichever tile(s) are showing on top of this, unaffected.
     videoBase:'Mosaic/Shaker/shaker_2x1_960x480_',
+    // Audio loop-seam glitch on the 75%/50% stems (Sep 29 2026, real report:
+    // "loops perfectly [at 100%]... glitch at the end" persisted even after
+    // an earlier crossfade-based attempt at a fix). Root cause turned out to
+    // be the earlier fix's own design, not AAC's frame-padding alone: that
+    // crossfade blended the tail with a same-length copy of the HEAD, which
+    // does not actually force last-sample≈first-sample continuity (it makes
+    // the tail resemble content ~W samples into the head, not sample 0
+    // itself) — so a residual jump remained, worse at 50% than 75%. Also
+    // confirmed (importantly) that this loop is a genuine 4-bar rhythmic
+    // phrase with real shaker hits within ~150ms of the loop point at these
+    // slower tempos — NOT a quiet tail — so a naive "fade everything near
+    // the end to silence" would have audibly ducked a real hit.
+    // Fix actually shipped: rebuilt each stem from raw/shaker.wav via the
+    // same calibrated rubberband tempo (0.744026 / 0.496017), trimmed to the
+    // EXACT target sample count (614400 / 921600 @ 48kHz — both already
+    // exact multiples of AAC's 1024-sample frame, confirmed via decode
+    // round-trip), then a plain 4096-sample (85.3ms, = 4 AAC frames) raised-
+    // cosine fade-to-true-zero on just the tail before AAC encoding — long
+    // enough to drive the boundary jump down near zero (verified via
+    // decode round-trip: ~1%/0.7% of local peak, at/under the already-
+    // accepted 100% file's own natural ~1.7%) but short enough that it only
+    // meaningfully touches audio already well past the last hit's decay
+    // (checked the actual amplitude envelope before picking the window —
+    // the loud hit sits 80-160ms before the loop point depending on tempo,
+    // safely outside this window's real attenuation). 100% is untouched
+    // (already fixed pre-Sep28 as a pure passthrough, Pat confirmed it
+    // loops perfectly).
     stemFiles:['Mosaic/Shaker/01_shaker_shaker.aac','Mosaic/Shaker/01_shaker_shaker.aac']
   }
 };
