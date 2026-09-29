@@ -187,3 +187,54 @@ What this means in practice:
   `npx wrangler secret put LIVE_ADMIN_PASSPHRASE --env staging`, typing the
   same passphrase as production's `ADMIN_PASSPHRASE` when prompted. Until
   that's set, "Send to live" will 401 every time.
+
+## Video composite build pipeline — READ THIS before building/rebuilding ANY tile video, single-pass only
+
+Written Sep 29 2026, after Pat noticed Shaker and Afrobeat's video looked
+visibly lower quality than Abakuá/Congo/Flip Swing despite "same camera, same
+lights, same settings." Root-caused with real measurements (see below) - two
+real causes, don't let either recur.
+
+**Cause 1 (real, measured, applies to any piece): always build the whole
+composite in ONE ffmpeg pass, straight from the raw master(s), never as
+separate per-tile files that get hstacked/vstacked in a second pass.**
+Abakuá/Congo/Flip Swing's established scripts (`Mosaic/*/raw/build_*.sh`) all
+do this correctly: every tile's crop/scale/tempo-setpts is a node in one
+`-filter_complex` feeding straight into `hstack`/`vstack`, with exactly ONE
+final `-c:v libx264` encode. Shaker and Afrobeat's builds this session instead
+wrote each tile to its own separate crf23-encoded file first, then re-encoded
+AGAIN when combining them into the composite - a second full lossy H.264
+generation. Measured with ffmpeg's own `ssim`/`psnr` filters against a
+crf-0 (near-lossless) reference built straight from the raw master: Afrobeat's
+double-pass Tumba tile scored PSNR avg 38.4dB (worst frame 21.9dB - a real,
+visible artifact) vs a fresh single-pass rebuild's 41.1dB avg (worst frame
+40.2dB) - a clear, meaningful loss purely from the redundant re-encode, not
+from the camera/lighting/source. Fixed by rebuilding both Shaker and Afrobeat
+as single-pass composites (commits after this file's own Sep 29 update) -
+when a piece needs one tile to have unique per-tile treatment (a crop, a
+flip, recovered footage from an old commit), feed that tile's file straight
+into the SAME final `-filter_complex`/hstack alongside the other raw-sourced
+tiles, rather than pre-baking it into its own separate intermediate encode
+first. Every extra intermediate encode is a lossy generation - avoid all of
+them, not just most.
+
+**Cause 2 (real, but on Pat's end, not fixable by rebuilding): check the raw
+export's own bitrate before assuming a build-pipeline problem.** Shaker's raw
+masters (`shaker square.mov`, `shaker2.mov`) are H.264 2160x2160 60fps at only
+~2.8Mbps/~5.4Mbps. Afrobeat's raw masters are the exact same
+codec/resolution/frame-rate but ~71Mbps - a 13-25x difference. Same camera,
+same resolution, same fps, wildly different source bitrate - something in the
+Final Cut export (or a lossy transfer step) compressed those two Shaker clips
+far more than usual. No amount of rebuilding the composite recovers detail
+that was never in the source; if a future piece looks soft despite a clean
+single-pass build, `ffprobe -select_streams v:0 -show_entries stream=bit_rate`
+the raw master FIRST and compare it to a known-good piece's raw master before
+assuming the pipeline is at fault.
+
+**Practical check for any future "does this look right" quality question**:
+don't just eyeball it - `ffprobe` the raw master's bitrate, and if you have a
+suspect build, ffmpeg's `-lavfi ssim`/`-lavfi psnr` against a crf-0 rebuild of
+the same source segment gives an objective, comparable number instead of a
+guess. A small final file size alone is not proof of a problem (a short/small
+canvas piece is legitimately smaller than an 8-tile 45s one) - but it's a
+reason to run this check, not a reason to skip it.
