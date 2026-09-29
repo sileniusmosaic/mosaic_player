@@ -2774,41 +2774,27 @@ const MOSAICS={
     // default; the existing flip-view/mirror button (flipViewOn) still
     // flips whichever tile(s) are showing on top of this, unaffected.
     videoBase:'Mosaic/Shaker/shaker_2x1_960x480_',
-    // Audio loop-seam glitch on 75%/50% — real saga, Sep 28-29 2026. Three
-    // rounds tried and each still reported broken by Pat (crossfade, then a
-    // frame-aligned declick fade, then switching these stems to WAV to
-    // remove AAC's decoder-specific block-padding as a variable entirely —
-    // verified by direct decode analysis every time, and STILL glitching in
-    // his real testing, WAV included). WAV still failing is the important
-    // data point: it rules out the container/codec entirely as the cause —
-    // whatever's wrong is baked into the STRETCHED AUDIO CONTENT itself, not
-    // how it's packaged or decoded.
-    // REAL ROOT CAUSE (found Sep 29 2026 by comparing this piece's build
-    // process against Congo/Flip Swing's, at Pat's prompting — "did you use
-    // a different codec... wasn't there something you used to retain
-    // clarity when slowing down"): every other piece's build_*_all_tempos.sh
-    // script (see Congo_Yambumba/raw/ and Flip_Swing/raw/) builds VIDEO
-    // ONLY — `-an`, no audio stream at all. There has never been an
-    // audio-generation step anywhere else in this app: Pat exports all
-    // three tempo-accurate AAC stems himself, per piece, straight from
-    // Logic's own time-stretch, and hands them over ready to use. For
-    // Shaker, only the 100% file was supplied ("there is only ever one
-    // audio file so no need to make another") and the 75%/50% versions were
-    // instead time-stretched programmatically (rubberband, command-line) —
-    // an ad hoc process that has never been used anywhere else in this app
-    // and was never validated against it. That's the actual discontinuity,
-    // not AAC vs WAV — reverted to .aac here (below) to match every other
-    // piece again; the WAV files are left on disk unused, not deleted.
-    // NEXT STEP, not yet done: Pat re-exports 75%/50% for Shaker from Logic
-    // the same way as every other piece (same time-stretch algorithm/
-    // settings he already trusts), and Claude just converts the resulting
-    // WAV to AAC-LC/48kHz mono to match (126kbps, per every other piece's
-    // real files — Shaker's current 100% AAC is 171kbps, a mismatch worth
-    // fixing at the same time) with zero stretching logic on Claude's side.
-    // Don't re-attempt a programmatic stretch here again without a fresh
-    // explicit request — it's the one thing in this whole saga that was
-    // never actually proven clean.
-    stemFiles:['Mosaic/Shaker/01_shaker_shaker.aac','Mosaic/Shaker/01_shaker_shaker.aac']
+    // Audio loop-seam glitch on 75%/50% — RESOLVED Sep 29 2026, see
+    // AUDIO_TEMPO_PIPELINE.md for the durable version of this. Real saga:
+    // three earlier rounds (crossfade, frame-aligned declick fade, switching
+    // to WAV) all still glitched in Pat's testing — WAV still failing ruled
+    // out the container/codec, pointing at the STRETCHED CONTENT itself.
+    // Root cause: every other piece's tempo-variant audio is exported
+    // directly from Logic by Pat, per piece, straight from Logic's own
+    // Flex Time algorithm — there has never been a programmatic/command-line
+    // stretch step anywhere else in this app. Shaker's 75%/50% had instead
+    // been generated ad hoc (rubberband, command-line), an untested process
+    // never used or validated anywhere else. Fix: Pat re-recorded the 100%
+    // source and re-exported all three tempos himself from Logic (Flex Time
+    // – Rhythmic algorithm, offline bounce, exact cycle-range export, no
+    // fades — verified zero-drift: 75%/50% sample counts are exact integer
+    // ratios of the 100% file, 614400/921600 vs 460800 samples, not the old
+    // ~0.8%-off rubberband output). Kept as WAV rather than reconverting to
+    // AAC — this is a single-track piece so the size cost is trivial, and it
+    // sidesteps AAC's priming-sample gapless-loop risk entirely (see
+    // AUDIO_TEMPO_PIPELINE.md §3). tempoUrls() derives '_75'/'_50' filenames
+    // from this base path automatically (extension-agnostic, see below).
+    stemFiles:['Mosaic/Shaker/01_shaker_shaker.wav','Mosaic/Shaker/01_shaker_shaker.wav']
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo','shaker']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
