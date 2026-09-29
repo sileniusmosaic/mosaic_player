@@ -2774,44 +2774,41 @@ const MOSAICS={
     // default; the existing flip-view/mirror button (flipViewOn) still
     // flips whichever tile(s) are showing on top of this, unaffected.
     videoBase:'Mosaic/Shaker/shaker_2x1_960x480_',
-    // Audio loop-seam glitch on 75%/50% — real saga, Sep 28-29 2026, two
-    // earlier fixes each verified clean by direct decode analysis and
-    // STILL reported broken by Pat, reproducing in Chrome incognito AND
-    // Safari (ruling out both browser HTTP cache and this app's own
-    // in-page bankCache, since a fresh incognito profile has neither).
-    // ROOT CAUSE (found by stepping back from the file's own waveform,
-    // which kept checking out clean, to the DECODE PATH itself): these
-    // stems were shipped as bare AAC (.aac). AAC is a block-coded format —
-    // an encoder MUST pad to a whole 1024-sample frame, so a decoded AAC
-    // stream is always a little longer than its authored content, by an
-    // amount that depends on the specific ENCODER (ffmpeg's here) and can
-    // differ from what a DIFFERENT decoder (Safari's own AAC-LC decoder is
-    // not the same code as Chrome's, let alone as ffmpeg, which is what
-    // every earlier round of this fix was actually verified against) or a
-    // different AudioContext sample rate reports back — loadBank()'s
-    // targetFrames truncation was tuned against one specific decode
-    // environment and had no guarantee of matching Pat's real one. Two
-    // rounds of trying to out-guess exactly where that decoder-specific
-    // padding lands (a head/tail crossfade, then a frame-aligned declick
-    // fade) were really just narrowing a moving target.
-    // FIX: stopped fighting AAC's padding and removed it as a variable —
-    // these three stems now ship as plain .wav (PCM), which has NO block
-    // padding and decodes to the exact authored sample count on every
-    // browser/decoder, confirmed directly (decoding these exact files in
-    // headless Chromium under a 44.1kHz context — deliberately a DIFFERENT
-    // rate than the 48kHz they were authored at, to stress the resampling
-    // path — landed within 1 sample of the mathematically exact loop
-    // length; AAC's equivalent overshoot was a reproducible ~1024 samples,
-    // 1000x worse). tempoUrls() (search this file) was generalized from a
-    // hardcoded '.aac' to insert the _<percent> suffix before whatever
-    // extension a piece's stems use, so every other (still-.aac) piece is
-    // completely unaffected. The 75%/50% files still carry the frame-
-    // aligned tail declick from the previous fix (still good practice —
-    // see git history — it addresses a small rubberband edge effect, a
-    // separate and much smaller issue than the AAC padding was); 100% is
-    // its raw source re-wrapped as exact-length WAV, unchanged content
-    // (Pat confirmed it already looped perfectly).
-    stemFiles:['Mosaic/Shaker/01_shaker_shaker.wav','Mosaic/Shaker/01_shaker_shaker.wav']
+    // Audio loop-seam glitch on 75%/50% — real saga, Sep 28-29 2026. Three
+    // rounds tried and each still reported broken by Pat (crossfade, then a
+    // frame-aligned declick fade, then switching these stems to WAV to
+    // remove AAC's decoder-specific block-padding as a variable entirely —
+    // verified by direct decode analysis every time, and STILL glitching in
+    // his real testing, WAV included). WAV still failing is the important
+    // data point: it rules out the container/codec entirely as the cause —
+    // whatever's wrong is baked into the STRETCHED AUDIO CONTENT itself, not
+    // how it's packaged or decoded.
+    // REAL ROOT CAUSE (found Sep 29 2026 by comparing this piece's build
+    // process against Congo/Flip Swing's, at Pat's prompting — "did you use
+    // a different codec... wasn't there something you used to retain
+    // clarity when slowing down"): every other piece's build_*_all_tempos.sh
+    // script (see Congo_Yambumba/raw/ and Flip_Swing/raw/) builds VIDEO
+    // ONLY — `-an`, no audio stream at all. There has never been an
+    // audio-generation step anywhere else in this app: Pat exports all
+    // three tempo-accurate AAC stems himself, per piece, straight from
+    // Logic's own time-stretch, and hands them over ready to use. For
+    // Shaker, only the 100% file was supplied ("there is only ever one
+    // audio file so no need to make another") and the 75%/50% versions were
+    // instead time-stretched programmatically (rubberband, command-line) —
+    // an ad hoc process that has never been used anywhere else in this app
+    // and was never validated against it. That's the actual discontinuity,
+    // not AAC vs WAV — reverted to .aac here (below) to match every other
+    // piece again; the WAV files are left on disk unused, not deleted.
+    // NEXT STEP, not yet done: Pat re-exports 75%/50% for Shaker from Logic
+    // the same way as every other piece (same time-stretch algorithm/
+    // settings he already trusts), and Claude just converts the resulting
+    // WAV to AAC-LC/48kHz mono to match (126kbps, per every other piece's
+    // real files — Shaker's current 100% AAC is 171kbps, a mismatch worth
+    // fixing at the same time) with zero stretching logic on Claude's side.
+    // Don't re-attempt a programmatic stretch here again without a fresh
+    // explicit request — it's the one thing in this whole saga that was
+    // never actually proven clean.
+    stemFiles:['Mosaic/Shaker/01_shaker_shaker.aac','Mosaic/Shaker/01_shaker_shaker.aac']
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo','shaker']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
@@ -5035,9 +5032,30 @@ function buildPieceMockup(id){
   // real #gridStageMobile. DOM append order below is untouched either way
   // (same tileOrderFor() sequence); only the visual reshape changes, exactly
   // like gridDestShape()'s own comment describes for the real grid.
-  const destCols=IS_DESKTOP?GRID_DEST_COLS_DESKTOP:m.cols, destRows=IS_DESKTOP?Math.ceil(m.tileCount/GRID_DEST_COLS_DESKTOP):m.rows;
+  // gridLayout override (Sep 29 2026 fix, real report — screenshot showed
+  // Egg Shaker's mockup card rendering its 2 tiles as thin distorted
+  // vertical slivers instead of two clean squares). Root cause: this whole
+  // function predates cfg.gridLayout (added the same day for Shaker's 2nd
+  // tile — see gridDestShape()/applyGridStageAspect()/buildControls()'s own
+  // matching comments, all three of which DO already know about it) and
+  // never learned about it — destCols/destRows below were still computed
+  // from raw tileCount/GRID_DEST_COLS_DESKTOP (2 cols x 1 row for Shaker),
+  // forced into .piece-mockup-grid's CSS aspect-ratio which is hardcoded for
+  // the standard 8-tile 2x4 shape every other piece uses (260x520px) — 2
+  // cols x 1 row inside a box built for 2 cols x 4 rows stretches each cell
+  // to a 130x520 sliver. Fixed by mirroring the real player exactly: when
+  // m.gridLayout is set, use ITS cols/rows for the template AND set the
+  // box's aspect-ratio inline from them (same technique
+  // applyGridStageAspect() uses for #gridStageMobile), and place each tile
+  // with an explicit col/row span from m.gridLayout.cells (same technique
+  // buildControls() uses for the real hit-areas) instead of uniform
+  // 1-cell-per-tile auto-placement. No-op for every other piece (no
+  // gridLayout set), which keeps using the exact same math as before.
+  const destCols=m.gridLayout?m.gridLayout.cols:(IS_DESKTOP?GRID_DEST_COLS_DESKTOP:m.cols),
+        destRows=m.gridLayout?m.gridLayout.rows:(IS_DESKTOP?Math.ceil(m.tileCount/GRID_DEST_COLS_DESKTOP):m.rows);
   gridEl.style.gridTemplateColumns='repeat('+destCols+',1fr)';
   gridEl.style.gridTemplateRows='repeat('+destRows+',1fr)';
+  if(m.gridLayout)gridEl.style.aspectRatio=destCols+'/'+destRows;
   // order[slot] is the logical tile shown at grid position `slot` — same
   // semantics as currentTileOrder()[slot]/buildControls()'s own order.forEach
   // (the admin-console "reorder the squares" feature). The crop position
@@ -5052,6 +5070,13 @@ function buildPieceMockup(id){
     t.style.backgroundSize=(m.cols*100)+'% '+(m.rows*100)+'%';
     const px=m.cols>1?(i%m.cols)/(m.cols-1)*100:0, py=m.rows>1?Math.floor(i/m.cols)/(m.rows-1)*100:0;
     t.style.backgroundPosition=px+'% '+py+'%';
+    // gridLayout cell span (see comment above destCols/destRows) — same
+    // pattern as buildControls()'s t.style.gridColumn/gridRow.
+    const span=m.gridLayout&&m.gridLayout.cells&&m.gridLayout.cells[i];
+    if(span){
+      t.style.gridColumn=(span.col+1)+' / span '+span.w;
+      t.style.gridRow=(span.row+1)+' / span '+span.h;
+    }
     gridEl.appendChild(t);
     pieceMockupTileObserver.observe(t); // see its own comment — forces a repaint the moment this tile scrolls into view
   }
