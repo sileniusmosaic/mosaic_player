@@ -6,6 +6,16 @@ every session. Product/design decisions and history live in Claude's own
 persistent memory, not here — this file is specifically about how a change
 actually gets shipped.
 
+## Audio tempo-variant pipeline — READ THIS before building 75%/50%(/25%) stems for any piece
+
+See `AUDIO_TEMPO_PIPELINE.md` in this repo root. Written Sep 29 2026 after the
+original process for Congo/Flip Swing/Abakuá's tempo audio was lost — it had
+never been written down, only existed in an old Claude conversation nobody
+could find again, and cost a long, frustrating debugging saga on Shaker as a
+result. Don't let that happen again: read that file first, and if the process
+ever changes, update that file in the same session, not just this repo's git
+history or Claude's memory alone.
+
 ## Two builds: staging (internal) and live (production)
 
 - **Live site** (what testers already use): https://mosaic-player.silenius.workers.dev
