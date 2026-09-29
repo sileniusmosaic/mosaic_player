@@ -215,8 +215,19 @@ html:not(.is-desktop) .piece-strip-bar{display:none}
    ellipsis instead of wrapping if it still doesn't fit. Targets the first
    child generically (works for both the master-title's classed .piece-name
    span and the plain unclassed name span buildPieceMockup() creates for
-   each mockup card, without needing a shared class on both). */
-.piece-mockup-label>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+   each mockup card, without needing a shared class on both).
+   padding-right (Sep 29 2026, real report — "Egg Shaker" showing as "Egg
+   Shake" and "...Brice Wassy" showing as "...Brice Wass"): Fraunces' italic
+   glyphs slant right and their ink can extend past the character's own
+   calculated advance-width box, especially on a trailing letter like r/y
+   with a descender or tail. The browser's text-overflow math only measures
+   advance width, so it decided the text still fit (never triggering the
+   ellipsis) while overflow:hidden's box boundary still sliced off that
+   trailing ink. A few pixels of right padding inside the clipped box gives
+   the last glyph's slant room to breathe without visibly affecting the
+   layout — genuinely-too-long names still truncate with an ellipsis as
+   before, just slightly earlier. */
+.piece-mockup-label>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:4px}
 .piece-mockup-hint{font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:1px;color:var(--accent-blue);white-space:nowrap}
 /* Same chrome as the real .focus-wrap/.grid-stage, same CSS-sprite-crop
    technique buildPieceStrip()'s thumbnails already use (poster image sliced
