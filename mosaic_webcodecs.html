@@ -5182,6 +5182,14 @@ function preloadNotationStrips(){
   const srcs=new Set();
   if(cfg.notationStrip)srcs.add(cfg.notationStrip);
   if(cfg.notationStripByIndex)Object.values(cfg.notationStripByIndex).forEach(s=>srcs.add(s));
+  // Left-hand (_lh) mirror counterparts (Oct 2026 — real report: "when I
+  // press the mirror button the notation briefly goes black and then the
+  // flipped notation loads in"). Without this they were never fetched until
+  // the exact moment resolveNotationStripSrc() first needed one, same
+  // "pops in late" bug this whole function exists to avoid for the normal
+  // per-tile strips above — so preload them here too, one pass, right
+  // alongside everything else this piece could ever show.
+  if(cfg.notationStripByIndexLH)Object.values(cfg.notationStripByIndexLH).forEach(s=>srcs.add(s));
   // Admin-uploaded per-bar variants (Sep 9 2026) — same reasoning as the two
   // lines above, just per-variant: preload every bar-specific/base image
   // this tile could swap to mid-playback, not just whichever one happens to
@@ -5485,8 +5493,13 @@ function resolveNotationStripSrc(tileIndex){
   // counterpart registered in notationStripByIndexLH — anything else falls
   // straight through to the normal unflipped static image, so pieces/tiles
   // without a left-hand file are completely unaffected.
+  // Direction confirmed by direct follow-up (Oct 2026, same day): mirror
+  // OFF (the plain/default view) shows the swapped (_lh) file, mirror ON
+  // shows the original static file — the opposite pairing from this
+  // feature's first cut, flipped on Pat's explicit instruction after
+  // seeing it live on staging.
   const lhMap=cfg.notationStripByIndexLH;
-  if(flipViewOn&&lhMap&&lhMap[tileIndex])return lhMap[tileIndex];
+  if(!flipViewOn&&lhMap&&lhMap[tileIndex])return lhMap[tileIndex];
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[tileIndex];
   return perTile||null;
 }
