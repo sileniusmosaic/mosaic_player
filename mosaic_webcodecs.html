@@ -2603,6 +2603,7 @@ const MOSAICS={
     // for it anywhere in that Drive folder.
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
     notationStripByIndex:{0:'Mosaic/Abakua/01_clave_abakua.png',1:'Mosaic/Abakua/02_bembe_abakua.png',2:'Mosaic/Abakua/03_cata_abakua.png',3:'Mosaic/Abakua/04_erikundi_abakua.png',4:'Mosaic/Abakua/05_quinto_abakua.png',5:'Mosaic/Abakua/06_conga_abakua.png',6:'Mosaic/Abakua/07_tumba_abakua.png'},
+    notationStripByIndexLH:{2:'Mosaic/Abakua/03_cata_abakua_lh.png',3:'Mosaic/Abakua/04_erikundi_abakua_lh.png',4:'Mosaic/Abakua/05_quinto_abakua_lh.png',5:'Mosaic/Abakua/06_conga_abakua_lh.png',6:'Mosaic/Abakua/07_tumba_abakua_lh.png'},
     names:['Clave','Bembé','Cata','Erikundi','Quinto','Conga','Tumba','Coro'],
     // Migrated (Aug 2026): Abakuá's stems used to be the one exception —
     // bundled into the git repo/Worker static assets while every other
@@ -2656,6 +2657,7 @@ const MOSAICS={
     // back to the shared placeholder.
     notationStrip:'Mosaic/Shared/notation_strip_placeholder.png',
     notationStripByIndex:{0:'Mosaic/Congo_Yambumba/01_clave_congoyambumba.png',1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo_Yambumba/03_erikundi_congoyambumba.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba.png',4:'Mosaic/Congo_Yambumba/05_conga_congoyambumba.png',5:'Mosaic/Congo_Yambumba/06_tumba_congoyambumba.png'},
+    notationStripByIndexLH:{1:'Mosaic/Congo_Yambumba/02_cata_congoyambumba_lh.png',3:'Mosaic/Congo_Yambumba/04_quinto_congoyambumba_lh.png',4:'Mosaic/Congo_Yambumba/05_conga_congoyambumba_lh.png',5:'Mosaic/Congo_Yambumba/06_tumba_congoyambumba_lh.png'},
     names:['Clave','Cata','Erikundi','Quinto','Conga','Tumba','Coro 1','Coro 2'],
     videoBase:'https://pub-ec95ace9fd674c938cb3ca372a1f8c5a.r2.dev/congo_yambumba_4x2_1920x960_',
     // Unlike Abakuá's stems (committed into the git repo, served from the app's
@@ -5474,6 +5476,17 @@ function resolveNotationStripSrc(tileIndex){
     const base=variants.find(v=>v.bars==='all');
     if(base)return base.url;
   }
+  // Left-hand sticking swap (Oct 2026, real request: "when you hit the
+  // mirror button that those parts also change to the new ones" — a
+  // student pointed out that R/L sticking markings should also mirror,
+  // e.g. R,L,L becoming L,R,R). Only applies to the static per-piece
+  // default layer above (admin-uploaded per-bar variants aren't covered by
+  // this yet) and only for tiles that actually have a generated _lh
+  // counterpart registered in notationStripByIndexLH — anything else falls
+  // straight through to the normal unflipped static image, so pieces/tiles
+  // without a left-hand file are completely unaffected.
+  const lhMap=cfg.notationStripByIndexLH;
+  if(flipViewOn&&lhMap&&lhMap[tileIndex])return lhMap[tileIndex];
   const perTile=cfg.notationStripByIndex&&cfg.notationStripByIndex[tileIndex];
   return perTile||null;
 }
@@ -7413,6 +7426,12 @@ if(!ANALYTICS_EXCLUDED){
 // avoid; this is the same fix applied to the same class of bug.
 function applyFlipView(){
   document.documentElement.classList.toggle('flip-view-on',flipViewOn);
+  // Re-resolve the notation strip src so any tile with a registered
+  // left-hand (_lh) counterpart swaps to it the instant the mirror button
+  // is toggled (see resolveNotationStripSrc()'s own comment, above) —
+  // tiles with no _lh file registered just re-render the same src, a
+  // harmless no-op.
+  renderNotationStrip();
   // iOS WebKit staleness (Sep 12 2026, real report: "flip is enabled but
   // nothing is flipped", reproduced on iPhone Chrome, NOT reproducible on
   // desktop Chrome via direct pixel-level testing — the CSS class/computed
