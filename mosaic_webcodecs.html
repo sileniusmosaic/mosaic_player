@@ -2854,45 +2854,80 @@ const MOSAICS={
   afrobeat:{
     // Added Sep 29 2026 — first new piece built entirely from Pat's own Logic
     // exports + the AUDIO_TEMPO_PIPELINE.md process, no ad hoc stretching on
-    // Claude's side at any point. Real 3-instrument piece (Tumba/Conga/
-    // Quinto), 110bpm.
+    // Claude's side at any point. Started as a 3-instrument piece (Tumba/
+    // Conga/Quinto), 110bpm. Expanded Oct 2026 to 7 instruments (added
+    // Clave/Shekere/Agogo/Bell) -- see this section's own comments below for
+    // the new grid/video/audio details, and AUDIO_TEMPO_PIPELINE.md's
+    // "Video/audio frame-exact sync" section for the methodology used.
     id:'afrobeat', label:'Afrobeat', poster:'Mosaic/Afrobeat/poster_afrobeat.jpg',
     metroOffsetMs:0,
-    cols:3, rows:1, tileCount:3,
-    // gridLayout: 3 tiles don't divide evenly into the standard 4-column
-    // grid every 8-tile piece uses (unlike Shaker's clean 2x2-per-tile
-    // split), so this piece gets its own natural 3-wide unit grid instead of
-    // being forced into the 4x2-derived box — same mechanism as Shaker's
-    // gridLayout (buildPieceMockup()/gridDestShape()/buildControls() all
-    // read this), just a plain 3x1 shape with each tile a single 1x1 cell.
-    gridLayout:{cols:3,rows:1,cells:{0:{col:0,row:0,w:1,h:1},1:{col:1,row:0,w:1,h:1},2:{col:2,row:0,w:1,h:1}}},
-    hideSelectedInGrid:false, // show all 3 tiles always, same reasoning as Shaker
-    // Loop length matches the audio exactly (418,909 samples @ 48kHz,
-    // verified via direct sample count on the 100% Conga stem — see chat).
-    // 110bpm x 8.727271s = exactly 16 beats (confirmed to 5 decimal places),
-    // i.e. 4 bars of 4/4 — bars mode below derives click spacing from
-    // loopEnd/(beatsPerBar*bars) directly, same pattern as every other
-    // recent piece. bpm kept alongside for reference only, same as Congo.
-    loopEnd:8.727271, beatsPerBar:4, bpm:110, bars:4,
+    // 4x2 grid like Abakua/Flip Swing, but only 7 of the 8 cells are real
+    // (tileCount:7, not 8) -- Pat's own layout call, Oct 2026: "two rows of
+    // 4 and 3, one missing square... I have an idea for that later". Row-
+    // major indexing (index = row*cols+col) naturally fills the top row
+    // completely (indices 0-3) and the first 3 of the bottom row (4-6),
+    // leaving index 7 (bottom-right) unaddressed by anything -- no tile
+    // button is ever built for it (gridLayout.cells below has no entry 7)
+    // and landscape swipe mode is bounded purely by TILE_COUNT, so it's
+    // naturally skipped there too. The composite video's own bottom-right
+    // cell is still physically present as pixel real estate (plain black,
+    // see the Oct 2026 build notes) since tileRect()'s pixel division needs
+    // a full cols*rows grid to divide evenly, but nothing ever samples it.
+    cols:4, rows:2, tileCount:7,
+    gridLayout:{cols:4,rows:2,cells:{
+      0:{col:0,row:0,w:1,h:1}, 1:{col:1,row:0,w:1,h:1}, 2:{col:2,row:0,w:1,h:1}, 3:{col:3,row:0,w:1,h:1},
+      4:{col:0,row:1,w:1,h:1}, 5:{col:1,row:1,w:1,h:1}, 6:{col:2,row:1,w:1,h:1}
+    }},
+    hideSelectedInGrid:false, // show all 7 tiles always, same reasoning as Shaker
+    // Oct 2026 rebuild: discovered mid-build that the ALREADY-SHIPPED
+    // Tumba/Conga/Quinto composite is 30fps (not 60fps like the new raw
+    // camera clips) -- confirmed via ffprobe on the real file rather than
+    // assumed, since FCP's project panel was showing 60fps for the NEW
+    // clips and it would have been easy to carry that assumption over.
+    // 30fps matters because 48000Hz / 30fps = exactly 1600 samples/frame --
+    // clean, no repeating decimal -- so every stem below was trimmed down
+    // (never padded, per AUDIO_TEMPO_PIPELINE.md's frame-exact section) to
+    // an exact multiple of 1600: 417600 (100%, 261 frames), 558400 (75%,
+    // 349 frames), 836800 (50%, 523 frames). The 75%/50% video frame counts
+    // (349/523) turned out to already exactly match the pre-existing
+    // Tumba/Conga/Quinto composite's own shipped frame counts at those
+    // tempos -- good independent confirmation this is the right math, not
+    // just a new invention. Only the 100% composite needed its own 1-frame
+    // trim (262 -> 261) to line up. bars/beatsPerBar below are derived from
+    // this new loopEnd, same pattern as every other piece; bpm is reference
+    // only (unused in the actual click-spacing math).
+    loopEnd:8.7, beatsPerBar:4, bpm:110, bars:4,
     progressiveVideo:true,
-    names:['Tumba','Conga','Quinto'],
-    videoBase:'Mosaic/Afrobeat/afrobeat_3x1_1440x480_',
-    // 75%/50% video built with ffmpeg's minterpolate (motion-compensated
-    // frame synthesis) from the start, not the plain setpts-hold approach —
-    // see Shaker's Sep 29 2026 "motion-interpolate" commit for why (baked-in
-    // capture-speed motion blur reads as smeared/low-res once simply held
-    // longer at a slower tempo).
+    names:['Tumba','Conga','Quinto','Clave','Shekere','Agogo','Bell'],
+    videoBase:'Mosaic/Afrobeat/afrobeat_4x2_1920x960_',
+    // Tumba/Conga/Quinto: cropped straight out of the pre-existing 3x1
+    // composite at each tempo (480x480 cells, x-offset 0/480/960) -- no
+    // re-render of that content, just a lossless-as-possible frame-exact
+    // recrop to match the new 261/349/523 targets.
+    // Clave/Shekere/Agogo/Bell: Pat's new FCP exports (2160x2160 ProRes,
+    // 60fps) scaled to 480x480. 100% tempo is a plain fps=30 decimation
+    // (no interpolation needed, same speed). 75%/50% use ffmpeg's
+    // minterpolate filter (mi_mode=mci, motion-compensated) same as
+    // Shaker's Sep 29 2026 "motion-interpolate" commit, with a
+    // tpad(stop_mode=clone) pad before it so minterpolate never falls short
+    // of the exact target frame count.
+    // All 7 tiles hstack'd into two rows (4 + 3-plus-black) and vstack'd
+    // into the final 1920x960 grid, per tempo.
     //
     // Stems are WAV, exported directly from Logic by Pat per
     // AUDIO_TEMPO_PIPELINE.md (Flex Time, exact cycle-range export, no
-    // fades) — verified zero-drift before wiring in: the 50% stem is exactly
-    // 2.000000x the 100% stem's sample count, and the 75% stem is within
-    // two-thirds of ONE sample of the exact 4/3 ratio (as close as an
-    // integer sample count can get). Kept as WAV rather than AAC per the
-    // doc's practical rule — only 3 simultaneous tracks, so the AAC
-    // priming-sample gapless-loop risk isn't worth taking for the bandwidth
-    // saved (see AUDIO_TEMPO_PIPELINE.md §3).
-    stemFiles:['Mosaic/Afrobeat/01_tumba_afrobeat.wav','Mosaic/Afrobeat/02_conga_afrobeat.wav','Mosaic/Afrobeat/03_quinto_afrobeat.wav']
+    // fades), then trimmed to the frame-exact sample counts above. Kept as
+    // WAV rather than AAC per the doc's practical rule -- right at the
+    // "many simultaneous stems" boundary now with 7 tracks (vs. Flip
+    // Swing/Abakua's 7-8), worth revisiting for AAC if load time becomes a
+    // real complaint, but shipping WAV first since it's simplest and matches
+    // this piece's existing choice.
+    stemFiles:[
+      'Mosaic/Afrobeat/01_tumba_afrobeat.wav','Mosaic/Afrobeat/02_conga_afrobeat.wav',
+      'Mosaic/Afrobeat/03_quinto_afrobeat.wav','Mosaic/Afrobeat/04_clave_afrobeat.wav',
+      'Mosaic/Afrobeat/05_shekere_afrobeat.wav','Mosaic/Afrobeat/06_agogo_afrobeat.wav',
+      'Mosaic/Afrobeat/07_bell_afrobeat.wav'
+    ]
   }
 };
 let MOSAIC_ORDER=['flipswing','abakua','congo','shaker','afrobeat']; // admin-console-tunable order (Sep 2026) — see fetchAdminConfig()
