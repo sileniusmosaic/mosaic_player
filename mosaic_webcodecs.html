@@ -4445,7 +4445,27 @@ function selectTile(i){
 const diagramImageCache=new Map();
 function getDiagramImage(src){
   let img=diagramImageCache.get(src);
-  if(!img){img=new Image();img.src=src;diagramImageCache.set(src,img);}
+  if(!img){
+    img=new Image();
+    diagramImageCache.set(src,img);
+    // Force an immediate redraw the moment this image actually finishes
+    // decoding (Oct 2026, real report: "slow draw bug on preview for
+    // shaker how to hold... same as agogo on flip swing" -- same root
+    // cause as that fix (v2.46, playFromGesture()'s count-in reset): a
+    // draw call landing before the async resource was actually ready used
+    // to be a silent no-op, relying on some LATER, unrelated repaint to
+    // come along and catch it up. tick()'s every-frame retry covers that
+    // fine while the piece is actively playing, but while paused (the
+    // normal state the very first time anyone taps this tile, before ever
+    // pressing Play) nothing else was scheduled to call drawDiagramFocus()
+    // again -- a slow-decoding image on a real device/connection could sit
+    // blank/stale well past "slow," indefinitely until some unrelated
+    // action happened to repaint. Mirrors Agogo's fix in spirit: force the
+    // correct state immediately once the real readiness signal fires,
+    // instead of hoping an unrelated future frame does it.
+    img.addEventListener('load',()=>{if(diagramFocused)drawDiagramFocus();});
+    img.src=src;
+  }
   return img;
 }
 // Focuses cfg.diagramTile's static reference image in the big square --
@@ -5147,7 +5167,23 @@ function buildControls(){
     const dcfg=cfg.diagramTile;
     const t=document.createElement('div');t.className='tile diagram-tile';
     const img=document.createElement('img');img.className='diagram-tile-img';
-    img.src=dcfg.img;img.alt=dcfg.label;img.loading='lazy';
+    // No `loading='lazy'` (Oct 2026, real report: "sometimes it replaces
+    // another tile... only have two tiles to switch from" on portrait —
+    // this tile sits in the very first screenful next to the two real
+    // tiles, so lazy-loading bought nothing, and setting `.src` on a still-
+    // detached <img> (as this was, before the appendChild below) combined
+    // with `loading='lazy'` is a known rough edge on WebKit/mobile Safari —
+    // the lazy-load intersection check can miss the element's real
+    // position if it fires before the grid's own CSS layout has settled,
+    // leaving the image stuck never loading until some unrelated later
+    // trigger. Every other image in this file (poster, notation strips)
+    // already loads eagerly the same way; this just brings the diagram
+    // tile in line with them rather than being the one exception).
+    // img.src is set AFTER appendChild below now too, for the same
+    // reason — never starting a load on a detached node in the first
+    // place removes the ambiguity entirely rather than just working around
+    // one symptom of it.
+    img.alt=dcfg.label;
     img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block';
     const tap=document.createElement('button');tap.type='button';tap.className='focusTap';tap.setAttribute('aria-label',dcfg.label+': select focus');
     const label=document.createElement('span');label.className='tile-name';label.textContent=dcfg.label;
@@ -5156,8 +5192,18 @@ function buildControls(){
     t.style.gridColumn=(span.col+1)+' / span '+span.w;
     t.style.gridRow=(span.row+1)+' / span '+span.h;
     controls.appendChild(t);
+    img.src=dcfg.img;
     diagramTileEl=t;
     tap.addEventListener('click',()=>selectDiagramTile());
+    // Warm the SEPARATE canvas-draw image cache (getDiagramImage(), used by
+    // drawDiagramFocus() for the big focus square) at the same time as this
+    // DOM <img> — see getDiagramImage()'s own comment for the "slow draw"
+    // fix this pairs with (same report, same root cause as Agogo's v2.46
+    // fix: a draw landing before the async image was ready used to be a
+    // silent no-op with nothing scheduled to ever retry it while paused).
+    // Starting the decode here, as early as buildControls() itself, means
+    // it's very likely already finished well before anyone taps the tile.
+    getDiagramImage(dcfg.img);
   }
 }
 function buildMosaicRail(){
