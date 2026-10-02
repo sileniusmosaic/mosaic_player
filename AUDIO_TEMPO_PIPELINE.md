@@ -60,6 +60,15 @@ though it's installed.
   Never use **Speed (FX)** or **Tempophone (FX)** — both are labelled FX for a
   reason (varispeed pitch-drop and robotic/granular artifacting respectively),
   not general-purpose quality algorithms.
+  - **Update, Oct 2026 (Afrobeat's 7-track export — Tumba/Conga/Quinto/Clave/
+    Shekere/Agogo/Bell)**: Pat's own A/B by ear on this real batch came back
+    the other way from the general shaker-specific advice above — "as it
+    happens, polyphonic sounds better than rhythmic" for these instruments.
+    Treat the Rhythmic-for-continuous-texture reasoning above as a starting
+    point, not a rule: always A/B Automatic (Polyphonic) against Rhythmic on
+    the actual take per instrument, same as this section already said, and
+    go with whichever one Pat's ear picks even when it contradicts the
+    theory-based recommendation.
 - Bounce **offline** (File > Export > Selection as Audio File, not real-time Flex
   playback captured live) — offline rendering gets Logic's best-quality pass,
   real-time playback doesn't always use the same quality tier.
