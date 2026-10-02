@@ -140,6 +140,64 @@ meaningful bandwidth cost — keep those as AAC unless one of them ever reports 
 same loop-click bug, in which case the fix is identical: switch that one piece's
 stems to WAV.
 
+## Video/audio frame-exact sync (FCP <-> Logic)
+
+Added Oct 2026, after a real mismatch on Afrobeat's 4 new instrument videos
+(Clave/Shekere/Agogo/Bell) -- documenting the methodology so it's not lost,
+per Pat's request.
+
+### The root cause
+
+Final Cut Pro's timeline is frame-quantized -- every cut/trim can only land on
+a frame boundary (at 60fps that's one possible cut every 1/60s). Logic's own
+Flex Time/export is sample-accurate, with no such restriction. Combine a
+video cut in FCP with an audio file bounced in Logic and, unless you
+deliberately force both onto the same boundary, there will generally be a
+small mismatch -- up to one whole frame's worth of samples -- between the
+video's actual length and the audio's actual length.
+
+The good news: at this project's rates, 48000Hz / 60fps = exactly 800
+samples per video frame, no repeating decimal. That means this is **fully**
+fixable, not just reducible -- once both land on a multiple of 800 samples,
+they match exactly, every time, with zero residual error.
+
+### The fix -- pick a direction, pick ONE source of truth
+
+1. Decide the loop length in whole video frames first (not seconds, not an
+   arbitrary Logic cycle region).
+2. Multiply by 800 to get the required exact sample count for every audio
+   stem.
+3. Export the video to exactly that many frames (FCP's own cut is already
+   frame-quantized, so this is natural for video).
+4. Trim every audio stem to exactly that many samples. Always trim DOWN to
+   the nearest multiple of 800, never pad/lengthen -- shortening by at most
+   799 samples (~16ms) off the tail is inaudible and 100% safe; lengthening
+   means fabricating samples that don't exist (silence-padding risks an
+   audible click/gap at the loop seam; stretching is unnecessary risk for
+   something under 1/60th of a second). If you still have flexibility on the
+   video cut too, cut it to a frame count at or just below the audio's
+   natural length, specifically so the audio only ever needs shortening.
+5. Verify before wiring anything into the app: `ffprobe` the finished video
+   for `nb_frames`, multiply by 800, and confirm every stem's exact sample
+   count (via `python3 -c "import wave; print(wave.open(f,'rb').getnframes())"`
+   or equivalent) matches. Don't eyeball it -- check the number.
+
+### Always verify the export actually is the loop, before trimming anything
+
+Real incident, Oct 2026: the four new-instrument raw exports
+(Agogo_Afrobeat.mov, Bell_Afrobeat.mov, Clave_Afrobeat.mov,
+Shekere_Afrobeat.mov) came out of FCP at 302.9s / 18174 frames each --
+the full source take, not trimmed to the ~8.7s loop at all. This wasn't a
+frame-rounding issue, it was the wrong IN/OUT range entirely. Always
+`ffprobe` a fresh video export immediately and sanity-check the duration
+against the expected loop length (roughly) before doing any frame-exact
+trimming math on it -- the frame-exact process above only matters once the
+export is already roughly the right length. In FCP, make sure the Cycle/
+Selection range is actually set to the intended loop before exporting
+(Share/Export with a Range, not the whole timeline/sequence), the same way
+Logic's own "Export only cycle range" has to be explicitly selected (see
+earlier sections of this doc).
+
 ## Sources
 - [Sounds fun — Jake Archibald](https://jakearchibald.com/2016/sounds-fun/) — the core AAC/MP3 priming-sample problem and the gap-detection workaround
 - [A brief history of gapless audio — Vimeo Engineering Blog](https://medium.com/vimeo-engineering-blog/a-brief-history-of-gapless-audio-and-what-you-can-do-about-it-ea9e1c343215) — codec-by-codec comparison (AAC/MP3/Vorbis/Opus), FFmpeg vs Apple encoder priming sample counts
