@@ -146,40 +146,59 @@ Added Oct 2026, after a real mismatch on Afrobeat's 4 new instrument videos
 (Clave/Shekere/Agogo/Bell) -- documenting the methodology so it's not lost,
 per Pat's request.
 
+### Recording frame rate vs. delivery frame rate -- don't assume, check
+
+**Pat's cameras record at 60fps. Every piece's delivered/composited video in
+this app ships at 30fps, at all three tempo speeds (100%/75%/50%).** This
+was confirmed directly (ffprobe) on the already-shipped Afrobeat composite
+during the Oct 2026 7-instrument rebuild, after almost assuming 60fps was
+the target because that's what FCP's project panel shows for freshly
+recorded/edited clips (and what the camera actually captured at). The 60fps
+source material is downsampled to 30fps for every tempo's final composite
+-- 100% is a plain fps=30 decimation of the 60fps source, 75%/50% go through
+setpts+minterpolate (see below) and output at 30fps too. Always verify the
+ACTUAL shipped composite's frame rate with ffprobe before doing any
+frame-exact math -- never assume it matches the camera/FCP project setting.
+
 ### The root cause
 
 Final Cut Pro's timeline is frame-quantized -- every cut/trim can only land on
-a frame boundary (at 60fps that's one possible cut every 1/60s). Logic's own
-Flex Time/export is sample-accurate, with no such restriction. Combine a
-video cut in FCP with an audio file bounced in Logic and, unless you
-deliberately force both onto the same boundary, there will generally be a
-small mismatch -- up to one whole frame's worth of samples -- between the
-video's actual length and the audio's actual length.
+a frame boundary. Logic's own Flex Time/export is sample-accurate, with no
+such restriction. Combine a video cut in FCP with an audio file bounced in
+Logic and, unless you deliberately force both onto the same boundary, there
+will generally be a small mismatch -- up to one whole frame's worth of
+samples -- between the video's actual length and the audio's actual length.
 
-The good news: at this project's rates, 48000Hz / 60fps = exactly 800
-samples per video frame, no repeating decimal. That means this is **fully**
-fixable, not just reducible -- once both land on a multiple of 800 samples,
-they match exactly, every time, with zero residual error.
+The frame rate that actually matters here is the DELIVERED composite's frame
+rate, not the camera/FCP-project frame rate -- see the recording-vs-delivery
+note above (60fps capture, 30fps delivery, every piece). At this project's
+rates, 48000Hz / 30fps = exactly 1600 samples per delivered video frame (and
+not coincidentally, 48000Hz / 60fps is also a clean 800 samples/frame, in
+case a future piece ever delivers at 60fps instead -- same method, different
+constant). No repeating decimal either way, so this is **fully** fixable,
+not just reducible -- once both land on a multiple of the frame's sample
+count, they match exactly, every time, with zero residual error.
 
 ### The fix -- pick a direction, pick ONE source of truth
 
-1. Decide the loop length in whole video frames first (not seconds, not an
-   arbitrary Logic cycle region).
-2. Multiply by 800 to get the required exact sample count for every audio
-   stem.
-3. Export the video to exactly that many frames (FCP's own cut is already
-   frame-quantized, so this is natural for video).
+1. Decide the loop length in whole DELIVERED video frames first (30fps for
+   this app today -- not seconds, not an arbitrary Logic cycle region, and
+   not the 60fps the camera captured at).
+2. Multiply by 1600 (samples/frame at 30fps/48kHz) to get the required exact
+   sample count for every audio stem.
+3. Export/build the video to exactly that many frames.
 4. Trim every audio stem to exactly that many samples. Always trim DOWN to
-   the nearest multiple of 800, never pad/lengthen -- shortening by at most
-   799 samples (~16ms) off the tail is inaudible and 100% safe; lengthening
+   the nearest multiple of 1600, never pad/lengthen -- shortening by at most
+   1599 samples (~33ms) off the tail is inaudible and 100% safe; lengthening
    means fabricating samples that don't exist (silence-padding risks an
    audible click/gap at the loop seam; stretching is unnecessary risk for
-   something under 1/60th of a second). If you still have flexibility on the
-   video cut too, cut it to a frame count at or just below the audio's
-   natural length, specifically so the audio only ever needs shortening.
+   something this short). If you still have flexibility on the video cut
+   too, cut it to a frame count at or just below the audio's natural length,
+   specifically so the audio only ever needs shortening.
 5. Verify before wiring anything into the app: `ffprobe` the finished video
-   for `nb_frames`, multiply by 800, and confirm every stem's exact sample
-   count (via `python3 -c "import wave; print(wave.open(f,'rb').getnframes())"`
+   for `nb_frames` AND its actual frame rate (don't assume it), multiply by
+   the matching samples/frame constant, and confirm every stem's exact
+   sample count (via `python3 -c "import wave; print(wave.open(f,'rb').getnframes())"`
    or equivalent) matches. Don't eyeball it -- check the number.
 
 ### Always verify the export actually is the loop, before trimming anything
