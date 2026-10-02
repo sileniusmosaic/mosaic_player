@@ -170,6 +170,11 @@ class WebCodecsVideoEngine {
     this.maxQueuedFrames = 8;  // decode-ahead buffer depth
     this.destroyed = false;
     this.seeking = false;
+    // Seek/tempo-switch catch-up gate (Oct 2026, real report: "weird speed
+    // ramp rather than instant change in speed...for video not sound" on
+    // every tempo switch) — see render()'s own comment for the full
+    // explanation and seekTo()'s for where this gets set.
+    this._seekCatchUpUs = null;
     this._resetLapTracking();
   }
 
@@ -423,6 +428,11 @@ class WebCodecsVideoEngine {
       this._everPumped = false;
     }
     this.sampleIdx = keyIdx;
+    // Arm the catch-up gate (see render()'s own comment for why) — targetSeconds
+    // is already in the NEW/post-seek local timeline (lapIndex was just reset
+    // above by _resetLapTracking()), so the gate's unit is simply
+    // targetSeconds*1e6, no lap math needed here.
+    this._seekCatchUpUs = targetSeconds * 1e6;
     this._pump();
     this.seeking = false;
   }
@@ -460,11 +470,45 @@ class WebCodecsVideoEngine {
       else break;
     }
     if (chosen) {
-      // Close everything strictly older than the chosen frame — keep the chosen
-      // one itself in the queue (harmless; it'll be superseded next tick) but
-      // never let closed frames linger as false candidates.
+      // Always drain everything strictly older than `chosen` — even on a tick
+      // the seek catch-up gate below ends up holding the picture for — so
+      // _pump() always has queue room (frameQueue.length < maxQueuedFrames)
+      // to keep decoding forward. Skipping this while the gate is armed would
+      // leave the queue permanently full and stall decode before it ever
+      // reaches the target.
       for (let i = 0; i < chosenIdx; i++) { try { this.frameQueue[i].close(); } catch {} }
       this.frameQueue.splice(0, chosenIdx);
+
+      // Seek/tempo-switch catch-up gate (Oct 2026, real report: "weird speed
+      // ramp rather than instant change in speed...for video not sound" on
+      // every tempo switch — audio is unaffected because startStems() just
+      // starts a WebAudio buffer source directly at the new position, no
+      // catch-up decode involved).
+      //
+      // seekTo() can only resume decode from the nearest keyframe AT OR
+      // BEFORE the target (a codec can't decode a mid-GOP frame standalone)
+      // — if that keyframe sits well before the actual target (common right
+      // after a tempo switch, since it remaps the playhead into a
+      // differently-stretched cycle), `chosen` above is only the right
+      // answer in STEADY STATE, once decode has already reached the target
+      // once. Until then it's just the newest frame decoded *so far* — short
+      // of the real target — and that answer visibly advances tick over tick
+      // as more frames decode, which is exactly a brief fast-forward "ramp"
+      // through the gap instead of one instant cut to the destination frame.
+      //
+      // Fix: while armed, keep draining/decoding (above) but don't actually
+      // paint `chosen` or swap it into displayedFrame until decode has
+      // reached the real target — hold whatever was already on screen
+      // instead (same no-black-flash reasoning as the "nothing qualifies
+      // yet" case below). Once decode catches up, disarm the gate and fall
+      // through to the normal paint on that same tick — at that point
+      // `chosen` IS the correct steady-state answer, not a mid-catch-up
+      // leftover, so there's nothing left to hide.
+      if (this._seekCatchUpUs !== null) {
+        if (chosen.globalTimestamp < this._seekCatchUpUs) return; // still catching up — hold the last picture, no paint this tick
+        this._seekCatchUpUs = null; // caught up — paint below, same as any normal tick from here on
+      }
+
       if (this.displayedFrame && this.displayedFrame !== chosen) { try { this.displayedFrame.close(); } catch {} }
       this.displayedFrame = chosen;
       this._draw(chosen);

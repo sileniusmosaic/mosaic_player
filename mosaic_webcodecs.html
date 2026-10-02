@@ -5421,13 +5421,54 @@ function buildPieceMockup(id){
 // everywhere buildPieceStrip() is, so it always mirrors the current piece +
 // MRU order: initial load, switchMosaic() (a real switch — reorders MRU
 // too), and fetchAdminConfig() if the admin-configured order changed.
-function buildPieceMockups(){
+// posterDecodeCache/ensurePosterDecoded (Oct 2026, real report — "tile
+// number eight on Flip Swing sometimes doesn't load on the preview when I
+// scroll down from a playing [mosaic]...is blank", now ALSO happening on
+// first load/first play, not just scroll). Same underlying bug as the Sep
+// 25 2026 report this piece-mockup-tile CSS already documents (see
+// .piece-mockup-tile's own comment): every tile is the SAME shared poster
+// image, just cropped to a different background-position — not a data/index
+// bug. pieceMockupTileObserver (below, unchanged) already covers the
+// SCROLL-into-view case by forcing a repaint the first time a tile
+// intersects. It does NOT cover initial load: buildPieceMockups() used to
+// paint every tile synchronously the instant the page (or a piece switch)
+// calls it, with no guarantee the shared poster image had actually finished
+// decoding yet — a slow/cold decode on a phone can lose that race, so the
+// very first paint shows a blank tile for the ~1s the old report's "within a
+// second it fixes" describes, with nothing to trigger a repaint until the
+// user scrolls (which is what the observer is for). Root-cause fix: decode
+// each piece's poster ONCE (cached — buildPieceMockups() runs often, e.g.
+// every switchMosaic()) and wait for that decode before ever painting that
+// piece's tiles, so there's nothing left for the observer to patch up.
+const posterDecodeCache=new Map();
+function ensurePosterDecoded(url){
+  if(!posterDecodeCache.has(url)){
+    const img=new Image();img.src=url;
+    posterDecodeCache.set(url, img.decode?img.decode().catch(()=>{}):Promise.resolve());
+  }
+  return posterDecodeCache.get(url);
+}
+// Rebuilds the scrollable stack of every OTHER piece's mockup, in pieceMRU
+// order (most-recently-used first, current piece excluded) — called
+// everywhere buildPieceStrip() is, so it always mirrors the current piece +
+// MRU order: initial load, switchMosaic() (a real switch — reorders MRU
+// too), and fetchAdminConfig() if the admin-configured order changed. Async
+// since Oct 2026 (see posterDecodeCache above) — a generation counter guards
+// against a slow decode here painting over a faster, later call's result
+// (e.g. a quick second piece-switch while the first one's poster was still
+// decoding).
+async function buildPieceMockups(){
   if(!pieceMockups)return;
+  const ids=pieceMRU.filter(id=>id!==mosaicId&&MOSAICS[id]);
+  const myGen=++buildPieceMockups._gen; // a later call (fast piece-switch) wins — don't let a slow decode here paint over it
+  await Promise.all(ids.map(id=>ensurePosterDecoded(MOSAICS[id].poster)));
+  if(buildPieceMockups._gen!==myGen)return;
   pieceMockups.innerHTML='';
-  pieceMRU.filter(id=>id!==mosaicId&&MOSAICS[id]).forEach(id=>{
+  ids.forEach(id=>{
     pieceMockups.appendChild(buildPieceMockup(id));
   });
 }
+buildPieceMockups._gen=0;
 // Renders whatever notation pages the current piece has (cfg.notation — an
 // array of image filenames, page 1 first) directly below the player, or
 // hides the whole section for a piece that doesn't have any yet. Plain
