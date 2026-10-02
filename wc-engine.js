@@ -148,6 +148,22 @@ class WebCodecsVideoEngine {
     // assignment right after constructing this engine. Defaults to "never
     // flip" so an app that never sets this behaves exactly as before.
     this.shouldFlipSelectedTile = (i) => false;
+    // Focus-square counterpart (Oct 2026, real request: Abakuá's Erikundi
+    // camera angle was recorded backwards relative to every other instrument
+    // — same class of problem as Shaker tile 0, see mosaic_webcodecs.html's
+    // own cfg.hflipTiles comment, but Erikundi's composite video is a large
+    // shared 8-tile CDN asset with no raw per-instrument source handy to
+    // re-encode, so the fix is applied here at draw time instead of baked
+    // into the video file). Unlike shouldFlipSelectedTile above (the per-tile
+    // small-grid mirror, which only ever fires when the user's own mirror
+    // button is on), this one is a PERMANENT per-tile correction to the
+    // baseline/unflipped view — it has to run unconditionally, independent of
+    // flipViewOn, so mosaic_webcodecs.html's existing CSS mirror
+    // (.focus-video{transform:scaleX(-1)}) keeps applying on top exactly as
+    // it already does for every other tile. Defaults to "never flip" so a
+    // piece that never sets this (every piece but Abakuá, today) behaves
+    // exactly as before.
+    this.shouldFlipFocusTile = (i) => false;
     this.cycleSeconds = 0;
     this.decodedFrameCount = 0;
     this.pumpBudgetMs = 6;     // don't let one pump call hog the main thread
@@ -501,7 +517,7 @@ class WebCodecsVideoEngine {
       if (this.gridLeftCtx) drawTileColumn(this.gridLeftCtx, this._offscreen, w, h, leftIdx, this.muted, this.selected, this.cols, this.rows, this.soloDim, half);
       if (this.gridRightCtx) drawTileColumn(this.gridRightCtx, this._offscreen, w, h, rightIdx, this.muted, this.selected, this.cols, this.rows, this.soloDim, half);
     }
-    drawFocusFromSource(this.focusCtx, this._offscreen, w, h, this.selected, this.cols, this.rows);
+    drawFocusFromSource(this.focusCtx, this._offscreen, w, h, this.selected, this.cols, this.rows, this.shouldFlipFocusTile);
   }
 }
 
@@ -604,9 +620,21 @@ function drawTileColumn(ctx, source, w, h, indices, muted, selected, cols, rows,
   });
 }
 
-function drawFocusFromSource(ctx, source, w, h, selected, cols = 4, rows = 2) {
+function drawFocusFromSource(ctx, source, w, h, selected, cols = 4, rows = 2, shouldFlipFocusTile) {
   const [sx, sy, sw, sh] = tileRect(selected, w, h, cols, rows);
-  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  // Permanent per-tile baseline correction (see shouldFlipFocusTile's own
+  // constructor comment) — unconditional, independent of the mirror button,
+  // which still applies its own uniform scaleX(-1) in CSS on top of
+  // whatever this draws, exactly as it already does for every other tile.
+  if (shouldFlipFocusTile && shouldFlipFocusTile(selected)) {
+    ctx.save();
+    ctx.translate(ctx.canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.restore();
+  } else {
+    ctx.drawImage(source, sx, sy, sw, sh, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
 }
 
 if (typeof module !== 'undefined') module.exports = { WebCodecsVideoEngine, drawGridFromSource, drawFocusFromSource, tileRect };

@@ -2566,6 +2566,18 @@ const MOSAICS={
     id:'abakua', label:'Abakuá', poster:'Mosaic/Abakua/poster_abakua.jpg',
     metroOffsetMs:0, // admin-console-tunable click nudge (Sep 2026) — see fetchAdminConfig()
     cols:4, rows:2, tileCount:8, loopEnd:45.600,
+    // Erikundi (tile index 3) was recorded with the camera angle backwards
+    // relative to every other instrument in this composite — direct report,
+    // Oct 2026: "cata on congo is correctly flipped and so is cata in
+    // abakua but erikundi on abakua is not... default state of notation is
+    // good, video needs flipping." The notation's own LH swap (see
+    // notationStripByIndexLH below) is untouched/correct; this only
+    // corrects the VIDEO. See shouldFlipGridTile()/shouldFlipFocusTile()'s
+    // own comments (well below) for why this is a draw-time correction
+    // rather than a baked re-encode like Shaker's analogous tile-0 fix —
+    // Abakuá's is a large shared 8-tile composite with no raw per-
+    // instrument source handy to rebuild from.
+    hflipTiles:[3],
     // True progressive video streaming (Aug 2026) — Abakuá is the proving
     // ground since it's the longest/hardest piece (biggest files, longest
     // wait today). Only affects position-0 loads that don't immediately
@@ -3997,6 +4009,7 @@ engine.muted=muted; // shared by reference — toggling muted[i] is automaticall
 engine.soloDim=soloed.map(()=>false);
 engine.tileOrder=currentTileOrder(); // admin-console tile reorder (Sep 7 2026) — see currentTileOrder()'s comment and wc-engine.js's drawGridFromSource()
 engine.shouldFlipSelectedTile=shouldFlipGridTile; // per-tile now (Sep 12 2026) — takes the tile index; see that function's own comment, well below — read fresh on every render(), not pushed on every change
+engine.shouldFlipFocusTile=shouldFlipFocusTile; // cfg.hflipTiles' permanent per-tile correction (Oct 2026) for the big focus square — see that function's own comment, well below
 
 function sizeFocusCanvas(){
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -4311,7 +4324,19 @@ function drawFocusPoster(){
   if(!poster.complete||!poster.naturalWidth)return;
   const w=poster.naturalWidth,h=poster.naturalHeight;
   const [sx,sy,sw,sh]=tileSource(selected,w,h);
-  focusCtx.drawImage(poster,sx,sy,sw,sh,0,0,focusCanvas.width,focusCanvas.height);
+  // Same cfg.hflipTiles correction as wc-engine.js's drawFocusFromSource()
+  // (see shouldFlipFocusTile's comment) — kept in sync so the static poster
+  // and the real decoded video never disagree about a corrected tile's
+  // orientation during the brief window before video takes over.
+  if(shouldFlipFocusTile(selected)){
+    focusCtx.save();
+    focusCtx.translate(focusCanvas.width,0);
+    focusCtx.scale(-1,1);
+    focusCtx.drawImage(poster,sx,sy,sw,sh,0,0,focusCanvas.width,focusCanvas.height);
+    focusCtx.restore();
+  }else{
+    focusCtx.drawImage(poster,sx,sy,sw,sh,0,0,focusCanvas.width,focusCanvas.height);
+  }
 }
 function drawPoster(){
   if(!poster.complete||!poster.naturalWidth)return;
@@ -4517,8 +4542,36 @@ function syncFlipExemption(){
 // though that's declared further down in this same script — safe because
 // this is only ever CALLED at draw time, well after the whole script has
 // finished running once.
+// cfg.hflipTiles (Oct 2026, real request): tile indices whose camera angle
+// was recorded backwards relative to the rest of the piece -- e.g. Abakuá's
+// Erikundi, where the notation's own default (mirror-off) reading is
+// correct but the video shows the wrong-handed view. Shaker's analogous
+// problem (tile 0) was fixed by baking a permanent hflip into that video's
+// own source, since it's a small two-tile composite rebuilt from Pat's own
+// raw per-tile clips; Abakuá's is a large shared 8-tile composite streamed
+// from the CDN with no raw per-instrument source handy to re-encode, so
+// this is the same fix applied at draw time instead: XOR the tile's normal
+// mirror-button flip with a permanent per-tile correction, so the corrected
+// tile's baseline (mirror off) shows right and the mirror button still
+// flips it from there exactly like every other tile. See
+// shouldFlipFocusTile() just below for the focus-square counterpart (same
+// idea, different composition since the focus square's mirror is a single
+// CSS transform rather than a per-tile canvas boolean).
 function shouldFlipGridTile(i){
-  return flipViewOn&&!FLIP_EXEMPT_RE.test(NAMES[i]);
+  if(FLIP_EXEMPT_RE.test(NAMES[i]))return false;
+  const needsDefaultFlip=cfg.hflipTiles&&cfg.hflipTiles.includes(i);
+  return needsDefaultFlip?!flipViewOn:flipViewOn;
+}
+// Focus-square counterpart to shouldFlipGridTile()'s cfg.hflipTiles
+// correction -- see wc-engine.js's shouldFlipFocusTile constructor comment
+// for why this has to be unconditional (independent of flipViewOn) rather
+// than XOR'd here the way the small-grid version is: the existing
+// .focus-video{transform:scaleX(-1)} CSS rule already applies the mirror
+// button's own flip uniformly on top of whatever this draws, so baking the
+// XOR in twice would cancel it out. Wired to the engine right after
+// construction, next to shouldFlipSelectedTile below.
+function shouldFlipFocusTile(i){
+  return !!(cfg.hflipTiles&&cfg.hflipTiles.includes(i));
 }
 function updateFocusUI(){
   focusLabel.textContent=NAMES[selected];
